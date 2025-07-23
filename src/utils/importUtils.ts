@@ -246,6 +246,11 @@ function convertRawToBook(rawBook: RawBookImport): Partial<Book> {
       // Still use the date but log a warning
       book.completedDate = dateStr;
     }
+  } else if (book.status === 'completed') {
+    // If the book is marked as completed but doesn't have a completed date,
+    // set today's date as the completed date
+    console.log('Book is marked completed but has no completed date, setting today as completed date');
+    book.completedDate = new Date().toISOString().split('T')[0]; // Today's date
   }
   
   // Convert numeric values

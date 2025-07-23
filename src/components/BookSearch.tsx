@@ -101,11 +101,16 @@ export const BookSearch = ({ onAddBook, existingBooks }: BookSearchProps) => {
       // Use user's preferred default status if no status is provided
       const defaultStatus = settings.defaultStatus || 'want-to-read';
       
+      // Log the current settings for debugging
+      console.log('Current default status setting:', settings.defaultStatus);
+      console.log('Using default status:', defaultStatus);
+      
       const convertedBook = {
         ...detailedBook,
         // Map the ReadingStatus enum to string values expected by the rest of the app
+        // Force use of the user's preferred default status unless explicitly set in the API response
         status: detailedBook.status === undefined ? defaultStatus :
-          detailedBook.status.toString().includes('TO_READ') ? 'want-to-read' :
+          detailedBook.status.toString().includes('TO_READ') ? defaultStatus : // Use default instead of hard-coded 'want-to-read'
           detailedBook.status.toString().includes('READING') ? 'reading' :
           detailedBook.status.toString().includes('COMPLETED') ? 'completed' :
           defaultStatus,
