@@ -113,3 +113,6 @@ $RECYCLE.BIN/
 
 # Package specific files
 .npmignore
+
+# architecture
+prompts

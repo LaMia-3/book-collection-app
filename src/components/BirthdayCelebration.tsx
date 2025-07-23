@@ -13,18 +13,29 @@ export const BirthdayCelebration: React.FC = () => {
   const today = new Date().toISOString().split('T')[0];
   const dismissStorageKey = `birthday-celebration-dismissed-${today}`;
   
-  // Get today's date in YYYY-MM-DD format for comparison
+  // Get today's date in MM/DD format for comparison
   const getTodayFormatted = () => {
     const now = new Date();
+    // Return month and day as numbers
     return `${now.getMonth() + 1}/${now.getDate()}`;
   };
   
   // Extract month and day from birthday
   const getBirthdayMonthDay = (birthdayString: string) => {
     try {
+      // Create a date object with the birthday string
+      // Note: When parsing dates with new Date(), the date is interpreted in the local timezone
       const date = new Date(birthdayString);
+      
+      // Check if the date is valid
+      if (isNaN(date.getTime())) {
+        return null;
+      }
+      
+      // Return month and day as numbers to match the todayFormatted format
       return `${date.getMonth() + 1}/${date.getDate()}`;
     } catch (e) {
+      console.error('Error parsing birthday date:', e);
       return null;
     }
   };

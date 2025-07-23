@@ -22,9 +22,10 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Card } from '@/components/ui/card';
 import { ImportExportView } from './ImportExportView';
-import { Settings as SettingsIcon, Trash2, AlertTriangle, Palette } from 'lucide-react';
+import { Settings as SettingsIcon, Trash2, AlertTriangle, Palette, Trophy } from 'lucide-react';
 import { useSettings } from '@/contexts/SettingsContext';
 import { PaletteSelector } from '@/components/PaletteSelector';
+import { GoalsTab } from '@/components/GoalsTab';
 
 interface SettingsProps {
   isOpen: boolean;
@@ -123,6 +124,15 @@ export const Settings: React.FC<SettingsProps> = ({
                 className="justify-start w-40 data-[state=active]:bg-muted"
               >
                 General
+              </TabsTrigger>
+              <TabsTrigger 
+                value="goals" 
+                className="justify-start w-40 data-[state=active]:bg-muted"
+              >
+                <span className="flex items-center gap-2">
+                  <Trophy className="h-4 w-4 text-amber-500" />
+                  Goals
+                </span>
               </TabsTrigger>
               <TabsTrigger 
                 value="appearance" 
@@ -250,6 +260,10 @@ export const Settings: React.FC<SettingsProps> = ({
                     </div>
                   </div>
                 </div>
+              </TabsContent>
+              
+              <TabsContent value="goals" className="mt-0">
+                <GoalsTab />
               </TabsContent>
 
               <TabsContent value="appearance" className="mt-0">

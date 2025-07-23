@@ -9,6 +9,10 @@ export interface UserSettings {
   defaultView?: 'shelf' | 'list' | 'cover' | 'insights';
   defaultApi?: 'google' | 'openlibrary';
   defaultStatus?: 'want-to-read' | 'reading' | 'completed';
+  goals?: {
+    enabled: boolean;
+    monthlyTarget: number;
+  };
 }
 
 // Default settings values
@@ -19,6 +23,10 @@ export const defaultSettings: UserSettings = {
   defaultView: 'shelf',
   defaultApi: 'google',
   defaultStatus: 'want-to-read',
+  goals: {
+    enabled: false,
+    monthlyTarget: 4, // Default to 4 books per month
+  },
 };
 
 // Context interface

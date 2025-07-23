@@ -2,6 +2,7 @@ import { Book } from "@/types/book";
 import { cn } from "@/lib/utils";
 import { usePalette } from "@/contexts/PaletteContext";
 import { useMemo } from "react";
+import { useTheme } from "@/components/ui-common/ThemeProvider";
 
 interface BookSpineProps {
   book: Book;
@@ -160,6 +161,37 @@ export const BookSpine = ({ book, onClick }: BookSpineProps) => {
     return null;
   }, [selectedPalette, book.id]);
   
+  // Determine optimal text color based on background color for accessibility
+  const textColor = useMemo(() => {
+    // If no custom spine color, use the default white text
+    if (!spineColor) return '#FFFFFF';
+    
+    try {
+      // Handle non-hex colors or empty strings
+      if (!spineColor.startsWith('#')) {
+        return '#FFFFFF'; // Default to white text
+      }
+      
+      // Convert hex to RGB
+      const r = parseInt(spineColor.slice(1, 3), 16);
+      const g = parseInt(spineColor.slice(3, 5), 16);
+      const b = parseInt(spineColor.slice(5, 7), 16);
+      
+      if (isNaN(r) || isNaN(g) || isNaN(b)) {
+        return '#FFFFFF'; // Default to white text if parsing fails
+      }
+      
+      // Calculate relative luminance using WCAG formula
+      const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+      
+      // Use black text on bright backgrounds, white text on dark backgrounds
+      return luminance > 0.5 ? '#000000' : '#FFFFFF';
+    } catch (error) {
+      console.error('Error calculating contrast text color for spine:', error);
+      return '#FFFFFF'; // Default to white text if any error occurs
+    }
+  }, [spineColor]);
+  
   // Use class-based color if no palette selected
   const spineColorClass = !spineColor ? `bg-spine-${book.spineColor || 'blue'}` : '';
 
@@ -195,9 +227,12 @@ export const BookSpine = ({ book, onClick }: BookSpineProps) => {
           style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}
         >
           <span 
-            className="text-white text-xs font-medium text-center leading-tight"
+            className="text-xs font-medium text-center leading-tight transition-colors"
             style={{ 
-              textShadow: '0 1px 2px rgba(0,0,0,0.3)',
+              color: textColor,
+              textShadow: textColor === '#000000' 
+                ? '0 1px 2px rgba(255,255,255,0.2)' 
+                : '0 1px 2px rgba(0,0,0,0.3)',
               maxHeight: '95%',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
