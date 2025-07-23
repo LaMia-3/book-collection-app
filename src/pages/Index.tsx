@@ -14,6 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Library, Search, Settings as SettingsIcon } from "lucide-react";
 import searchService, { SearchResult, SearchOptions } from "@/services/search/SearchService";
 import { AdvancedSearch } from "@/components/AdvancedSearch";
+import { GoalTracker } from "@/components/GoalTracker";
 
 const Index = () => {
   const { toast } = useToast();
@@ -34,6 +35,9 @@ const Index = () => {
   // Use default view from settings or fallback to 'shelf'
   const [viewMode, setViewMode] = useState<ViewMode>(settings.defaultView as ViewMode || 'shelf');
   const [showSettings, setShowSettings] = useState(false);
+  
+  // Calculate books completed in the current month
+  const [booksCompletedThisMonth, setBooksCompletedThisMonth] = useState<number>(0);
   
   // Get the personalized library name
   const libraryName = settings.preferredName 
@@ -59,6 +63,30 @@ const Index = () => {
       }
     }
   }, []);
+  
+  // Calculate books completed in the current month whenever books change
+  useEffect(() => {
+    const currentDate = new Date();
+    const currentMonth = currentDate.getMonth();
+    const currentYear = currentDate.getFullYear();
+    
+    // Count books completed in the current month
+    const completedThisMonth = books.filter(book => {
+      // Check if the book has a completedDate
+      if (!book.completedDate) return false;
+      
+      // Parse the completed date
+      const completedDate = new Date(book.completedDate);
+      
+      // Check if it's the current month and year
+      return (
+        completedDate.getMonth() === currentMonth &&
+        completedDate.getFullYear() === currentYear
+      );
+    }).length;
+    
+    setBooksCompletedThisMonth(completedThisMonth);
+  }, [books]);
 
   // Save books to localStorage whenever books change
   useEffect(() => {
@@ -202,6 +230,9 @@ const Index = () => {
             <div className="text-sm text-muted-foreground">Favorites (4+ stars)</div>
           </div>
         </div>
+        
+        {/* Goal Tracker */}
+        <GoalTracker booksCompletedThisMonth={booksCompletedThisMonth} />
 
         {/* Library View */}
         <div className="bg-card rounded-lg p-6 shadow-elegant">
