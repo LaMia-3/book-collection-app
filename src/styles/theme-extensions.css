@@ -1,0 +1,80 @@
+/* Theme extensions for enhanced design system
+   These additions complement the existing index.css foundation */
+
+/* CSS variables for the enhanced theme */
+  :root {
+    /* Additional gradients for UI elements */
+    --gradient-cool: linear-gradient(135deg, hsl(200 60% 45%) 0%, hsl(220 70% 55%) 100%);
+    --gradient-success: linear-gradient(135deg, hsl(140 60% 45%) 0%, hsl(160 70% 40%) 100%);
+    --gradient-danger: linear-gradient(135deg, hsl(0 70% 50%) 0%, hsl(350 80% 40%) 100%);
+    
+    /* Enhanced bookshelf gradients */
+    --gradient-shelf-dark: linear-gradient(180deg, hsl(25 40% 25%) 0%, hsl(25 35% 15%) 100%);
+    --gradient-shelf-light: linear-gradient(180deg, hsl(25 40% 85%) 0%, hsl(25 35% 75%) 100%);
+    --gradient-shelf-side: linear-gradient(90deg, hsl(25 40% 65%) 0%, hsl(25 35% 55%) 100%);
+    
+    /* Wood grain texture overlay */
+    --texture-wood: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Cpath fill='%23964B00' fill-opacity='0.05' d='M11 18c3.866 0 7-3.134 7-7s-3.134-7-7-7-7 3.134-7 7 3.134 7 7 7zm48 25c3.866 0 7-3.134 7-7s-3.134-7-7-7-7 3.134-7 7 3.134 7 7 7zm-43-7c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zm63 31c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zM34 90c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zm56-76c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zM12 86c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm28-65c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm23-11c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm-6 60c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm29 22c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zM32 63c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm57-13c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm-9-21c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM60 91c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM35 41c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM12 60c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2z'%3E%3C/path%3E%3C/svg%3E");
+    
+    /* Enhanced shadows for depth */
+    --shadow-book-hover: 0 10px 25px -5px hsl(25 25% 15% / 0.25);
+    --shadow-intense: 0 10px 30px -8px hsl(var(--primary) / 0.35);
+    --shadow-inner-shelf: inset 0 5px 15px -5px hsl(25 25% 15% / 0.15);
+    
+    /* Additional spine color options */
+    --spine-custom-1: 35 100% 65%;
+    --spine-custom-2: 325 80% 60%;
+    --spine-custom-3: 260 70% 55%;
+    --spine-custom-4: 160 65% 40%;
+    
+    /* High contrast colors for accessibility */
+    --high-contrast-text: 0 0% 0%;
+    --high-contrast-background: 0 0% 100%;
+    --high-contrast-primary: 230 100% 45%;
+  }
+
+  .dark {
+    /* Enhanced dark mode gradients */
+    --gradient-shelf: linear-gradient(180deg, hsl(25 30% 25%) 0%, hsl(25 25% 15%) 100%);
+    --gradient-warm: linear-gradient(135deg, hsl(25 60% 25%) 0%, hsl(35 70% 35%) 100%);
+    --gradient-page: linear-gradient(180deg, hsl(222.2 84% 4.9%) 0%, hsl(222.2 84% 3.9%) 100%);
+    
+    /* Dark mode shadows */
+    --shadow-book: 0 4px 12px -2px hsl(0 0% 0% / 0.35);
+    --shadow-shelf: 0 8px 24px -4px hsl(0 0% 0% / 0.4);
+    --shadow-elegant: 0 6px 20px -6px hsl(var(--primary) / 0.35);
+    --shadow-book-hover: 0 10px 25px -5px hsl(0 0% 0% / 0.45);
+  }
+  
+  /* High contrast mode for accessibility */
+  .high-contrast {
+    --background: var(--high-contrast-background);
+    --foreground: var(--high-contrast-text);
+    --primary: var(--high-contrast-primary);
+    --primary-foreground: var(--high-contrast-background);
+    --secondary: var(--high-contrast-text);
+    --secondary-foreground: var(--high-contrast-background);
+    --muted: 0 0% 85%;
+    --muted-foreground: 0 0% 15%;
+    --border: 0 0% 0%;
+    
+    /* Increase contrast for spine colors */
+    --spine-1: 15 100% 50%;
+    --spine-2: 200 100% 45%;
+    --spine-3: 120 100% 40%;
+    --spine-4: 280 100% 50%;
+    --spine-5: 45 100% 55%;
+    --spine-6: 340 100% 50%;
+    --spine-7: 180 100% 45%;
+    --spine-8: 60 100% 50%;
+  }
+  
+  /* Reduced motion for accessibility */
+  @media (prefers-reduced-motion: reduce) {
+    * {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
