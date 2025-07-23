@@ -1,0 +1,117 @@
+[
+    {
+        "title": "A Madness So Discreet",
+        "cover": "covers/A_Madness_So_Discreet.jpg",
+        "hexcodes": ["#443344", "#997766", "#998877", "#888888", "#ccaa99"]
+    },
+    {
+        "title": "Black Food",
+        "cover": "covers/Black_Food.jpg",
+        "hexcodes": ["#AA7DB1", "#EC154F", "#0F0C05", "#096735", "#F26722"]
+    },
+    {
+        "title": "Butterfield 8",
+        "cover": "covers/Butterfield_8.jpg",
+        "hexcodes": ["#072743", "#11395E", "#12213F", "#066886", "#0291B5"]
+    },
+    {
+        "title": "Caps For Sale",
+        "cover": "covers/Caps_For_Sale.jpg",
+        "hexcodes": ["#EDEEE9", "#E09E6D", "#B09D92", "#77BDBD", "#EBD1BB"]
+    },
+    {
+        "title": "Carrie Soto is Back",
+        "cover": "covers/Carrie_Soto_is_Back.jpg",
+        "hexcodes": ["#D2A134", "#9E7626", "#F5DC5D", "#EFCA50", "#65491B"]
+    },
+    {
+        "title": "Divergent",
+        "cover": "covers/Divergent.jpg",
+        "hexcodes": ["#334466", "#887788", "#FF9900", "#FFFF33", "#CCCCCC"]
+    },
+    {
+        "title": "Dorothy Must Die",
+        "cover": "covers/Dorothy_Must_Die.jpg",
+        "hexcodes": ["#000000", "#5555BB", "#CC4466", "#FF0000", "#AAAADD"]
+    },
+    {
+        "title": "Dreamland",
+        "cover": "covers/Dreamland.jpg",
+        "hexcodes": ["#444455", "#AA99AA", "#888899", "#DDDDCC", "#BBBBBB"]
+    },
+    {
+        "title": "Fans of the Impossible Life",
+        "cover": "covers/Fans_of_the_Impossible_Life.jpg",
+        "hexcodes": ["#554444", "#FF8855", "#FF9999", "#D6E4B3", "#F8DF9F"]
+    },
+    {
+        "title": "Feel Something",
+        "cover": "covers/Feel_Something.jpg",
+        "hexcodes": ["#E1A06C", "#C3CED1", "#E6DFDA", "#C29D9E", "#DF829D"]
+    },
+    {
+        "title": "Good Night Moon",
+        "cover": "covers/Good_Night_Moon.jpg",
+        "hexcodes": ["#C5D5A1", "#F5B366", "#EDEEE9", "#2D2D2D", "#F08570"]
+    },
+    {
+        "title": "I Can Fly",
+        "cover": "covers/I_Can_Fly.jpg",
+        "hexcodes": ["#DF984E", "#DCD6C9", "#A2583A", "#6A8AA4", "#C04D35"]
+    },
+    {
+        "title": "Love Letters to the Dead",
+        "cover": "covers/Love_Letters_to_the_Dead.jpg",
+        "hexcodes": ["#223355", "#666699", "#AA8899", "#EE9977", "#EEDDCC"]
+    },
+    {
+        "title": "Miss Peregrine's Home for Peculiar Children",
+        "cover": "covers/Miss_Peregrine's_Home_for_Peculiar_Children.jpg",
+        "hexcodes": ["#555555", "#999999", "#888888", "#CCCCCC", "#AAAAAA"]
+    },
+    {
+        "title": "Paper Towns",
+        "cover": "covers/Paper_Towns.jpg",
+        "hexcodes": ["#CC3333", "#EEEE88", "#FFFFCC", "#EEEEDD", "#FF7744"]
+    },
+    {
+        "title": "Pat the Bunny",
+        "cover": "covers/Pat_the_Bunny.jpg",
+        "hexcodes": ["#EDEEE9", "#CEC3A7", "#77BDBD", "#2D2D2D", "#CBD5CE"]
+    },
+    {
+        "title": "People We Meet on Vacation",
+        "cover": "covers/People_We_Meet_on_Vacation.jpg",
+        "hexcodes": ["#5BBD4E", "#FCDAC3", "#FB8544", "#6CE075", "#FFAA88"]
+    },
+    {
+        "title": "Reward System - Stories",
+        "cover": "covers/Reward_System_Stories.jpg",
+        "hexcodes": ["#B700E1", "#3E0092", "#5B01AE", "#8D01D3", "#30006B"]
+    },
+    {
+        "title": "Sabrina & Corina - Stories",
+        "cover": "covers/Sabrina_&_Corina_Stories.jpg",
+        "hexcodes": ["#646665", "#1E1E22", "#424739", "#B92F1F", "#DB9733"]
+    },
+    {
+        "title": "Survive the Night",
+        "cover": "covers/Survive_the_Night.jpg",
+        "hexcodes": ["#003333", "#00796D", "#E9E5B2", "#AFE1D6", "#DD99CC"]
+    },
+    {
+        "title": "The School for Good Mothers",
+        "cover": "covers/The_School_for_Good_Mothers.jpg",
+        "hexcodes": ["#AA594E", "#114847", "#D39389", "#0B3B42", "#900C0F"]
+    },
+    {
+        "title": "To Love an Island",
+        "cover": "covers/To_Love_an_Island.jpg",
+        "hexcodes": ["#81322A", "#C45E4C", "#A38579", "#29221F", "#DAD7CE"]
+    }, 
+    {
+        "title": "Where the Wild Things Are",
+        "cover": "covers/Where_the_Wild_Things_Are.jpg",
+        "hexcodes": ["#EDEEE9", "#4D5982", "#0074AC", "#736D65", "#FAB85F"]
+    }
+]
