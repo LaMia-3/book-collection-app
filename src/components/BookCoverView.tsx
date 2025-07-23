@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Star } from "lucide-react";
 import { usePalette } from "@/contexts/PaletteContext";
 import { useState, useEffect } from "react";
+import { useTheme } from "@/components/ui-common/ThemeProvider";
 
 interface BookCoverViewProps {
   books: Book[];
@@ -25,6 +26,34 @@ export const BookCoverView = ({ books, onBookClick }: BookCoverViewProps) => {
     
     // Fallback to the standard spine color classes
     return null;
+  };
+  
+  // Utility function to determine if text should be black or white based on background color
+  const getContrastTextColor = (backgroundColor: string): string => {
+    try {
+      // Handle non-hex colors or empty strings
+      if (!backgroundColor || !backgroundColor.startsWith('#')) {
+        return '#FFFFFF'; // Default to white text
+      }
+      
+      // Convert hex to RGB
+      const r = parseInt(backgroundColor.slice(1, 3), 16);
+      const g = parseInt(backgroundColor.slice(3, 5), 16);
+      const b = parseInt(backgroundColor.slice(5, 7), 16);
+      
+      if (isNaN(r) || isNaN(g) || isNaN(b)) {
+        return '#FFFFFF'; // Default to white text if parsing fails
+      }
+      
+      // Calculate relative luminance using WCAG formula
+      const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+      
+      // Use black text on bright backgrounds, white text on dark backgrounds
+      return luminance > 0.5 ? '#000000' : '#FFFFFF';
+    } catch (error) {
+      console.error('Error calculating contrast text color:', error);
+      return '#FFFFFF'; // Default to white text if any error occurs
+    }
   };
   if (books.length === 0) {
     return (
@@ -58,7 +87,14 @@ export const BookCoverView = ({ books, onBookClick }: BookCoverViewProps) => {
                   }}
                   className={`w-full h-full flex items-center justify-center ${!getPlaceholderColor(book.spineColor) ? `bg-spine-${book.spineColor}` : ''}`}
                 >
-                  <p className="font-serif text-white text-center px-4 line-clamp-3">
+                  <p 
+                    style={{
+                      color: getPlaceholderColor(book.spineColor) 
+                        ? getContrastTextColor(getPlaceholderColor(book.spineColor)) 
+                        : '#FFFFFF'
+                    }}
+                    className="font-serif text-center px-4 line-clamp-3 transition-colors"
+                  >
                     {book.title}
                   </p>
                 </div>
