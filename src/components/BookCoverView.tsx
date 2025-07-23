@@ -2,6 +2,8 @@ import { Book } from "@/types/book";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Star } from "lucide-react";
+import { usePalette } from "@/contexts/PaletteContext";
+import { useState, useEffect } from "react";
 
 interface BookCoverViewProps {
   books: Book[];
@@ -9,6 +11,21 @@ interface BookCoverViewProps {
 }
 
 export const BookCoverView = ({ books, onBookClick }: BookCoverViewProps) => {
+  const { selectedPalette } = usePalette();
+  
+  // Function to get a color from the palette based on book spine color
+  const getPlaceholderColor = (spineColor: number) => {
+    // If we have a selected palette with colors
+    if (selectedPalette && selectedPalette.colors && selectedPalette.colors.length > 0) {
+      // Use the spine color as an index into the palette array
+      // We'll use modulo to ensure we stay within the array bounds
+      const colorIndex = (spineColor - 1) % selectedPalette.colors.length;
+      return selectedPalette.colors[colorIndex];
+    }
+    
+    // Fallback to the standard spine color classes
+    return null;
+  };
   if (books.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -36,7 +53,10 @@ export const BookCoverView = ({ books, onBookClick }: BookCoverViewProps) => {
                 />
               ) : (
                 <div 
-                  className={`w-full h-full flex items-center justify-center bg-spine-${book.spineColor}`}
+                  style={{
+                    backgroundColor: getPlaceholderColor(book.spineColor) || undefined
+                  }}
+                  className={`w-full h-full flex items-center justify-center ${!getPlaceholderColor(book.spineColor) ? `bg-spine-${book.spineColor}` : ''}`}
                 >
                   <p className="font-serif text-white text-center px-4 line-clamp-3">
                     {book.title}
