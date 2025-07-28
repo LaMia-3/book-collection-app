@@ -4,11 +4,12 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "NODE_OPTIONS=--enable-source-maps vite",
-    "build": "vite build",
-    "build:dev": "vite build --mode development",
-    "lint": "eslint .",
-    "preview": "vite preview"
+    "dev": "cross-env NODE_OPTIONS=--enable-source-maps vite",
+    "build": "cross-env vite build",
+    "build:dev": "cross-env vite build --mode development",
+    "lint": "cross-env eslint .",
+    "preview": "cross-env vite preview",
+    "start": "npm run dev"
   },
   "dependencies": {
     "@radix-ui/react-accordion": "^1.2.0",
@@ -70,6 +71,7 @@
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react-swc": "^3.5.0",
     "autoprefixer": "^10.4.20",
+    "cross-env": "^7.0.3",
     "eslint": "^9.9.0",
     "eslint-plugin-react-hooks": "^5.1.0-rc.0",
     "eslint-plugin-react-refresh": "^0.4.9",
