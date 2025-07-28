@@ -33,6 +33,35 @@ npm install
 npm run dev
 ```
 
+### Windows-Specific Instructions
+
+The application is fully compatible with Windows. If you're using Windows, follow these additional steps for the best experience:
+
+1. **Node.js Installation**:
+   - Download and install Node.js from the [official website](https://nodejs.org/)
+   - During installation, make sure to check the option to install necessary tools for native modules
+
+2. **Command Line**:
+   - You can use either Command Prompt, PowerShell, or Windows Terminal
+   - For the best experience, we recommend using Windows Terminal with PowerShell
+
+3. **Running the Application**:
+   ```powershell
+   # Install dependencies
+   npm install
+
+   # Start development server
+   npm run dev
+   ```
+
+4. **Troubleshooting Windows-Specific Issues**:
+   - If you encounter ENOENT errors, ensure paths don't contain special characters
+   - If you see permission errors, try running your terminal as Administrator
+   - For any "node-gyp" related errors during installation, run:
+     ```powershell
+     npm install --global --production windows-build-tools
+     ```
+
 ## Project Structure
 
 - `/src/components`: UI components
