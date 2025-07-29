@@ -1,3 +1,6 @@
+/* Import custom scrollbar styles for cross-browser compatibility */
+@import './styles/scrollbar.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

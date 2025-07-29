@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef, KeyboardEvent, useCallback } from "react";
 import { Book } from "@/types/book";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,8 +6,30 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, Star, BookOpen, X } from "lucide-react";
+import { 
+  Calendar, 
+  Star, 
+  BookOpen, 
+  X, 
+  Trash2, 
+  AlertTriangle, 
+  Check, 
+  Edit2, 
+  AlertCircle 
+} from "lucide-react";
 import { cn } from "@/lib/utils";
+import { cleanHtml } from "@/utils/textUtils";
+import { useToast } from "@/components/ui/use-toast";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface BookDetailsProps {
   book: Book;
@@ -17,22 +39,149 @@ interface BookDetailsProps {
 }
 
 export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsProps) => {
+  // State management
   const [editedBook, setEditedBook] = useState<Book>({ ...book });
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [titleError, setTitleError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  
+  // Refs and hooks
+  const titleInputRef = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
 
-  const handleSave = () => {
-    onUpdate(editedBook);
-    onClose();
-  };
-
-  const handleDelete = () => {
-    if (onDelete) {
-      onDelete(book.id);
+  // Event handlers with useCallback to prevent unnecessary re-renders
+  const handleSave = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    if (isSaving) return;
+    
+    setIsSaving(true);
+    try {
+      onUpdate(editedBook);
+      onClose();
+    } catch (error) {
+      console.error('Error saving book:', error);
+      toast({
+        title: "Error",
+        description: "Failed to save changes. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSaving(false);
     }
-  };
+  }, [editedBook, isSaving, onUpdate, onClose, toast]);
 
-  const handleRatingClick = (rating: number) => {
-    setEditedBook({ ...editedBook, rating });
-  };
+  const handleDeleteConfirmation = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setShowDeleteConfirm(true);
+  }, []);
+  
+  const confirmDelete = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    if (isDeleting) return;
+    
+    setIsDeleting(true);
+    try {
+      if (onDelete) {
+        onDelete(book.id);
+      }
+      setShowDeleteConfirm(false);
+      onClose();
+    } catch (error) {
+      console.error('Error deleting book:', error);
+      setShowDeleteConfirm(false);
+      toast({
+        title: "Error",
+        description: "Failed to delete book. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  }, [book.id, isDeleting, onDelete, onClose, setShowDeleteConfirm, toast]);
+
+  // Field update handlers
+  const handleRatingClick = useCallback((rating: number) => {
+    setEditedBook(prev => ({ ...prev, rating }));
+  }, []);
+  
+  // Title editing functions
+  const startTitleEdit = useCallback(() => {
+    setIsEditingTitle(true);
+    setTitleError(null);
+    // Focus the input after state update
+    setTimeout(() => {
+      if (titleInputRef.current) {
+        titleInputRef.current.focus();
+        titleInputRef.current.select();
+      }
+    }, 10);
+  }, []);
+  
+  const validateAndSaveTitle = useCallback(() => {
+    const newTitle = titleInputRef.current?.value.trim();
+    
+    if (!newTitle) {
+      setTitleError("Title cannot be empty");
+      return false;
+    }
+    
+    setEditedBook(prev => ({ ...prev, title: newTitle }));
+    setIsEditingTitle(false);
+    setTitleError(null);
+    return true;
+  }, []);
+  
+  const cancelTitleEdit = useCallback(() => {
+    setIsEditingTitle(false);
+    setTitleError(null);
+    // Reset to the current value
+    if (titleInputRef.current) {
+      titleInputRef.current.value = editedBook.title;
+    }
+  }, [editedBook.title]);
+  
+  const handleTitleKeyDown = useCallback((e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      validateAndSaveTitle();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      cancelTitleEdit();
+    }
+  }, [validateAndSaveTitle, cancelTitleEdit]);
+  
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: globalThis.KeyboardEvent) => {
+      // Skip if we're editing the title (handled separately)
+      if (isEditingTitle) return;
+      
+      // Save with Ctrl+S or Cmd+S
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        if (!isSaving) {
+          // Create a synthetic event for the save handler
+          const syntheticEvent = { preventDefault: () => {} } as React.MouseEvent;
+          handleSave(syntheticEvent);
+          toast({
+            title: "Changes saved",
+            description: "Your book details have been updated."
+          });
+        }
+      }
+      
+      // Cancel with Escape (if not in a dialog)
+      if (e.key === 'Escape' && !showDeleteConfirm) {
+        e.preventDefault();
+        onClose();
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown as EventListener);
+    return () => window.removeEventListener('keydown', handleKeyDown as EventListener);
+  }, [editedBook, isSaving, isEditingTitle, showDeleteConfirm, onClose, handleSave, toast]);
 
   return (
     <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -40,15 +189,67 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
         <CardHeader className="bg-gradient-warm text-primary-foreground">
           <div className="flex items-start justify-between">
             <div className="flex-1">
-              <CardTitle className="font-serif text-xl mb-2">
-                {book.title}
-              </CardTitle>
+              {isEditingTitle ? (
+                <div className="relative mb-2">
+                  <Input
+                    ref={titleInputRef}
+                    defaultValue={editedBook.title}
+                    className={cn(
+                      "font-serif text-xl bg-white/20 text-primary-foreground border-white/30 pr-16",
+                      titleError && "border-destructive focus-visible:ring-destructive"
+                    )}
+                    onKeyDown={handleTitleKeyDown}
+                    aria-invalid={!!titleError}
+                  />
+                  <div className="absolute right-0 top-0 h-full flex items-center gap-1 pr-1">
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      onClick={validateAndSaveTitle}
+                      className="h-8 w-8 text-primary-foreground hover:bg-white/20"
+                    >
+                      <Check className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      onClick={cancelTitleEdit}
+                      className="h-8 w-8 text-primary-foreground hover:bg-white/20"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  {titleError && (
+                    <div className="text-destructive text-sm flex items-center gap-1 mt-1">
+                      <AlertCircle className="h-3 w-3" /> {titleError}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="flex items-center gap-1 mb-2">
+                  <CardTitle className="font-serif text-xl">
+                    {editedBook.title}
+                  </CardTitle>
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    onClick={startTitleEdit}
+                    className="h-6 w-6 text-primary-foreground/80 hover:bg-white/20 hover:text-primary-foreground"
+                    title="Edit title"
+                  >
+                    <Edit2 className="h-3 w-3" />
+                  </Button>
+                </div>
+              )}
               <p className="text-primary-foreground/90 font-medium">
-                by {book.author}
+                by {editedBook.author}
               </p>
-              {book.genre && (
+              {editedBook.genre && (
                 <Badge variant="secondary" className="mt-2 bg-white/20 text-primary-foreground border-white/30">
-                  {book.genre}
+                  {editedBook.genre}
                 </Badge>
               )}
             </div>
@@ -224,33 +425,83 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
           {book.description && (
             <div>
               <Label>Description</Label>
-              <div className="text-sm text-muted-foreground mt-1 p-3 bg-muted rounded leading-relaxed">
-                {book.description.length > 300
-                  ? `${book.description.substring(0, 300)}...`
-                  : book.description}
+              <div className="relative">
+                <div 
+                  className="text-sm text-muted-foreground mt-1 p-3 bg-muted rounded leading-relaxed max-h-[200px] overflow-y-auto custom-scrollbar scrollbar-thin whitespace-pre-line"
+                  aria-label="Book description"
+                >
+                  {cleanHtml(editedBook.description || book.description)}
+                </div>
+                {/* Fade effect at the bottom to indicate scrollable content */}
+                <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-muted to-transparent pointer-events-none"></div>
               </div>
             </div>
           )}
 
           {/* Action Buttons */}
           <div className="flex flex-wrap gap-2 pt-4">
-            <Button onClick={handleSave} className="bg-gradient-warm hover:bg-primary-glow">
-              Save Changes
-            </Button>
-            <Button variant="outline" onClick={onClose}>
-              Cancel
-            </Button>
-            <div className="flex-grow"></div>
             {onDelete && (
               <Button 
                 variant="destructive" 
-                onClick={handleDelete}
-                className="bg-gradient-danger hover:bg-destructive/90"
+                onClick={handleDeleteConfirmation}
+                className="bg-gradient-danger hover:bg-destructive/90 mr-auto"
               >
+                <Trash2 className="h-4 w-4 mr-2" />
                 Delete Book
               </Button>
             )}
+            <div className="flex-grow"></div>
+            <Button 
+              variant="outline" 
+              onClick={onClose}
+              type="button"
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleSave} 
+              className="bg-gradient-warm hover:bg-primary-glow"
+              disabled={isSaving}
+              type="button"
+              title="Save Changes (Ctrl+S)"
+            >
+              {isSaving ? 'Saving...' : 'Save Changes'}
+            </Button>
           </div>
+          
+          {/* Delete Confirmation Dialog */}
+          <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+            <AlertDialogContent className="max-w-md">
+              <AlertDialogHeader>
+                <AlertDialogTitle className="flex items-center gap-2">
+                  <AlertTriangle className="h-5 w-5 text-destructive" />
+                  Delete Book
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  Are you sure you want to delete "{book.title}"? This action cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel 
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setShowDeleteConfirm(false);
+                  }}
+                  type="button"
+                >
+                  Cancel
+                </AlertDialogCancel>
+                <AlertDialogAction 
+                  onClick={confirmDelete}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  disabled={isDeleting}
+                  type="button"
+                >
+                  {isDeleting ? 'Deleting...' : 'Delete'}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </CardContent>
       </Card>
     </div>

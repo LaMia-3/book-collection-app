@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg width="300" height="450" viewBox="0 0 300 450" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="300" height="450" fill="#f1f5f9" />
+  
+  <!-- Color palette illustration -->
+  <rect x="60" y="100" width="180" height="30" fill="#3B82F6" />
+  <rect x="60" y="140" width="180" height="30" fill="#EF4444" />
+  <rect x="60" y="180" width="180" height="30" fill="#10B981" />
+  <rect x="60" y="220" width="180" height="30" fill="#F59E0B" />
+  <rect x="60" y="260" width="180" height="30" fill="#8B5CF6" />
+  
+  <!-- Paintbrush icon -->
+  <path d="M150 320 C145 325, 140 330, 135 340 C130 350, 130 360, 135 365 C140 370, 150 370, 155 360 C160 350, 155 340, 150 320 Z" fill="#64748b" />
+  <path d="M150 320 L180 290 L190 300 L160 330 Z" fill="#64748b" />
+  
+  <!-- Text -->
+  <text x="150" y="70" font-family="Arial" font-size="24" font-weight="bold" text-anchor="middle" fill="#1e293b">Custom Palette</text>
+</svg>
