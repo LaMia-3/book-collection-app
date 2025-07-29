@@ -244,7 +244,7 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
               <Label>Description</Label>
               <div className="relative">
                 <div 
-                  className="text-sm text-muted-foreground mt-1 p-3 bg-muted rounded leading-relaxed max-h-[200px] overflow-y-auto scrollbar-thin scrollbar-thumb-rounded scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent whitespace-pre-line"
+                  className="text-sm text-muted-foreground mt-1 p-3 bg-muted rounded leading-relaxed max-h-[200px] overflow-y-auto custom-scrollbar scrollbar-thin whitespace-pre-line"
                 >
                   {cleanHtml(book.description)}
                 </div>
