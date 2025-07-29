@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, KeyboardEvent } from "react";
+import { useState, useEffect, useRef, KeyboardEvent, useCallback } from "react";
 import { Book } from "@/types/book";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,7 +6,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, Star, BookOpen, X, Trash2, AlertTriangle, Check, Edit2, AlertCircle } from "lucide-react";
+import { 
+  Calendar, 
+  Star, 
+  BookOpen, 
+  X, 
+  Trash2, 
+  AlertTriangle, 
+  Check, 
+  Edit2, 
+  AlertCircle 
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { cleanHtml } from "@/utils/textUtils";
 import { useToast } from "@/components/ui/use-toast";
@@ -29,20 +39,20 @@ interface BookDetailsProps {
 }
 
 export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsProps) => {
+  // State management
   const [editedBook, setEditedBook] = useState<Book>({ ...book });
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  
-  // Title editing state
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [titleError, setTitleError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  
+  // Refs and hooks
   const titleInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
-  // Prevent multiple clicks by using state management
-  const [isSaving, setIsSaving] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-
-  const handleSave = (e: React.MouseEvent) => {
+  // Event handlers with useCallback to prevent unnecessary re-renders
+  const handleSave = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     if (isSaving) return;
     
@@ -52,17 +62,22 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
       onClose();
     } catch (error) {
       console.error('Error saving book:', error);
+      toast({
+        title: "Error",
+        description: "Failed to save changes. Please try again.",
+        variant: "destructive"
+      });
     } finally {
       setIsSaving(false);
     }
-  };
+  }, [editedBook, isSaving, onUpdate, onClose, toast]);
 
-  const handleDeleteConfirmation = (e: React.MouseEvent) => {
+  const handleDeleteConfirmation = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     setShowDeleteConfirm(true);
-  };
+  }, []);
   
-  const confirmDelete = (e: React.MouseEvent) => {
+  const confirmDelete = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     if (isDeleting) return;
     
@@ -76,14 +91,66 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
     } catch (error) {
       console.error('Error deleting book:', error);
       setShowDeleteConfirm(false);
+      toast({
+        title: "Error",
+        description: "Failed to delete book. Please try again.",
+        variant: "destructive"
+      });
     } finally {
       setIsDeleting(false);
     }
-  };
+  }, [book.id, isDeleting, onDelete, onClose, setShowDeleteConfirm, toast]);
 
-  const handleRatingClick = (rating: number) => {
-    setEditedBook({ ...editedBook, rating });
-  };
+  // Field update handlers
+  const handleRatingClick = useCallback((rating: number) => {
+    setEditedBook(prev => ({ ...prev, rating }));
+  }, []);
+  
+  // Title editing functions
+  const startTitleEdit = useCallback(() => {
+    setIsEditingTitle(true);
+    setTitleError(null);
+    // Focus the input after state update
+    setTimeout(() => {
+      if (titleInputRef.current) {
+        titleInputRef.current.focus();
+        titleInputRef.current.select();
+      }
+    }, 10);
+  }, []);
+  
+  const validateAndSaveTitle = useCallback(() => {
+    const newTitle = titleInputRef.current?.value.trim();
+    
+    if (!newTitle) {
+      setTitleError("Title cannot be empty");
+      return false;
+    }
+    
+    setEditedBook(prev => ({ ...prev, title: newTitle }));
+    setIsEditingTitle(false);
+    setTitleError(null);
+    return true;
+  }, []);
+  
+  const cancelTitleEdit = useCallback(() => {
+    setIsEditingTitle(false);
+    setTitleError(null);
+    // Reset to the current value
+    if (titleInputRef.current) {
+      titleInputRef.current.value = editedBook.title;
+    }
+  }, [editedBook.title]);
+  
+  const handleTitleKeyDown = useCallback((e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      validateAndSaveTitle();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      cancelTitleEdit();
+    }
+  }, [validateAndSaveTitle, cancelTitleEdit]);
   
   // Keyboard shortcuts
   useEffect(() => {
@@ -115,52 +182,6 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
     window.addEventListener('keydown', handleKeyDown as EventListener);
     return () => window.removeEventListener('keydown', handleKeyDown as EventListener);
   }, [editedBook, isSaving, isEditingTitle, showDeleteConfirm, onClose, handleSave, toast]);
-  
-  // Title editing functions
-  const startTitleEdit = () => {
-    setIsEditingTitle(true);
-    setTitleError(null);
-    // Focus the input after state update
-    setTimeout(() => {
-      if (titleInputRef.current) {
-        titleInputRef.current.focus();
-        titleInputRef.current.select();
-      }
-    }, 10);
-  };
-  
-  const validateAndSaveTitle = () => {
-    const newTitle = titleInputRef.current?.value.trim();
-    
-    if (!newTitle) {
-      setTitleError("Title cannot be empty");
-      return false;
-    }
-    
-    setEditedBook({ ...editedBook, title: newTitle });
-    setIsEditingTitle(false);
-    setTitleError(null);
-    return true;
-  };
-  
-  const cancelTitleEdit = () => {
-    setIsEditingTitle(false);
-    setTitleError(null);
-    // Reset to the current value
-    if (titleInputRef.current) {
-      titleInputRef.current.value = editedBook.title;
-    }
-  };
-  
-  const handleTitleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      validateAndSaveTitle();
-    } else if (e.key === "Escape") {
-      e.preventDefault();
-      cancelTitleEdit();
-    }
-  };
 
   return (
     <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -407,8 +428,9 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
               <div className="relative">
                 <div 
                   className="text-sm text-muted-foreground mt-1 p-3 bg-muted rounded leading-relaxed max-h-[200px] overflow-y-auto custom-scrollbar scrollbar-thin whitespace-pre-line"
+                  aria-label="Book description"
                 >
-                  {cleanHtml(book.description)}
+                  {cleanHtml(editedBook.description || book.description)}
                 </div>
                 {/* Fade effect at the bottom to indicate scrollable content */}
                 <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-muted to-transparent pointer-events-none"></div>
