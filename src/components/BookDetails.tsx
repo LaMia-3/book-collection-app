@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Book } from "@/types/book";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,8 +6,19 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, Star, BookOpen, X } from "lucide-react";
+import { Calendar, Star, BookOpen, X, Trash2, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { cleanHtml } from "@/utils/textUtils";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface BookDetailsProps {
   book: Book;
@@ -18,16 +29,23 @@ interface BookDetailsProps {
 
 export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsProps) => {
   const [editedBook, setEditedBook] = useState<Book>({ ...book });
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const handleSave = () => {
     onUpdate(editedBook);
     onClose();
   };
 
-  const handleDelete = () => {
+  const handleDeleteConfirmation = () => {
+    setShowDeleteConfirm(true);
+  };
+  
+  const confirmDelete = () => {
     if (onDelete) {
       onDelete(book.id);
     }
+    setShowDeleteConfirm(false);
+    onClose();
   };
 
   const handleRatingClick = (rating: number) => {
@@ -224,33 +242,64 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
           {book.description && (
             <div>
               <Label>Description</Label>
-              <div className="text-sm text-muted-foreground mt-1 p-3 bg-muted rounded leading-relaxed">
-                {book.description.length > 300
-                  ? `${book.description.substring(0, 300)}...`
-                  : book.description}
+              <div className="relative">
+                <div 
+                  className="text-sm text-muted-foreground mt-1 p-3 bg-muted rounded leading-relaxed max-h-[200px] overflow-y-auto scrollbar-thin scrollbar-thumb-rounded scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent whitespace-pre-line"
+                >
+                  {cleanHtml(book.description)}
+                </div>
+                {/* Fade effect at the bottom to indicate scrollable content */}
+                <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-muted to-transparent pointer-events-none"></div>
               </div>
             </div>
           )}
 
           {/* Action Buttons */}
           <div className="flex flex-wrap gap-2 pt-4">
-            <Button onClick={handleSave} className="bg-gradient-warm hover:bg-primary-glow">
-              Save Changes
-            </Button>
-            <Button variant="outline" onClick={onClose}>
-              Cancel
-            </Button>
-            <div className="flex-grow"></div>
             {onDelete && (
               <Button 
                 variant="destructive" 
-                onClick={handleDelete}
-                className="bg-gradient-danger hover:bg-destructive/90"
+                onClick={handleDeleteConfirmation}
+                className="bg-gradient-danger hover:bg-destructive/90 mr-auto"
               >
+                <Trash2 className="h-4 w-4 mr-2" />
                 Delete Book
               </Button>
             )}
+            <div className="flex-grow"></div>
+            <Button variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button onClick={handleSave} className="bg-gradient-warm hover:bg-primary-glow">
+              Save Changes
+            </Button>
           </div>
+          
+          {/* Delete Confirmation Dialog */}
+          <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+            <AlertDialogContent className="max-w-md">
+              <AlertDialogHeader>
+                <AlertDialogTitle className="flex items-center gap-2">
+                  <AlertTriangle className="h-5 w-5 text-destructive" />
+                  Delete Book
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  Are you sure you want to delete "{book.title}"? This action cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel onClick={() => setShowDeleteConfirm(false)}>
+                  Cancel
+                </AlertDialogCancel>
+                <AlertDialogAction 
+                  onClick={confirmDelete}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                >
+                  Delete
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </CardContent>
       </Card>
     </div>
