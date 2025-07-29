@@ -31,21 +31,47 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
   const [editedBook, setEditedBook] = useState<Book>({ ...book });
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
-  const handleSave = () => {
-    onUpdate(editedBook);
-    onClose();
+  // Prevent multiple clicks by using useCallback and adding state management
+  const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleSave = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (isSaving) return;
+    
+    setIsSaving(true);
+    try {
+      onUpdate(editedBook);
+      onClose();
+    } catch (error) {
+      console.error('Error saving book:', error);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const handleDeleteConfirmation = () => {
+  const handleDeleteConfirmation = (e: React.MouseEvent) => {
+    e.preventDefault();
     setShowDeleteConfirm(true);
   };
   
-  const confirmDelete = () => {
-    if (onDelete) {
-      onDelete(book.id);
+  const confirmDelete = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (isDeleting) return;
+    
+    setIsDeleting(true);
+    try {
+      if (onDelete) {
+        onDelete(book.id);
+      }
+      setShowDeleteConfirm(false);
+      onClose();
+    } catch (error) {
+      console.error('Error deleting book:', error);
+      setShowDeleteConfirm(false);
+    } finally {
+      setIsDeleting(false);
     }
-    setShowDeleteConfirm(false);
-    onClose();
   };
 
   const handleRatingClick = (rating: number) => {
@@ -267,11 +293,20 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
               </Button>
             )}
             <div className="flex-grow"></div>
-            <Button variant="outline" onClick={onClose}>
+            <Button 
+              variant="outline" 
+              onClick={onClose}
+              type="button"
+            >
               Cancel
             </Button>
-            <Button onClick={handleSave} className="bg-gradient-warm hover:bg-primary-glow">
-              Save Changes
+            <Button 
+              onClick={handleSave} 
+              className="bg-gradient-warm hover:bg-primary-glow"
+              disabled={isSaving}
+              type="button"
+            >
+              {isSaving ? 'Saving...' : 'Save Changes'}
             </Button>
           </div>
           
@@ -288,14 +323,22 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogCancel onClick={() => setShowDeleteConfirm(false)}>
+                <AlertDialogCancel 
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setShowDeleteConfirm(false);
+                  }}
+                  type="button"
+                >
                   Cancel
                 </AlertDialogCancel>
                 <AlertDialogAction 
                   onClick={confirmDelete}
                   className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  disabled={isDeleting}
+                  type="button"
                 >
-                  Delete
+                  {isDeleting ? 'Deleting...' : 'Delete'}
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>

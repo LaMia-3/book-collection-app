@@ -79,3 +79,53 @@ The application supports theme customization through the Settings dialog, includ
 - Default view mode selection
 - API preferences
 - Book spine color palettes
+
+## Debugging
+
+### Browser Console Debugging
+
+1. **Access Chrome DevTools**:
+   - Right-click anywhere on the page and select "Inspect" or press F12
+   - Click on the "Console" tab to view errors and logs
+   - Filter by error types using the dropdown menu (Errors, Warnings, Info)
+
+2. **Network Debugging**:
+   - Use the "Network" tab in DevTools to monitor API requests
+   - Filter by XHR requests to focus on data fetching issues
+   - Check for failed requests (red entries) or slow responses
+
+### Server-Side Debugging
+
+1. **Enable Verbose Logging**:
+   ```sh
+   # Run with debug output for Vite
+   DEBUG=vite:* npm run dev
+   
+   # Run with debug output for React
+   REACT_APP_DEBUG=true npm run dev
+   ```
+
+2. **Common Issues and Solutions**:
+   - **CORS errors**: Check browser console for cross-origin issues
+   - **White screen**: Look for JavaScript errors in the console
+   - **Unresponsive UI**: Check for infinite loops or blocked main thread
+   - **API failures**: Verify network requests and response codes
+
+3. **Performance Debugging**:
+   - Use the "Performance" tab in DevTools to record and analyze rendering
+   - Look for long tasks that might be blocking the UI thread
+   - Check for memory leaks in the "Memory" tab
+
+### Cross-Browser Testing
+
+The application is designed to work across modern browsers, but some features may behave differently:
+
+- **Chrome/Edge**: Best overall support, recommended for development
+- **Firefox**: Good support, may have minor styling differences
+- **Safari**: Test for WebKit-specific issues, especially with flexbox layouts
+
+If you encounter browser-specific issues, add the following to your bug report:
+- Browser name and version
+- Operating system
+- Steps to reproduce
+- Screenshots of the console errors

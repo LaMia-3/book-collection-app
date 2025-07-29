@@ -1,9 +1,9 @@
+/* Import custom scrollbar styles for cross-browser compatibility */
+@import './styles/scrollbar.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-/* Import custom scrollbar styles for cross-browser compatibility */
-@import './styles/scrollbar.css';
 
 /* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
 All colors MUST be HSL.
