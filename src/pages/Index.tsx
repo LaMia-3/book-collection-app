@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useSettings } from "@/contexts/SettingsContext";
 import { Book } from "@/types/book";
 import { BookSearch } from "@/components/BookSearch";
@@ -17,6 +18,7 @@ import { AdvancedSearch } from "@/components/AdvancedSearch";
 import { GoalTracker } from "@/components/GoalTracker";
 
 const Index = () => {
+  const navigate = useNavigate();
   const { toast } = useToast();
   const { settings } = useSettings();
   const [books, setBooks] = useState<Book[]>([]);
@@ -262,7 +264,16 @@ const Index = () => {
               </Button>
               
               {/* View Toggle */}
-              <ViewToggle viewMode={viewMode} onChange={setViewMode} />
+              <ViewToggle 
+                viewMode={viewMode} 
+                onChange={(newViewMode) => {
+                  if (newViewMode === 'series') {
+                    navigate('/series');
+                  } else {
+                    setViewMode(newViewMode);
+                  }
+                }}
+              />  
             </div>
           </div>
           

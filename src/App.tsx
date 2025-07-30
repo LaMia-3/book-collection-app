@@ -9,6 +9,7 @@ import PaletteProvider from "./contexts/PaletteContext";
 import BirthdayCelebration from "./components/BirthdayCelebration";
 import ImportStatusDisplay from "./components/ImportStatusDisplay";
 import Index from "./pages/Index";
+import SeriesPage from "./pages/SeriesPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -26,6 +27,7 @@ const App = () => (
               <BrowserRouter>
                 <Routes>
                   <Route path="/" element={<Index />} />
+                  <Route path="/series" element={<SeriesPage />} />
                   {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                   <Route path="*" element={<NotFound />} />
                 </Routes>

@@ -182,9 +182,9 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
                   <Input
                     id="seriesName"
                     placeholder="e.g., The Chronicles of Narnia"
-                    value={editedBook.seriesName || ""}
+                    value={editedBook._legacySeriesName || ""}
                     onChange={(e) =>
-                      setEditedBook({ ...editedBook, seriesName: e.target.value })
+                      setEditedBook({ ...editedBook, _legacySeriesName: e.target.value })
                     }
                   />
                 </div>
@@ -194,9 +194,9 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
                   <Input
                     id="nextBookTitle"
                     placeholder="Title of the next book"
-                    value={editedBook.nextBookTitle || ""}
+                    value={editedBook._legacyNextBookTitle || ""}
                     onChange={(e) =>
-                      setEditedBook({ ...editedBook, nextBookTitle: e.target.value })
+                      setEditedBook({ ...editedBook, _legacyNextBookTitle: e.target.value })
                     }
                   />
                 </div>
@@ -207,11 +207,11 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
                     id="nextBookExpectedYear"
                     type="number"
                     placeholder="2024"
-                    value={editedBook.nextBookExpectedYear || ""}
+                    value={editedBook._legacyNextBookExpectedYear || ""}
                     onChange={(e) =>
                       setEditedBook({
                         ...editedBook,
-                        nextBookExpectedYear: parseInt(e.target.value) || undefined,
+                        _legacyNextBookExpectedYear: parseInt(e.target.value) || undefined,
                       })
                     }
                   />

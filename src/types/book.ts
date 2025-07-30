@@ -8,16 +8,23 @@ export interface Book {
   pageCount?: number;
   thumbnail?: string;
   googleBooksId?: string;
+  openLibraryId?: string;
   
   // User tracking fields
   status?: 'reading' | 'completed' | 'want-to-read'; // Track reading status
   completedDate?: string;
   rating?: number; // 1-5 stars
   notes?: string;
-  isPartOfSeries?: boolean;
-  seriesName?: string;
-  nextBookTitle?: string;
-  nextBookExpectedYear?: number;
+  
+  // Series fields - enhanced for new series feature
+  isPartOfSeries: boolean;
+  seriesId?: string; // Link to Series object
+  volumeNumber?: number; // Position in the series
+  
+  // Legacy series fields - maintained for data migration
+  _legacySeriesName?: string; // Renamed from seriesName
+  _legacyNextBookTitle?: string; // Renamed from nextBookTitle
+  _legacyNextBookExpectedYear?: number; // Renamed from nextBookExpectedYear
   
   // Display properties
   spineColor: number; // 1-8 for different colors
