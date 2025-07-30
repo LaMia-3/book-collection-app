@@ -10,7 +10,6 @@ import { SeriesCard } from "@/components/series/SeriesCard";
 import { CreateSeriesDialog } from "@/components/series/CreateSeriesDialog";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { seriesDetectionService } from "@/services/api/SeriesDetectionService";
-import { generateMockSeries, detectPotentialSeries } from "@/utils/mockApiData";
 
 /**
  * Series management page component
@@ -55,7 +54,7 @@ const SeriesPage = () => {
         if (savedSeries) {
           seriesData = JSON.parse(savedSeries);
         } 
-        // If no saved series data or empty array, generate mock series
+        // If no saved series data but we have books, try to detect series
         else if (parsedBooks.length > 0) {
           seriesData = await detectSeriesFromBooks(parsedBooks);
         }
@@ -83,12 +82,7 @@ const SeriesPage = () => {
   // Detect series from books using the API service
   const detectSeriesFromBooks = async (books: Book[]): Promise<Series[]> => {
     try {
-      // Use mock data for demonstration if we have less than 10 books
-      if (books.length < 10) {
-        return generateMockSeries();
-      }
-      
-      // For larger collections, use the detection service
+      // Use detection service to find potential series
       const potentialSeries = await seriesDetectionService.detectSeriesFromCollection(books);
       
       // Convert the Map to an array of Series objects

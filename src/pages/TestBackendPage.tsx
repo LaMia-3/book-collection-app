@@ -14,7 +14,6 @@ import { Notification } from '@/types/notification';
 import { Book } from '@/types/book';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Check, AlertCircle, BookOpen, Bell } from 'lucide-react';
-import { generateMockSeries } from '@/utils/mockApiData';
 
 const TestBackendPage = () => {
   const [loading, setLoading] = useState(false);
@@ -88,16 +87,15 @@ const TestBackendPage = () => {
   
   const testSeriesOperations = async () => {
     try {
-      // Add a mock series
-      const mockData = generateMockSeries()[0];
+      // Add a test series
       const newSeries = await seriesService.createSeries({
-        name: mockData.name,
-        description: mockData.description || "Test series description",
-        author: mockData.author,
+        name: "The Stormlight Archive",
+        description: "Epic fantasy series set in the world of Roshar",
+        author: "Brandon Sanderson",
         books: ["test-book-1"],
-        coverImage: mockData.coverImage,
-        genre: mockData.genre,
-        status: mockData.status || "ongoing",
+        coverImage: "https://via.placeholder.com/400x600?text=Test+Series",
+        genre: ["fantasy"],
+        status: "ongoing",
         readingOrder: "publication",
         isTracked: true,
         hasUpcoming: false,

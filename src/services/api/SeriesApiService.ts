@@ -1,43 +1,92 @@
 import { Series } from '@/types/series';
-import { generateMockSeries } from '@/utils/mockApiData';
 
 /**
  * Service for fetching series data from external APIs
- * Simplified mock implementation for development
  */
 export class SeriesApiService {
-  // Use mock data instead of making real API calls
+  private baseUrl = 'https://www.googleapis.com/books/v1';
+  private openLibraryBaseUrl = 'https://openlibrary.org/api';
+  
+  /**
+   * Get enhanced series information by searching APIs with book info
+   */
   async getEnhancedSeriesInfo(bookId: string, title: string, author: string): Promise<Partial<Series> | null> {
-    console.log('Mock API call for enhanced series info', { bookId, title, author });
-    
-    // Return a mock series based on the book title
-    const mockSeries = generateMockSeries().find(s => {
-      return s.name.toLowerCase().includes(title.toLowerCase()) || 
-             (author && s.author?.toLowerCase().includes(author.toLowerCase()));
-    });
-    
-    if (mockSeries) {
+    try {
+      // First try to identify series from Google Books API
+      const query = encodeURIComponent(`${title} ${author} series`);
+      const response = await fetch(`${this.baseUrl}/volumes?q=${query}&maxResults=5`);
+      
+      if (!response.ok) {
+        throw new Error(`Google Books API error: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      
+      if (!data.items || data.items.length === 0) {
+        return null;
+      }
+      
+      // Look for books that mention "series" in the title or description
+      const seriesBook = data.items.find((item: any) => {
+        const volumeInfo = item.volumeInfo || {};
+        const seriesInfo = volumeInfo.seriesInfo;
+        const description = volumeInfo.description || '';
+        const bookTitle = volumeInfo.title || '';
+        
+        return seriesInfo || 
+               description.toLowerCase().includes('series') || 
+               bookTitle.toLowerCase().includes('series');
+      });
+      
+      if (!seriesBook) {
+        return null;
+      }
+      
+      const volumeInfo = seriesBook.volumeInfo;
+      const seriesName = this.extractSeriesName(volumeInfo.title, title);
+      
       return {
-        name: mockSeries.name,
-        description: mockSeries.description,
-        author: mockSeries.author,
-        coverImage: mockSeries.coverImage,
-        status: mockSeries.status,
-        totalBooks: mockSeries.totalBooks,
-        genre: mockSeries.genre
+        name: seriesName || title.split(':')[0],
+        description: volumeInfo.description,
+        author: volumeInfo.authors ? volumeInfo.authors[0] : author,
+        coverImage: volumeInfo.imageLinks?.thumbnail,
+        status: 'unknown', // API doesn't provide series status
+        totalBooks: undefined, // API doesn't provide total books count
+        genre: volumeInfo.categories
       };
+    } catch (error) {
+      console.error('Error fetching series info:', error);
+      return null;
+    }
+  }
+  
+  /**
+   * Try to extract series name from book title
+   */
+  private extractSeriesName(fullTitle: string, bookTitle: string): string | null {
+    // Common series patterns
+    const patterns = [
+      /(.+?)(?: Series)(?:: | - | )(.+)/i, // "Harry Potter Series: Book 1"
+      /(.+?)(?: #\d+)/i,                    // "Harry Potter #1"
+      /(.+?)(?:: Book \d+)/i,               // "Harry Potter: Book 1"
+      /(.+?)(?:: Volume \d+)/i,             // "Harry Potter: Volume 1"
+      /(.+?)(?:, Book \d+)/i,               // "Harry Potter, Book 1"
+      /(.+?)(?:\((?:Book|Vol\.?) \d+\))/i   // "Harry Potter (Book 1)"
+    ];
+    
+    for (const pattern of patterns) {
+      const match = fullTitle.match(pattern);
+      if (match && match[1]) {
+        return match[1].trim();
+      }
     }
     
-    // Default mock series data
-    return {
-      name: title.split(':')[0] || 'Unknown Series',
-      description: 'A captivating series of books that will keep you engaged from start to finish.',
-      author: author,
-      coverImage: 'https://picsum.photos/seed/series1/400/600',
-      status: 'ongoing',
-      totalBooks: 5,
-      genre: ['Fiction']
-    };
+    // If book title has a colon, first part might be series name
+    if (bookTitle.includes(':')) {
+      return bookTitle.split(':')[0].trim();
+    }
+    
+    return null;
   }
 }
 
