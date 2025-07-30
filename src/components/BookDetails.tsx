@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, KeyboardEvent, useCallback } from "react";
 import { Book } from "@/types/book";
 import { Series } from "@/types/series";
 import { Button } from "@/components/ui/button";
@@ -8,14 +8,36 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { 
-  Calendar, Star, BookOpen, X, Library, Plus, ChevronRight,
-  Pencil, Trash2, Check, ChevronDown, ChevronUp
+  Calendar, 
+  Star, 
+  BookOpen, 
+  X, 
+  Library, 
+  Plus, 
+  ChevronRight,
+  ChevronDown, 
+  ChevronUp,
+  Trash2, 
+  AlertTriangle, 
+  Check, 
+  Edit2, 
+  AlertCircle 
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { cleanHtml } from "@/utils/textUtils";
 import { seriesService } from "@/services/SeriesService";
 import { Skeleton } from "@/components/ui/skeleton";
-import { toast } from "sonner";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { useToast } from "@/components/ui/use-toast";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface BookDetailsProps {
   book: Book;
@@ -25,15 +47,22 @@ interface BookDetailsProps {
 }
 
 export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsProps) => {
+  // State management
   const [editedBook, setEditedBook] = useState<Book>({ ...book });
   const [availableSeries, setAvailableSeries] = useState<Series[]>([]);
   const [loadingSeries, setLoadingSeries] = useState(false);
   const [selectedSeriesId, setSelectedSeriesId] = useState<string>(book.seriesId || '');
   const [volumeNumber, setVolumeNumber] = useState<number | undefined>(book.volumeNumber);
-  const [isTitleEditing, setIsTitleEditing] = useState(false);
-  const [editedTitle, setEditedTitle] = useState(book.title);
-  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
   const [showSeriesInfo, setShowSeriesInfo] = useState(!!book.seriesId);
+  
+  // States for improved UI from main branch
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [titleError, setTitleError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const titleInputRef = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
 
   // Load available series on component mount
   useEffect(() => {
@@ -57,68 +86,167 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
     loadSeries();
   }, [book.seriesId]);
 
-  const handleSave = async () => {
-    // Update book with series information and title if it was edited
-    const updatedBook: Book = {
-      ...editedBook,
-      title: editedTitle,
-      isPartOfSeries: !!selectedSeriesId,
-      seriesId: selectedSeriesId || undefined,
-      volumeNumber: volumeNumber
-    };
+  // Enhanced save handler with loading state
+  const handleSave = useCallback(async () => {
+    if (isSaving) return;
     
-    // If a series was selected, make sure the book is added to that series
-    if (selectedSeriesId) {
-      try {
-        await seriesService.addBookToSeries(selectedSeriesId, book.id);
-        toast.success('Book added to series');
-      } catch (error) {
-        console.error('Error adding book to series:', error);
-        toast.error('Error adding book to series');
+    setIsSaving(true);
+    
+    try {
+      // Update book with series information and title
+      const titleToUse = titleInputRef.current?.value.trim() || editedBook.title;
+      
+      const updatedBook: Book = {
+        ...editedBook,
+        title: titleToUse,
+        isPartOfSeries: !!selectedSeriesId,
+        seriesId: selectedSeriesId || undefined,
+        volumeNumber: volumeNumber
+      };
+      
+      // If a series was selected, make sure the book is added to that series
+      if (selectedSeriesId) {
+        try {
+          await seriesService.addBookToSeries(selectedSeriesId, book.id);
+          toast({
+            title: "Series Updated",
+            description: "Book successfully added to series."
+          });
+        } catch (error) {
+          console.error('Error adding book to series:', error);
+          toast({
+            title: "Error",
+            description: "Failed to add book to series.",
+            variant: "destructive"
+          });
+        }
       }
+      
+      onUpdate(updatedBook);
+      onClose();
+      
+      toast({
+        title: "Changes Saved",
+        description: "Book details updated successfully."
+      });
+    } catch (error) {
+      console.error('Error saving book:', error);
+      toast({
+        title: "Error",
+        description: "Failed to save changes. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSaving(false);
     }
+  }, [editedBook, isSaving, onUpdate, onClose, selectedSeriesId, toast]);
+
+  // Delete confirmation and handling
+  const handleDeleteConfirmation = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setShowDeleteConfirm(true);
+  }, []);
+  
+  const confirmDelete = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    if (isDeleting || !onDelete) return;
     
-    onUpdate(updatedBook);
-    onClose();
-  };
-
-  const handleDeleteConfirmation = () => {
-    setShowDeleteConfirmation(true);
-  };
-
-  const handleDelete = () => {
-    if (onDelete) {
+    setIsDeleting(true);
+    
+    try {
       onDelete(book.id);
-      setShowDeleteConfirmation(false);
+      setShowDeleteConfirm(false);
+      
+      toast({
+        title: "Book Deleted",
+        description: "The book has been removed from your collection."
+      });
+    } catch (error) {
+      console.error('Error deleting book:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete book. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsDeleting(false);
     }
-  };
+  }, [book.id, isDeleting, onDelete, toast]);
 
-  // Utility function to clean HTML from description
-  const cleanDescription = (html: string): string => {
-    if (!html) return '';
+  // Title editing functions
+  const startTitleEdit = useCallback(() => {
+    setIsEditingTitle(true);
+    setTitleError(null);
+    // Focus the input after state update
+    setTimeout(() => {
+      if (titleInputRef.current) {
+        titleInputRef.current.focus();
+        titleInputRef.current.select();
+      }
+    }, 10);
+  }, []);
+  
+  const validateAndSaveTitle = useCallback(() => {
+    const newTitle = titleInputRef.current?.value.trim();
     
-    // Remove HTML tags but preserve line breaks
-    const withoutTags = html
-      .replace(/<br\s*\/?>/gi, '\n')
-      .replace(/<\/p>/gi, '\n\n')
-      .replace(/<[^>]*>/g, '');
-      
-    // Decode HTML entities
-    const decoded = withoutTags
-      .replace(/&nbsp;/g, ' ')
-      .replace(/&amp;/g, '&')
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&quot;/g, '"');
-      
-    return decoded.trim();
-  };
-
-
-
+    if (!newTitle) {
+      setTitleError("Title cannot be empty");
+      return false;
+    }
+    
+    setEditedBook(prev => ({ ...prev, title: newTitle }));
+    setIsEditingTitle(false);
+    setTitleError(null);
+    return true;
+  }, []);
+  
+  const cancelTitleEdit = useCallback(() => {
+    if (titleInputRef.current) {
+      titleInputRef.current.value = editedBook.title;
+    }
+    setIsEditingTitle(false);
+    setTitleError(null);
+  }, [editedBook.title]);
+  
+  const handleTitleKeyDown = useCallback((e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      validateAndSaveTitle();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      cancelTitleEdit();
+    }
+  }, [validateAndSaveTitle, cancelTitleEdit]);
+  
+  // Rating click handler
   const handleRatingClick = (rating: number) => {
     setEditedBook({ ...editedBook, rating });
   };
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: globalThis.KeyboardEvent) => {
+      // Skip if we're inside an input or textarea
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+      
+      // Ctrl/Cmd + S for save
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        handleSave();
+      }
+      
+      // Escape to close
+      if (e.key === 'Escape' && !isEditingTitle && !showDeleteConfirm) {
+        e.preventDefault();
+        onClose();
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown as EventListener);
+    return () => window.removeEventListener('keydown', handleKeyDown as EventListener);
+  }, [handleSave, onClose, isEditingTitle, showDeleteConfirm]);
 
   return (
     <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -126,46 +254,43 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
         <CardHeader className="bg-gradient-warm text-primary-foreground">
           <div className="flex items-start justify-between">
             <div className="flex-1">
-              {isTitleEditing ? (
-                <div className="flex items-center gap-2">
+              {isEditingTitle ? (
+                <div className="relative mb-2">
                   <Input
-                    value={editedTitle}
-                    onChange={(e) => setEditedTitle(e.target.value)}
-                    className="font-serif text-lg mb-2 bg-white/20 text-primary-foreground border-white/30"
+                    ref={titleInputRef}
+                    defaultValue={editedBook.title}
+                    className={cn(
+                      "font-serif text-lg bg-white/20 text-primary-foreground border-white/30",
+                      titleError && "border-destructive focus-visible:ring-destructive"
+                    )}
                     autoFocus
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && editedTitle.trim()) {
-                        setEditedBook({...editedBook, title: editedTitle});
-                        setIsTitleEditing(false);
-                      } else if (e.key === 'Escape') {
-                        setEditedTitle(editedBook.title);
-                        setIsTitleEditing(false);
-                      }
-                    }}
+                    onKeyDown={handleTitleKeyDown}
+                    aria-invalid={!!titleError}
                   />
-                  <div className="flex gap-1">
+                  {titleError && (
+                    <div className="text-destructive text-sm flex items-center gap-1 mt-1">
+                      <AlertCircle className="h-3 w-3" /> {titleError}
+                    </div>
+                  )}
+                  <div className="absolute right-1 top-1 flex gap-1">
                     <Button
                       size="sm"
-                      onClick={() => {
-                        if (editedTitle.trim()) {
-                          setEditedBook({...editedBook, title: editedTitle});
-                          setIsTitleEditing(false);
-                        } else {
-                          toast.error("Title cannot be empty");
-                        }
+                      onClick={(e) => {
+                        e.preventDefault();
+                        validateAndSaveTitle();
                       }}
-                      className="h-8 w-8 p-0 text-primary-foreground hover:bg-white/20"
+                      className="h-7 w-7 p-0 text-primary-foreground hover:bg-white/20"
                     >
                       <Check className="h-4 w-4" />
                     </Button>
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => {
-                        setEditedTitle(editedBook.title);
-                        setIsTitleEditing(false);
+                      onClick={(e) => {
+                        e.preventDefault();
+                        cancelTitleEdit();
                       }}
-                      className="h-8 w-8 p-0 text-primary-foreground hover:bg-white/20"
+                      className="h-7 w-7 p-0 text-primary-foreground hover:bg-white/20"
                     >
                       <X className="h-4 w-4" />
                     </Button>
@@ -174,21 +299,18 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
               ) : (
                 <CardTitle 
                   className="font-serif text-xl mb-2 cursor-pointer hover:underline hover:underline-offset-4 flex items-center" 
-                  onClick={() => {
-                    setIsTitleEditing(true);
-                    setEditedTitle(editedBook.title);
-                  }}
+                  onClick={startTitleEdit}
                 >
                   {editedBook.title}
-                  <Pencil className="h-4 w-4 ml-2 opacity-50" />
+                  <Edit2 className="h-4 w-4 ml-2 opacity-50" />
                 </CardTitle>
               )}
               <p className="text-primary-foreground/90 font-medium">
-                by {book.author}
+                by {editedBook.author}
               </p>
-              {book.genre && (
+              {editedBook.genre && (
                 <Badge variant="secondary" className="mt-2 bg-white/20 text-primary-foreground border-white/30">
-                  {book.genre}
+                  {editedBook.genre}
                 </Badge>
               )}
             </div>
@@ -300,8 +422,6 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
             />
           </div>
 
-
-
           {/* Description */}
           {book.description && (
             <div>
@@ -309,7 +429,10 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
               <div 
                 className="text-sm text-muted-foreground mt-1 p-3 bg-muted rounded leading-relaxed max-h-[200px] overflow-y-auto scrollbar-thin scrollbar-thumb-rounded scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent"
               >
-                {cleanDescription(book.description)}
+                {cleanHtml(book.description)}
+                {/* Fade effect at the bottom to indicate scrollable content */}
+                <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-muted to-transparent pointer-events-none"></div>
+>>>>>>> main
               </div>
             </div>
           )}
@@ -443,34 +566,61 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
                 variant="destructive" 
                 onClick={handleDeleteConfirmation}
                 className="bg-gradient-danger hover:bg-destructive/90 mr-auto"
+                title="Delete Book"
               >
                 <Trash2 className="h-4 w-4 mr-2" />
                 Delete Book
               </Button>
             )}
             <div className="flex-grow"></div>
-            <Button variant="outline" onClick={onClose}>
+            <Button 
+              variant="outline" 
+              onClick={onClose}
+              type="button"
+              title="Cancel Changes"
+            >
               Cancel
             </Button>
-            <Button onClick={handleSave} className="bg-gradient-warm hover:bg-primary-glow">
-              Save Changes
+            <Button 
+              onClick={handleSave} 
+              className="bg-gradient-warm hover:bg-primary-glow"
+              disabled={isSaving}
+              type="button"
+              title="Save Changes (Ctrl+S)"
+            >
+              {isSaving ? 'Saving...' : 'Save Changes'}
             </Button>
           </div>
-
+          
           {/* Delete Confirmation Dialog */}
-          <AlertDialog open={showDeleteConfirmation} onOpenChange={setShowDeleteConfirmation}>
-            <AlertDialogContent>
+          <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+            <AlertDialogContent className="max-w-md">
               <AlertDialogHeader>
-                <AlertDialogTitle>Delete Book</AlertDialogTitle>
+                <AlertDialogTitle className="flex items-center gap-2">
+                  <AlertTriangle className="h-5 w-5 text-destructive" />
+                  Delete Book
+                </AlertDialogTitle>
                 <AlertDialogDescription>
                   Are you sure you want to delete "{editedBook.title}"? This action cannot be undone.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90">
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Delete Book
+                <AlertDialogCancel 
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setShowDeleteConfirm(false);
+                  }}
+                  type="button"
+                >
+                  Cancel
+                </AlertDialogCancel>
+                <AlertDialogAction 
+                  onClick={confirmDelete}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  disabled={isDeleting}
+                  type="button"
+                >
+                  {isDeleting ? 'Deleting...' : 'Delete'}
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
