@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Calendar, CalendarClock, RefreshCcw, Plus, Trash2 } from 'lucide-react';
+import { Calendar, CalendarClock, Plus, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 
@@ -28,7 +28,6 @@ export const UpcomingReleasesTab = ({
   const { toast } = useToast();
   const [upcomingBooks, setUpcomingBooks] = useState<UpcomingBook[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const [isAddingManually, setIsAddingManually] = useState(false);
   const [newBookData, setNewBookData] = useState<Partial<UpcomingBook>>({
     title: '',
@@ -70,30 +69,7 @@ export const UpcomingReleasesTab = ({
     loadUpcomingBooks();
   }, [seriesId, toast]);
   
-  // Refresh upcoming releases
-  const handleRefresh = async () => {
-    setIsRefreshing(true);
-    
-    try {
-      // In a real app, this would call an API to fetch the latest data
-      // For now, just simulate an API call with a timeout
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      toast({
-        title: "Refresh complete",
-        description: "Upcoming releases information is up to date."
-      });
-    } catch (error) {
-      console.error("Error refreshing upcoming releases:", error);
-      toast({
-        title: "Error refreshing releases",
-        description: "Failed to refresh upcoming book releases.",
-        variant: "destructive"
-      });
-    } finally {
-      setIsRefreshing(false);
-    }
-  };
+  // Function for refreshing upcoming releases has been removed
   
   // Handle manual addition of an upcoming book
   const handleAddBook = () => {
@@ -218,17 +194,7 @@ export const UpcomingReleasesTab = ({
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-medium">Upcoming Releases</h2>
         
-        <div className="flex items-center gap-2">
-          <Button 
-            variant="outline"
-            onClick={handleRefresh}
-            disabled={isRefreshing}
-            className="flex items-center gap-1"
-          >
-            <RefreshCcw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
-            {isRefreshing ? "Refreshing..." : "Refresh"}
-          </Button>
-          
+        <div className="flex items-center">
           <Button 
             onClick={() => setIsAddingManually(true)}
             className="flex items-center gap-1"
@@ -265,16 +231,7 @@ export const UpcomingReleasesTab = ({
             There are no upcoming books announced for this series yet, 
             or they haven't been added to the system.
           </p>
-          <div className="flex gap-3">
-            <Button 
-              variant="outline" 
-              onClick={handleRefresh}
-              disabled={isRefreshing}
-              className="flex items-center gap-1"
-            >
-              <RefreshCcw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
-              Check for Updates
-            </Button>
+          <div className="flex justify-center">
             <Button onClick={() => setIsAddingManually(true)}>
               <Plus className="h-4 w-4 mr-2" />
               Add Manually

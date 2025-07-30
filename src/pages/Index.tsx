@@ -325,7 +325,7 @@ const Index = () => {
             try {
               // Import required services only when needed
               const { seriesService } = await import('@/services/SeriesService');
-              const { upcomingReleasesService } = await import('@/services/UpcomingReleasesService');
+              // Import of upcomingReleasesService removed as that functionality is no longer supported
               const { notificationService } = await import('@/services/NotificationService');
               const { databaseService } = await import('@/services/DatabaseService');
               

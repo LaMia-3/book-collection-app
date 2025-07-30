@@ -62,6 +62,21 @@ export class SeriesService {
   }
   
   /**
+   * Clear all series from the database
+   */
+  async clearAllSeries(): Promise<number> {
+    // Get all series first so we know how many were deleted
+    const allSeries = await this.getAllSeries();
+    
+    // Delete each series and its related data
+    for (const series of allSeries) {
+      await this.deleteSeries(series.id);
+    }
+    
+    return allSeries.length;
+  }
+  
+  /**
    * Enable or disable tracking for a series
    */
   async toggleSeriesTracking(id: string, isTracked: boolean): Promise<Series | null> {

@@ -23,9 +23,21 @@ import {
   Edit2, 
   AlertCircle 
 } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { SeriesInfoPanel } from "@/components/series/SeriesInfoPanel";
+import { SeriesAssignmentDialog } from "@/components/dialogs/SeriesAssignmentDialog";
 import { cn } from "@/lib/utils";
 import { cleanHtml } from "@/utils/textUtils";
 import { seriesService } from "@/services/SeriesService";
+import { seriesApiService } from "@/services/api/SeriesApiService";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/use-toast";
 import {
@@ -61,19 +73,242 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showSeriesAssignmentDialog, setShowSeriesAssignmentDialog] = useState(false);
+  const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
+  const [seriesDetectionResult, setSeriesDetectionResult] = useState<any>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
+  // Function to detect series and open the advanced dialog
+  const detectAndOpenSeriesDialog = async () => {
+    try {
+      // If the book is already in a series, we'll use it as the current series
+      // Otherwise, try to detect a series
+      if (!book.seriesId) {
+        const detectionResult = await seriesApiService.detectSeries(
+          book.googleBooksId || '',
+          book.title,
+          book.author
+        );
+        
+        if (detectionResult) {
+          setSeriesDetectionResult(detectionResult);
+        }
+      }
+      
+      // Open the dialog
+      setShowSeriesAssignmentDialog(true);
+    } catch (error) {
+      console.error('Error detecting series:', error);
+      // Open the dialog anyway, just without detected series
+      setShowSeriesAssignmentDialog(true);
+    }
+  };
+  
+  // Handle removing a book from series with database update
+  const handleRemoveFromSeries = async () => {
+    if (!book.seriesId && !selectedSeriesId) {
+      // No series to remove from
+      return;
+    }
+    
+    try {
+      const seriesId = selectedSeriesId || book.seriesId || '';
+      
+      // Update database
+      if (seriesId) {
+        await seriesService.removeBookFromSeries(seriesId, book.id);
+        
+        // Update the series in localStorage
+        const updatedSeries = availableSeries.map(series => {
+          if (series.id === seriesId) {
+            return {
+              ...series,
+              books: series.books?.filter(id => id !== book.id) || []
+            };
+          }
+          return series;
+        });
+        
+        // Update series in localStorage
+        localStorage.setItem('seriesLibrary', JSON.stringify(updatedSeries));
+        
+        // IMPORTANT: Update the book in localStorage too
+        const booksJson = localStorage.getItem('bookLibrary');
+        if (booksJson) {
+          const books = JSON.parse(booksJson);
+          const updatedBooks = books.map((b: Book) => {
+            if (b.id === book.id) {
+              // Update the book to remove series association
+              return {
+                ...b,
+                isPartOfSeries: false,
+                seriesId: undefined,
+                volumeNumber: undefined
+              };
+            }
+            return b;
+          });
+          localStorage.setItem('bookLibrary', JSON.stringify(updatedBooks));
+        }
+      }
+      
+      // Update UI
+      setSelectedSeriesId('');
+      setVolumeNumber(undefined);
+      setShowRemoveConfirm(false);
+      
+      // Update the edited book to ensure it gets saved correctly
+      setEditedBook({
+        ...editedBook,
+        isPartOfSeries: false,
+        seriesId: undefined,
+        volumeNumber: undefined
+      });
+      
+      toast({
+        title: "Removed from Series",
+        description: "Book has been removed from the series."
+      });
+    } catch (error) {
+      console.error('Error removing book from series:', error);
+      toast({
+        title: "Error",
+        description: `Failed to remove book from series: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: "destructive"
+      });
+    }
+  };
+  
+  // Handle series assignment from dialog
+  const handleAssignSeries = (updatedBook: Book, seriesId: string, volumeNumber?: number) => {
+    setSelectedSeriesId(seriesId);
+    if (volumeNumber) {
+      setVolumeNumber(volumeNumber);
+    }
+    setShowSeriesAssignmentDialog(false);
+    toast({
+      title: "Series Selected",
+      description: "Series selection will be saved when you save the book."
+    });
+  };
+  
+  // Handle series creation from dialog
+  const handleCreateNewSeries = async (seriesData: Partial<any>, bookToUpdate: Book, volumeNumber?: number) => {
+    try {
+      // Create the new series
+      const newSeries = await seriesService.createSeries({
+        name: seriesData.name || `Unknown Series`,
+        description: seriesData.description || `Series featuring ${book.title}`,
+        author: seriesData.author || book.author,
+        books: [book.id],
+        coverImage: seriesData.coverImage || book.thumbnail,
+        genre: seriesData.genre || (book.genre ? [book.genre] : []),
+        status: seriesData.status || 'ongoing',
+        readingOrder: 'publication',
+        totalBooks: seriesData.totalBooks,
+        isTracked: false,
+        hasUpcoming: false
+      });
+      
+      // Update local state
+      const updatedSeries = [...availableSeries, newSeries];
+      setAvailableSeries(updatedSeries);
+      setSelectedSeriesId(newSeries.id);
+      if (volumeNumber) {
+        setVolumeNumber(volumeNumber);
+      }
+      
+      // IMPORTANT: Update localStorage to synchronize with SeriesPage
+      localStorage.setItem('seriesLibrary', JSON.stringify(updatedSeries));
+      
+      toast({
+        title: "New Series Created",
+        description: `Created new series "${newSeries.name}". Changes will be saved when you save the book.`
+      });
+    } catch (error) {
+      console.error('Error creating new series:', error);
+      toast({
+        title: "Error Creating Series",
+        description: `Failed to create series: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: "destructive"
+      });
+    } finally {
+      setShowSeriesAssignmentDialog(false);
+    }
+  };
+  
   // Load available series on component mount
   useEffect(() => {
     const loadSeries = async () => {
       setLoadingSeries(true);
       try {
-        const seriesList = await seriesService.getAllSeries();
-        setAvailableSeries(seriesList);
+        console.log('Loading series data...');
+        
+        // IMPORTANT: Match the same data source as SeriesPage - use localStorage directly
+        const savedSeries = localStorage.getItem('seriesLibrary');
+        console.log('Series in localStorage:', savedSeries ? 'Found' : 'Not found');
+        
+        if (savedSeries) {
+          // Parse series data from localStorage
+          const parsedSeries = JSON.parse(savedSeries);
+          console.log('Parsed series from localStorage:', parsedSeries);
+          setAvailableSeries(parsedSeries);
+          
+          // Also sync this data to IndexedDB for future use
+          try {
+            // Clear existing series first
+            await seriesService.clearAllSeries();
+            
+            // Add each series to IndexedDB
+            for (const series of parsedSeries) {
+              await seriesService.createSeries({
+                ...series,
+                books: series.books || [],
+                readingOrder: series.readingOrder || 'publication',
+                isTracked: series.isTracked !== undefined ? series.isTracked : false,
+                hasUpcoming: series.hasUpcoming !== undefined ? series.hasUpcoming : false
+              });
+            }
+            console.log('Series data synchronized with IndexedDB');
+          } catch (syncError) {
+            console.error('Error syncing series data to IndexedDB:', syncError);
+            // Continue with localStorage data even if sync fails
+          }
+        } else {
+          // No localStorage data, try IndexedDB
+          const seriesList = await seriesService.getAllSeries();
+          console.log('Series in IndexedDB:', seriesList);
+          
+          if (seriesList.length === 0) {
+            // Create a sample series if no series found anywhere
+            console.log('No series found. Creating sample series...');
+            const newSeries = await seriesService.createSeries({
+              name: "Sample Series",
+              description: "A sample series for testing",
+              author: "Test Author",
+              books: [book.id],
+              coverImage: "",
+              readingOrder: "publication",
+              isTracked: false,
+              hasUpcoming: false
+            });
+            
+            // Update localStorage to match SeriesPage data source
+            localStorage.setItem('seriesLibrary', JSON.stringify([newSeries]));
+            console.log('Created sample series:', newSeries);
+            setAvailableSeries([newSeries]);
+          } else {
+            // We have series in IndexedDB, use them and sync to localStorage
+            console.log('Using existing series from IndexedDB');
+            setAvailableSeries(seriesList);
+            localStorage.setItem('seriesLibrary', JSON.stringify(seriesList));
+          }
+        }
         
         // If the book is already in a series, select it
         if (book.seriesId) {
+          console.log('Book is already in series:', book.seriesId);
           setSelectedSeriesId(book.seriesId);
         }
       } catch (error) {
@@ -432,7 +667,6 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
                 {cleanHtml(book.description)}
                 {/* Fade effect at the bottom to indicate scrollable content */}
                 <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-muted to-transparent pointer-events-none"></div>
->>>>>>> main
               </div>
             </div>
           )}
@@ -459,27 +693,36 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
                   {loadingSeries ? (
                     <Skeleton className="h-10 w-full mt-1" />
                   ) : (
-                    <div className="relative w-full">
+                    <div className="relative">
+                      {/* Fallback to using a standard select as a temporary solution */}
                       <select
                         id="seriesSelect"
-                        className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
+                        className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring appearance-none"
                         value={selectedSeriesId}
-                        onChange={(e) => setSelectedSeriesId(e.target.value)}
+                        onChange={(e) => {
+                          if (e.target.value === "advanced") {
+                            // Open SeriesAssignmentDialog with series detection
+                            detectAndOpenSeriesDialog();
+                          } else {
+                            setSelectedSeriesId(e.target.value);
+                          }
+                        }}
                       >
                         <option value="">None</option>
                         {availableSeries.map(series => (
                           <option key={series.id} value={series.id}>
-                            {series.name} ({series.author || 'Unknown author'})
+                            {series.name} {series.author && `(${series.author})`}
                           </option>
                         ))}
+                        <option value="advanced" className="font-medium italic border-t border-muted">Advanced Series Selection...</option>
                       </select>
-                      <ChevronRight className="absolute right-3 top-2.5 h-4 w-4 rotate-90 text-muted-foreground" />
+                      <ChevronDown className="pointer-events-none absolute right-3 top-2.5 h-4 w-4 text-muted-foreground" />
                     </div>
                   )}
                 </div>
                 
                 {selectedSeriesId && (
-                  <div className="space-y-3">
+                  <div className="space-y-4">
                     <div>
                       <Label htmlFor="volumeNumber">Volume in Series</Label>
                       <Input
@@ -493,29 +736,28 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
                       />
                     </div>
                     
-                    <div className="flex items-center justify-between">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="text-xs"
-                        onClick={() => {
-                          const seriesId = selectedSeriesId;
-                          if (seriesId) {
-                            window.location.href = `/series/${seriesId}`;
-                          }
-                        }}
-                      >
-                        View Series Details
-                        <ChevronRight className="ml-1 h-3 w-3" />
-                      </Button>
-
+                    {/* Enhanced Series Information Display */}
+                    <div className="mt-4 pt-4 border-t border-border/40">
+                      <h4 className="text-sm font-medium mb-3 flex items-center gap-2">
+                        <Library className="h-4 w-4 text-primary" />
+                        Series Details
+                      </h4>
+                      
+                      <SeriesInfoPanel 
+                        seriesId={selectedSeriesId} 
+                        currentBookId={book.id} 
+                        volumeNumber={volumeNumber} 
+                      />
+                    </div>
+                    
+                    <div className="flex items-center justify-end">
                       <Button
                         variant="ghost"
                         size="sm"
                         className="text-xs text-destructive"
-                        onClick={() => {
-                          setSelectedSeriesId('');
-                          setVolumeNumber(undefined);
+                        onClick={(e) => {
+                          e.preventDefault();
+                          setShowRemoveConfirm(true); // Show confirmation dialog
                         }}
                       >
                         Remove from Series
@@ -531,7 +773,7 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
                     <Button
                       variant="outline"
                       size="sm"
-                      className="flex items-center"
+                      className="flex items-center mt-2"
                       onClick={() => {
                         window.open('/series', '_blank');
                       }}
@@ -625,6 +867,52 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
+          
+          {/* Series Removal Confirmation Dialog */}
+          <AlertDialog open={showRemoveConfirm} onOpenChange={setShowRemoveConfirm}>
+            <AlertDialogContent className="max-w-md">
+              <AlertDialogHeader>
+                <AlertDialogTitle className="flex items-center gap-2">
+                  <AlertCircle className="h-5 w-5 text-primary" />
+                  Remove from Series
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  Are you sure you want to remove this book from the series? This action will take effect immediately.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel 
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setShowRemoveConfirm(false);
+                  }}
+                  type="button"
+                >
+                  Cancel
+                </AlertDialogCancel>
+                <AlertDialogAction 
+                  onClick={handleRemoveFromSeries}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  type="button"
+                >
+                  Remove
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+          
+          {/* Series Assignment Dialog */}
+          <SeriesAssignmentDialog
+            open={showSeriesAssignmentDialog}
+            onOpenChange={setShowSeriesAssignmentDialog}
+            book={book}
+            existingBooks={availableSeries.length > 0 ? availableSeries.map(s => ({ ...book, id: s.id })) : []}
+            detectedSeries={seriesDetectionResult}
+            onAssignSeries={handleAssignSeries}
+            onCreateNewSeries={handleCreateNewSeries}
+            mode="change"
+            currentBookSeriesId={selectedSeriesId}
+          />
         </CardContent>
       </Card>
     </div>

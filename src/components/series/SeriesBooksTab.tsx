@@ -28,7 +28,37 @@ export const SeriesBooksTab = ({ series, books, allBooks }: SeriesBooksTabProps)
   const [isAddingBooks, setIsAddingBooks] = useState(false);
   
   // For the add books functionality
-  const nonSeriesBooks = allBooks.filter(book => !series.books.includes(book.id));
+  // Filter out books that are already in any series
+  // This enforces the rule that books can only belong to one series at a time
+  const nonSeriesBooks = allBooks.filter(book => {
+    // First check: Not in current series
+    if (series.books.includes(book.id)) {
+      return false;
+    }
+    
+    // Second check: Not part of any series at all (using book's own properties)
+    if (book.isPartOfSeries || book.seriesId) {
+      return false;
+    }
+    
+    // Third check: Not in any other series (checking all series in localStorage)
+    const savedSeries = localStorage.getItem("seriesLibrary");
+    if (savedSeries) {
+      try {
+        const allSeries = JSON.parse(savedSeries) as Series[];
+        for (const s of allSeries) {
+          if (s.books && s.books.includes(book.id)) {
+            return false;
+          }
+        }
+      } catch (e) {
+        console.error("Error parsing series data:", e);
+      }
+    }
+    
+    // If we reach here, the book isn't in any series
+    return true;
+  });
   const [selectedBookIds, setSelectedBookIds] = useState<Record<string, boolean>>({});
   
   // Order books based on selected ordering
@@ -132,9 +162,27 @@ export const SeriesBooksTab = ({ series, books, allBooks }: SeriesBooksTabProps)
     
     // Update series in localStorage
     const savedSeries = localStorage.getItem("seriesLibrary");
-    if (savedSeries) {
+    const savedBooks = localStorage.getItem("bookLibrary");
+    
+    if (savedSeries && savedBooks) {
+      // 1. Update series data
       const parsedSeries = JSON.parse(savedSeries) as Series[];
-      const updatedSeries = parsedSeries.map(s => {
+      let updatedSeries = [...parsedSeries];
+      
+      // First, remove the selected books from any other series they might be in
+      updatedSeries = updatedSeries.map(s => {
+        if (s.id !== series.id && s.books) {
+          // Remove any of our selected books from this other series
+          return {
+            ...s,
+            books: s.books.filter(bookId => !booksToAdd.includes(bookId))
+          };
+        }
+        return s;
+      });
+      
+      // Then add the books to our target series
+      updatedSeries = updatedSeries.map(s => {
         if (s.id === series.id) {
           return {
             ...s,
@@ -144,7 +192,24 @@ export const SeriesBooksTab = ({ series, books, allBooks }: SeriesBooksTabProps)
         return s;
       });
       
+      // 2. Update the books to include series information
+      const parsedBooks = JSON.parse(savedBooks) as Book[];
+      const updatedBooks = parsedBooks.map(book => {
+        if (booksToAdd.includes(book.id)) {
+          return {
+            ...book,
+            isPartOfSeries: true,
+            seriesId: series.id
+            // Note: We're not setting volumeNumber here as that would require user input
+            // In a more advanced implementation, we could detect volume numbers from titles
+          };
+        }
+        return book;
+      });
+      
+      // 3. Save both updates to localStorage
       localStorage.setItem("seriesLibrary", JSON.stringify(updatedSeries));
+      localStorage.setItem("bookLibrary", JSON.stringify(updatedBooks));
       
       toast({
         title: "Books added",
@@ -164,9 +229,12 @@ export const SeriesBooksTab = ({ series, books, allBooks }: SeriesBooksTabProps)
   // Handle removing a book from the series
   const handleRemoveBook = (bookId: string) => {
     if (confirm("Remove this book from the series?")) {
-      // Update series in localStorage
+      // Get both series and books data from localStorage
       const savedSeries = localStorage.getItem("seriesLibrary");
-      if (savedSeries) {
+      const savedBooks = localStorage.getItem("bookLibrary");
+      
+      if (savedSeries && savedBooks) {
+        // 1. Update series to remove the book
         const parsedSeries = JSON.parse(savedSeries) as Series[];
         const updatedSeries = parsedSeries.map(s => {
           if (s.id === series.id) {
@@ -178,7 +246,23 @@ export const SeriesBooksTab = ({ series, books, allBooks }: SeriesBooksTabProps)
           return s;
         });
         
+        // 2. Update the book to remove series information
+        const parsedBooks = JSON.parse(savedBooks) as Book[];
+        const updatedBooks = parsedBooks.map(book => {
+          if (book.id === bookId) {
+            return {
+              ...book,
+              isPartOfSeries: false,
+              seriesId: undefined,
+              volumeNumber: undefined
+            };
+          }
+          return book;
+        });
+        
+        // 3. Save both updates to localStorage
         localStorage.setItem("seriesLibrary", JSON.stringify(updatedSeries));
+        localStorage.setItem("bookLibrary", JSON.stringify(updatedBooks));
         
         toast({
           title: "Book removed",
@@ -344,7 +428,7 @@ export const SeriesBooksTab = ({ series, books, allBooks }: SeriesBooksTabProps)
           
           {nonSeriesBooks.length === 0 ? (
             <div className="text-center py-6 text-muted-foreground">
-              <p>All your books are already in this series!</p>
+              <p>No books available to add. Books that are already in a series cannot be added to another series.</p>
             </div>
           ) : (
             <>

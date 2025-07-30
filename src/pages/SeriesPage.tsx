@@ -1,15 +1,17 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSettings } from "@/contexts/SettingsContext";
 import { Series } from "@/types/series";
 import { Book } from "@/types/book";
 import { Button } from "@/components/ui/button";
-import { Library, Plus, ArrowLeft, BookOpen, Bell, BellOff, RefreshCw } from "lucide-react";
+import { Library, Plus, ArrowLeft, BookOpen, Bell, BellOff, RefreshCw, BookMarked } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { SeriesCard } from "@/components/series/SeriesCard";
 import { CreateSeriesDialog } from "@/components/series/CreateSeriesDialog";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { seriesDetectionService } from "@/services/api/SeriesDetectionService";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { SeriesFilterPanel, SeriesFilter } from "@/components/filters/SeriesFilterPanel";
 
 /**
  * Series management page component
@@ -22,6 +24,76 @@ const SeriesPage = () => {
   const [series, setSeries] = useState<Series[]>([]);
   const [isCreatingNewSeries, setIsCreatingNewSeries] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<"all" | "tracked">("tracked");
+  const [filter, setFilter] = useState<SeriesFilter>({});
+  
+  // Extract unique genres and authors for filtering
+  const availableGenres = useMemo(() => {
+    const genres = new Set<string>();
+    series.forEach(s => {
+      if (Array.isArray(s.genre)) {
+        s.genre.forEach(g => genres.add(g));
+      } else if (typeof s.genre === 'string' && s.genre) {
+        genres.add(s.genre);
+      }
+    });
+    return Array.from(genres).sort();
+  }, [series]);
+  
+  const availableAuthors = useMemo(() => {
+    const authors = new Set<string>();
+    series.forEach(s => {
+      if (s.author) authors.add(s.author);
+    });
+    return Array.from(authors).sort();
+  }, [series]);
+  
+  // Apply filters to series
+  const filteredSeries = useMemo(() => {
+    // Start with the tab filter
+    let result = activeTab === "tracked" ? series.filter(s => s.isTracked) : series;
+    
+    // Apply search filter
+    if (filter.search) {
+      const searchLower = filter.search.toLowerCase();
+      result = result.filter(s => 
+        s.name.toLowerCase().includes(searchLower) ||
+        (s.author && s.author.toLowerCase().includes(searchLower)) ||
+        (s.description && s.description.toLowerCase().includes(searchLower))
+      );
+    }
+    
+    // Apply genre filter
+    if (filter.genres && filter.genres.length > 0) {
+      result = result.filter(s => {
+        if (Array.isArray(s.genre)) {
+          return s.genre.some(g => filter.genres?.includes(g));
+        }
+        return typeof s.genre === 'string' && filter.genres.includes(s.genre);
+      });
+    }
+    
+    // Apply status filter
+    if (filter.statuses && filter.statuses.length > 0) {
+      result = result.filter(s => 
+        s.status && filter.statuses?.includes(s.status as any)
+      );
+    }
+    
+    // Apply author filter
+    if (filter.authors && filter.authors.length > 0) {
+      result = result.filter(s => 
+        s.author && filter.authors?.includes(s.author)
+      );
+    }
+    
+    return result;
+  }, [series, activeTab, filter]);
+  
+  // Clear all filters
+  const clearFilters = () => {
+    setFilter({});
+  };
   
   // Get the personalized library name
   const libraryName = settings.preferredName 
@@ -221,43 +293,153 @@ const SeriesPage = () => {
         </div>
       </div>
       
-      {/* Empty state when no series exist */}
-      {series.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-20 border-2 border-dashed border-muted-foreground/20 rounded-lg">
-          <Library className="h-16 w-16 text-muted-foreground/40 mb-4" />
-          <h2 className="text-xl font-medium mb-2">No Series Yet</h2>
-          <p className="text-muted-foreground text-center max-w-md mb-6">
-            Organize your books into series to track your progress, manage reading order, 
-            and get notified about upcoming releases.
-          </p>
-          <Button 
-            onClick={() => setIsCreatingNewSeries(true)}
-            className="bg-gradient-warm hover:bg-primary-glow"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Create Your First Series
-          </Button>
+      {/* Series Tabs */}
+      <Tabs defaultValue="tracked" onValueChange={(v) => setActiveTab(v as "all" | "tracked")} className="mt-6">
+        <div className="flex items-center justify-between mb-6">
+          <TabsList className="grid w-[400px] grid-cols-2">
+            <TabsTrigger value="tracked" className="flex items-center gap-2">
+              <BookMarked className="h-4 w-4" />
+              Tracked Series <span className="ml-1.5 text-xs bg-muted rounded-full px-2 py-0.5">{series.filter(s => s.isTracked).length}</span>
+            </TabsTrigger>
+            <TabsTrigger value="all" className="flex items-center gap-2">
+              <Library className="h-4 w-4" />
+              All Series <span className="ml-1.5 text-xs bg-muted rounded-full px-2 py-0.5">{series.length}</span>
+            </TabsTrigger>
+          </TabsList>
+          
+          <div className="text-sm text-muted-foreground">
+            {activeTab === "tracked" 
+              ? "Series you're tracking for updates"
+              : "All series in your collection"}
+          </div>
         </div>
-      )}
-      
-      {/* Series grid */}
-      {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {[1, 2, 3].map(i => (
-            <div key={i} className="h-64 animate-pulse bg-muted rounded-lg" />
-          ))}
-        </div>
-      ) : series.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {series.map(seriesItem => (
-            <SeriesCard 
-              key={seriesItem.id} 
-              series={seriesItem}
-              onToggleTracking={handleToggleTracking}
-            />
-          ))}
-        </div>
-      ) : null}
+        
+        {/* Series Filter Panel */}
+        <SeriesFilterPanel
+          filter={filter}
+          onFilterChange={setFilter}
+          genres={availableGenres}
+          authors={availableAuthors}
+          onClearFilters={clearFilters}
+        />
+        
+        <TabsContent value="all" className="mt-0">
+          {/* Empty state when no series exist */}
+          {series.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-20 border-2 border-dashed border-muted-foreground/20 rounded-lg">
+              <Library className="h-16 w-16 text-muted-foreground/40 mb-4" />
+              <h2 className="text-xl font-medium mb-2">No Series Yet</h2>
+              <p className="text-muted-foreground text-center max-w-md mb-6">
+                Organize your books into series to track your progress, manage reading order, 
+                and get notified about upcoming releases.
+              </p>
+              <Button 
+                onClick={() => setIsCreatingNewSeries(true)}
+                className="bg-gradient-warm hover:bg-primary-glow"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Create Your First Series
+              </Button>
+            </div>
+          )}
+          
+          {/* All Series grid */}
+          {isLoading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {[1, 2, 3].map(i => (
+                <div key={i} className="h-64 animate-pulse bg-muted rounded-lg" />
+              ))}
+            </div>
+          ) : series.length > 0 && (
+            <>
+              {filteredSeries.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-12 border border-dashed rounded-lg">
+                  <p className="text-muted-foreground">No series match your filters</p>
+                  <Button 
+                    variant="link" 
+                    className="mt-2"
+                    onClick={clearFilters}
+                  >
+                    Clear all filters
+                  </Button>
+                </div>
+              )}
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredSeries.map(seriesItem => (
+                  <SeriesCard 
+                    key={seriesItem.id} 
+                    series={seriesItem}
+                    onToggleTracking={handleToggleTracking}
+                  />
+                ))}
+              </div>
+            </>
+          )}
+        </TabsContent>
+        
+        <TabsContent value="tracked" className="mt-0">
+          {/* Empty state when no tracked series exist */}
+          {series.filter(s => s.isTracked).length === 0 && (
+            <div className="flex flex-col items-center justify-center py-16 border-2 border-dashed border-muted-foreground/20 rounded-lg">
+              <BookMarked className="h-16 w-16 text-muted-foreground/40 mb-4" />
+              <h2 className="text-xl font-medium mb-2">No Tracked Series</h2>
+              <p className="text-muted-foreground text-center max-w-md mb-6">
+                Track series to get notifications about upcoming releases and keep up with your favorite authors.
+              </p>
+              {series.length > 0 ? (
+                <div className="text-center">
+                  <p className="mb-3 text-sm">You have {series.length} series in your collection</p>
+                  <Button 
+                    onClick={() => setActiveTab("all")}
+                    variant="outline"
+                  >
+                    <Bell className="h-4 w-4 mr-2" />
+                    Enable Tracking for Series
+                  </Button>
+                </div>
+              ) : (
+                <Button 
+                  onClick={() => setIsCreatingNewSeries(true)}
+                  className="bg-gradient-warm hover:bg-primary-glow"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create Your First Series
+                </Button>
+              )}
+            </div>
+          )}
+          
+          {/* Tracked Series grid */}
+          {!isLoading && series.filter(s => s.isTracked).length > 0 && (
+            <>
+              {filteredSeries.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-12 border border-dashed rounded-lg">
+                  <p className="text-muted-foreground">No tracked series match your filters</p>
+                  <Button 
+                    variant="link" 
+                    className="mt-2"
+                    onClick={clearFilters}
+                  >
+                    Clear all filters
+                  </Button>
+                </div>
+              )}
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredSeries.map(seriesItem => (
+                  <SeriesCard 
+                    key={seriesItem.id} 
+                    series={seriesItem}
+                    onToggleTracking={handleToggleTracking}
+                  />
+                ))
+                }
+              </div>
+            </>
+          )}
+        </TabsContent>
+      </Tabs>
       
       {/* Create Series Dialog */}
       <CreateSeriesDialog

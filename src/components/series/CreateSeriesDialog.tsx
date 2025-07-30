@@ -122,8 +122,11 @@ export const CreateSeriesDialog = ({
     }));
   };
   
-  // Group books by author for easier selection
-  const booksByAuthor = books.reduce<Record<string, Book[]>>((acc, book) => {
+  // Filter out books that are already in a series
+  const availableBooks = books.filter(book => !(book.isPartOfSeries || book.seriesId));
+  
+  // Group available books by author for easier selection
+  const booksByAuthor = availableBooks.reduce<Record<string, Book[]>>((acc, book) => {
     const author = book.author || 'Unknown Author';
     if (!acc[author]) {
       acc[author] = [];
@@ -203,10 +206,15 @@ export const CreateSeriesDialog = ({
             <p className="text-sm mb-4">
               {books.length === 0 
                 ? "You don't have any books in your collection yet." 
-                : `Select books to add to "${seriesData.name}" (${selectedCount} selected)`}
+                : availableBooks.length === 0
+                  ? "All your books are already assigned to series. You can create an empty series."
+                  : `Select books to add to "${seriesData.name}" (${selectedCount} selected)`}
+            </p>
+            <p className="text-xs text-muted-foreground mb-2">
+              Note: Only books not already assigned to a series are shown here.
             </p>
             
-            {books.length > 0 ? (
+            {books.length > 0 && availableBooks.length > 0 ? (
               <ScrollArea className="h-[400px] pr-4">
                 <div className="space-y-6">
                   {authorGroups.map(author => (
