@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { ReleaseNotification } from '@/types/series';
+import { Notification } from '@/types/notification';
 import { NotificationCard } from './NotificationCard';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { CheckSquare, Bell, Settings, Trash } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { notificationService } from '@/services/NotificationService';
 
 interface NotificationFeedProps {
   onClose: () => void;
@@ -17,61 +18,31 @@ interface NotificationFeedProps {
 export const NotificationFeed = ({ onClose }: NotificationFeedProps) => {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<'all' | 'unread'>('unread');
-  const [notifications, setNotifications] = useState<ReleaseNotification[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
   // Count unread notifications
   const unreadCount = notifications.filter(n => !n.isRead).length;
   
-  // Load notifications
+  // Load notifications from the real notification service
   useEffect(() => {
-    const loadNotifications = () => {
+    const loadNotifications = async () => {
       setIsLoading(true);
       
       try {
-        // In a real app, this would fetch from an API/database
-        // For now, we'll load from localStorage
-        const savedNotifications = localStorage.getItem("releaseNotifications");
-        if (savedNotifications) {
-          const parsedNotifications = JSON.parse(savedNotifications) as ReleaseNotification[];
-          setNotifications(parsedNotifications);
-        } else {
-          // For demo purposes, create some sample notifications if none exist
-          const sampleNotifications: ReleaseNotification[] = [
-            {
-              id: 'notification-1',
-              upcomingBookId: 'upcoming-1',
-              seriesId: 'series-1',
-              title: 'New Release Coming Soon',
-              message: 'The next book in "The Stormlight Archive" series will be released soon!',
-              releaseDate: new Date(new Date().setDate(new Date().getDate() + 10)),
-              isRead: false,
-              createdAt: new Date(new Date().setDate(new Date().getDate() - 1))
-            },
-            {
-              id: 'notification-2',
-              upcomingBookId: 'upcoming-2',
-              seriesId: 'series-2',
-              title: 'Pre-orders Available',
-              message: 'Pre-orders are now available for the next book in "Mistborn" series!',
-              releaseDate: new Date(new Date().setDate(new Date().getDate() + 30)),
-              isRead: false,
-              createdAt: new Date(new Date().setDate(new Date().getDate() - 3))
-            },
-            {
-              id: 'notification-3',
-              upcomingBookId: 'upcoming-3',
-              seriesId: 'series-3',
-              title: 'Release Date Changed',
-              message: 'The release date for the next "Dune" book has been updated.',
-              releaseDate: new Date(new Date().setDate(new Date().getDate() + 45)),
-              isRead: true,
-              createdAt: new Date(new Date().setDate(new Date().getDate() - 7))
-            }
-          ];
+        // Use the notification service to get all notifications
+        const allNotifications = await notificationService.getAllNotifications();
+        setNotifications(allNotifications);
+        
+        // If we have no notifications, trigger a check for upcoming releases
+        // This will populate notifications if there are upcoming book releases
+        if (allNotifications.length === 0) {
+          console.log('No notifications found, checking for upcoming releases');
+          await notificationService.checkForUpcomingReleases();
           
-          setNotifications(sampleNotifications);
-          localStorage.setItem("releaseNotifications", JSON.stringify(sampleNotifications));
+          // Fetch notifications again after the check
+          const updatedNotifications = await notificationService.getAllNotifications();
+          setNotifications(updatedNotifications);
         }
       } catch (error) {
         console.error("Error loading notifications:", error);
@@ -84,51 +55,80 @@ export const NotificationFeed = ({ onClose }: NotificationFeedProps) => {
     loadNotifications();
   }, []);
   
-  // Save notifications
-  const saveNotifications = (updatedNotifications: ReleaseNotification[]) => {
-    localStorage.setItem("releaseNotifications", JSON.stringify(updatedNotifications));
-    setNotifications(updatedNotifications);
-  };
-  
   // Mark notification as read
-  const handleMarkAsRead = (id: string) => {
-    const updatedNotifications = notifications.map(notification => 
-      notification.id === id ? { ...notification, isRead: true } : notification
-    );
-    
-    saveNotifications(updatedNotifications);
+  const handleMarkAsRead = async (id: string) => {
+    try {
+      const updatedNotification = await notificationService.markAsRead(id);
+      if (updatedNotification) {
+        // Update local state
+        setNotifications(prevNotifications => 
+          prevNotifications.map(notification => 
+            notification.id === id ? { ...notification, isRead: true } : notification
+          )
+        );
+      }
+    } catch (error) {
+      console.error("Error marking notification as read:", error);
+    }
   };
   
   // Mark all as read
-  const handleMarkAllAsRead = () => {
-    const updatedNotifications = notifications.map(notification => ({ 
-      ...notification, 
-      isRead: true 
-    }));
+  const handleMarkAllAsRead = async () => {
+    if (unreadCount === 0) return;
     
-    saveNotifications(updatedNotifications);
-    
-    toast({
-      title: "All notifications marked as read",
-      description: `${unreadCount} notification${unreadCount !== 1 ? 's' : ''} marked as read.`
-    });
+    try {
+      const markedCount = await notificationService.markAllAsRead();
+      
+      // Update local state
+      setNotifications(prevNotifications => 
+        prevNotifications.map(notification => ({
+          ...notification,
+          isRead: true
+        }))
+      );
+      
+      toast({
+        title: "All notifications marked as read",
+        description: `${markedCount} notifications marked as read`
+      });
+    } catch (error) {
+      console.error("Error marking all notifications as read:", error);
+    }
   };
   
   // Dismiss notification
-  const handleDismiss = (id: string) => {
-    const updatedNotifications = notifications.filter(notification => notification.id !== id);
-    saveNotifications(updatedNotifications);
+  const handleDismiss = async (id: string) => {
+    try {
+      const dismissed = await notificationService.dismissNotification(id);
+      if (dismissed) {
+        // Update local state
+        setNotifications(prevNotifications => 
+          prevNotifications.map(notification => 
+            notification.id === id ? { ...notification, isDismissed: true } : notification
+          )
+        );
+      }
+    } catch (error) {
+      console.error("Error dismissing notification:", error);
+    }
   };
   
   // Clear all notifications
-  const handleClearAll = () => {
-    if (confirm("Are you sure you want to clear all notifications?")) {
-      saveNotifications([]);
+  const handleClearAll = async () => {
+    if (notifications.length === 0) return;
+    
+    try {
+      const clearedCount = await notificationService.clearAllNotifications();
+      
+      // Update local state
+      setNotifications([]);
       
       toast({
         title: "Notifications cleared",
-        description: "All notifications have been removed."
+        description: `${clearedCount} notifications removed`
       });
+    } catch (error) {
+      console.error("Error clearing notifications:", error);
     }
   };
   

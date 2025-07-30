@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { ReleaseNotification } from '@/types/series';
+import { Notification } from '@/types/notification';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -8,7 +8,7 @@ import { CalendarClock, X, Check, BookOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface NotificationCardProps {
-  notification: ReleaseNotification;
+  notification: Notification;
   onMarkAsRead: (id: string) => void;
   onDismiss: (id: string) => void;
 }
@@ -147,22 +147,36 @@ export const NotificationCard = ({
             </div>
             
             <div className="flex items-center gap-3 mt-2">
-              <Badge variant="secondary" className="whitespace-nowrap text-xs">
-                {notification.releaseDate && formatDate(notification.releaseDate)}
-              </Badge>
+              {notification.type === 'release' && (
+                <Badge variant="secondary" className="whitespace-nowrap text-xs">
+                  {notification.actionUrl && 'Available now'}
+                </Badge>
+              )}
               <span className="text-xs text-muted-foreground">
                 {timeAgo(notification.createdAt)}
               </span>
             </div>
             
-            <div className="mt-3">
-              <Button variant="outline" size="sm" asChild>
-                <Link to={`/series/${notification.seriesId}`} className="flex items-center gap-1">
-                  <BookOpen className="h-3.5 w-3.5" />
-                  View Series
-                </Link>
-              </Button>
-            </div>
+            {notification.seriesId && (
+              <div className="mt-3">
+                <Button variant="outline" size="sm" asChild>
+                  <Link to={`/series/${notification.seriesId}`} className="flex items-center gap-1">
+                    <BookOpen className="h-3.5 w-3.5" />
+                    View Series
+                  </Link>
+                </Button>
+              </div>
+            )}
+            {notification.actionUrl && !notification.seriesId && (
+              <div className="mt-3">
+                <Button variant="outline" size="sm" asChild>
+                  <a href={notification.actionUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1">
+                    <BookOpen className="h-3.5 w-3.5" />
+                    View Book
+                  </a>
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       </CardContent>

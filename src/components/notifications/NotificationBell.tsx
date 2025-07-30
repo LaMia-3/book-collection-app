@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ReleaseNotification } from '@/types/series';
 import { Button } from '@/components/ui/button';
 import { NotificationFeed } from './NotificationFeed';
 import { Bell } from 'lucide-react';
+import { notificationService } from '@/services/NotificationService';
 
 /**
  * Notification bell with count badge for the header
@@ -14,18 +14,11 @@ export const NotificationBell = () => {
   
   // Load and count unread notifications
   useEffect(() => {
-    const countUnreadNotifications = () => {
+    const countUnreadNotifications = async () => {
       try {
-        // In a real app, this might be an API call
-        // For now, we'll check localStorage
-        const savedNotifications = localStorage.getItem("releaseNotifications");
-        if (savedNotifications) {
-          const parsedNotifications = JSON.parse(savedNotifications) as ReleaseNotification[];
-          const count = parsedNotifications.filter(n => !n.isRead).length;
-          setUnreadCount(count);
-        } else {
-          setUnreadCount(0);
-        }
+        // Use the notification service to get unread notifications
+        const unreadNotifications = await notificationService.getUnreadNotifications();
+        setUnreadCount(unreadNotifications.length);
       } catch (error) {
         console.error("Error counting notifications:", error);
         setUnreadCount(0);
@@ -38,19 +31,9 @@ export const NotificationBell = () => {
     // Set up interval to check periodically (e.g., every 60 seconds)
     const intervalId = setInterval(countUnreadNotifications, 60000);
     
-    // Set up event listener for storage changes (in case notifications are updated in another tab)
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === "releaseNotifications") {
-        countUnreadNotifications();
-      }
-    };
-    
-    window.addEventListener('storage', handleStorageChange);
-    
     // Clean up
     return () => {
       clearInterval(intervalId);
-      window.removeEventListener('storage', handleStorageChange);
     };
   }, []);
   
