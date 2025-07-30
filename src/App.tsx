@@ -10,6 +10,8 @@ import BirthdayCelebration from "./components/BirthdayCelebration";
 import ImportStatusDisplay from "./components/ImportStatusDisplay";
 import Index from "./pages/Index";
 import SeriesPage from "./pages/SeriesPage";
+import SeriesDetailPage from "./pages/SeriesDetailPage";
+import TestBackendPage from "./pages/TestBackendPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -28,6 +30,8 @@ const App = () => (
                 <Routes>
                   <Route path="/" element={<Index />} />
                   <Route path="/series" element={<SeriesPage />} />
+                  <Route path="/series/:seriesId" element={<SeriesDetailPage />} />
+                  <Route path="/test-backend" element={<TestBackendPage />} />
                   {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                   <Route path="*" element={<NotFound />} />
                 </Routes>

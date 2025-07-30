@@ -16,6 +16,7 @@ import { Library, Search, Settings as SettingsIcon } from "lucide-react";
 import searchService, { SearchResult, SearchOptions } from "@/services/search/SearchService";
 import { AdvancedSearch } from "@/components/AdvancedSearch";
 import { GoalTracker } from "@/components/GoalTracker";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 
 const Index = () => {
   const navigate = useNavigate();
@@ -252,6 +253,9 @@ const Index = () => {
             </div>
             
             <div className="flex items-center gap-4">
+              {/* Notification Bell */}
+              <NotificationBell />
+              
               {/* Settings Button */}
               <Button
                 variant="ghost"
@@ -319,13 +323,43 @@ const Index = () => {
           books={books}
           onDeleteLibrary={async () => {
             try {
+              // Import required services only when needed
+              const { seriesService } = await import('@/services/SeriesService');
+              const { upcomingReleasesService } = await import('@/services/UpcomingReleasesService');
+              const { notificationService } = await import('@/services/NotificationService');
+              const { databaseService } = await import('@/services/DatabaseService');
+              
               // Clear the books array
               setBooks([]);
+              
+              // Clear series and related data
+              try {
+                // Get all series to delete them one by one (allows for proper cleanup of related data)
+                const allSeries = await seriesService.getAllSeries();
+                
+                // Delete each series and its related data
+                for (const series of allSeries) {
+                  await seriesService.deleteSeries(series.id);
+                }
+                
+                // Clear any remaining notifications
+                await notificationService.clearAllNotifications();
+                
+                console.log('Series data deleted successfully');
+              } catch (seriesError) {
+                console.error('Error deleting series data:', seriesError);
+                // Continue with library deletion even if series deletion fails
+              }
+              
+              // Also clear localStorage for compatibility with old implementation
+              localStorage.removeItem('seriesLibrary');
+              localStorage.removeItem('upcomingBooks');
+              localStorage.removeItem('releaseNotifications');
               
               // Show success toast
               toast({
                 title: "Library Deleted",
-                description: "Your book collection has been successfully deleted."
+                description: "Your book collection and series data have been successfully deleted."
               });
               
               return Promise.resolve();

@@ -1,14 +1,19 @@
 import { useState, useEffect } from "react";
 import { useSettings } from "@/contexts/SettingsContext";
-import { Search, Plus, Loader2, BookOpen } from "lucide-react";
+import { Search, Plus, Loader2, BookOpen, Library, Check } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Book } from "@/types/book";
+import { Series } from "@/types/series";
 import { useToast } from "@/hooks/use-toast";
 import { bookApiClient } from "@/services/api";
 import { BookSearchItem } from "@/types/api/BookApiProvider";
 import { Select } from "@/components/ui/select";
+import { seriesApiService } from "@/services/api/SeriesApiService";
+import { seriesService } from "@/services/SeriesService";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
 
 interface BookSearchProps {
   onAddBook: (book: Book) => void;
@@ -20,6 +25,10 @@ export const BookSearch = ({ onAddBook, existingBooks }: BookSearchProps) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<BookSearchItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [potentialSeries, setPotentialSeries] = useState<Partial<Series> | null>(null);
+  const [showSeriesDialog, setShowSeriesDialog] = useState(false);
+  const [currentBook, setCurrentBook] = useState<Book | null>(null);
+  const [detectingSeries, setDetectingSeries] = useState(false);
   const [activeProvider, setActiveProvider] = useState(
     // Initialize from settings if available, otherwise use current provider
     settings.defaultApi || bookApiClient.activeProviderId
@@ -91,6 +100,22 @@ export const BookSearch = ({ onAddBook, existingBooks }: BookSearchProps) => {
     searchBooks(searchQuery);
   };
 
+  const detectSeries = async (book: Book): Promise<Partial<Series> | null> => {
+    try {
+      // Use the Series API service to check if this book might be part of a series
+      const seriesInfo = await seriesApiService.getEnhancedSeriesInfo(
+        book.googleBooksId || '',
+        book.title,
+        book.author
+      );
+      
+      return seriesInfo;
+    } catch (error) {
+      console.error('Error detecting series:', error);
+      return null;
+    }
+  };
+  
   const addBookToCollection = async (book: BookSearchItem) => {
     setIsLoading(true);
     try {
@@ -101,39 +126,126 @@ export const BookSearch = ({ onAddBook, existingBooks }: BookSearchProps) => {
       // Use user's preferred default status if no status is provided
       const defaultStatus = settings.defaultStatus || 'want-to-read';
       
-      // Log the current settings for debugging
-      console.log('Current default status setting:', settings.defaultStatus);
-      console.log('Using default status:', defaultStatus);
+      // Create a book object compatible with the existing application
+      const newBook: Book = {
+        id: `book-${Math.random().toString(36).substring(2, 10)}`,
+        title: detailedBook.title,
+        author: Array.isArray(detailedBook.author) && detailedBook.author.length > 0 
+          ? detailedBook.author[0] : typeof detailedBook.author === 'string' ? detailedBook.author : 'Unknown',
+        thumbnail: detailedBook.thumbnail,
+        genre: Array.isArray(detailedBook.genre) && detailedBook.genre.length > 0 
+          ? detailedBook.genre[0] : typeof detailedBook.genre === 'string' ? detailedBook.genre : undefined,
+        description: detailedBook.description,
+        publishedDate: detailedBook.publishedDate,
+        pageCount: detailedBook.pageCount,
+        googleBooksId: detailedBook.sourceType === 'google' ? detailedBook.id : undefined,
+        openLibraryId: detailedBook.sourceType === 'openlib' ? detailedBook.id : undefined,
+        status: defaultStatus as 'reading' | 'completed' | 'want-to-read',
+        isPartOfSeries: false, // Initially set to false
+        addedDate: new Date().toISOString(),
+        spineColor: Math.floor(Math.random() * 8) + 1, // Random spine color 1-8
+      };
       
-      const convertedBook = {
-        ...detailedBook,
-        // Map the ReadingStatus enum to string values expected by the rest of the app
-        // Force use of the user's preferred default status unless explicitly set in the API response
-        status: detailedBook.status === undefined ? defaultStatus :
-          detailedBook.status.toString().includes('TO_READ') ? defaultStatus : // Use default instead of hard-coded 'want-to-read'
-          detailedBook.status.toString().includes('READING') ? 'reading' :
-          detailedBook.status.toString().includes('COMPLETED') ? 'completed' :
-          defaultStatus,
-        // Add a backward-compatible googleBooksId field if the source is Google Books
-        ...(detailedBook.sourceType === 'google' ? { googleBooksId: detailedBook.sourceId } : {})
-      } as any;
+      // Set the current book for reference in the series dialog
+      setCurrentBook(newBook);
       
-      // Pass the detailed book to the parent component
-      onAddBook(convertedBook);
+      // First add the book to the collection
+      onAddBook(newBook);
       
+      // Show success toast
       toast({
-        title: "Book Added!",
-        description: `"${detailedBook.title}" has been added to your library.`,
+        title: "Book Added",
+        description: `${detailedBook.title} has been added to your collection.`,
       });
+      
+      // After adding the book, check if it might be part of a series
+      setDetectingSeries(true);
+      const seriesInfo = await detectSeries(newBook);
+      setDetectingSeries(false);
+      
+      if (seriesInfo && seriesInfo.name) {
+        // We found a potential series, set it and show the dialog
+        setPotentialSeries(seriesInfo);
+        setShowSeriesDialog(true);
+      }
+      
+      // Clear search results
+      setSearchResults([]);
+      setSearchQuery("");
     } catch (error) {
-      console.error('Error fetching book details:', error);
+      console.error('Error adding book:', error);
       toast({
         title: "Error Adding Book",
-        description: `Failed to add "${book.title}". ${error instanceof Error ? error.message : ''}`,
+        description: `Failed to add book: ${error instanceof Error ? error.message : 'Unknown error'}`,
         variant: "destructive"
       });
     } finally {
       setIsLoading(false);
+    }
+  };
+  
+  const handleAddToSeries = async () => {
+    if (!currentBook || !potentialSeries || !potentialSeries.name) {
+      setShowSeriesDialog(false);
+      return;
+    }
+    
+    try {
+      // Create or get the series
+      let seriesId: string;
+      let existingSeries = await seriesService.getAllSeries();
+      let matchingSeries = existingSeries.find(s => 
+        s.name.toLowerCase() === potentialSeries.name?.toLowerCase() && 
+        s.author === currentBook.author
+      );
+      
+      if (matchingSeries) {
+        // Use existing series
+        seriesId = matchingSeries.id;
+        await seriesService.addBookToSeries(seriesId, currentBook.id);
+      } else {
+        // Create new series
+        const newSeries = await seriesService.createSeries({
+          name: potentialSeries.name,
+          description: potentialSeries.description || `Series featuring ${currentBook.title}`,
+          author: currentBook.author,
+          books: [currentBook.id],
+          coverImage: potentialSeries.coverImage || currentBook.thumbnail,
+          genre: potentialSeries.genre || (currentBook.genre ? [currentBook.genre] : []),
+          status: potentialSeries.status || 'ongoing',
+          readingOrder: 'publication',
+          totalBooks: potentialSeries.totalBooks,
+          isTracked: false,
+          hasUpcoming: false
+        });
+        seriesId = newSeries.id;
+      }
+      
+      // Update the book to mark it as part of the series
+      const updatedBook = {
+        ...currentBook,
+        isPartOfSeries: true,
+        seriesId: seriesId
+      };
+      
+      // Update the book in the collection
+      onAddBook(updatedBook);
+      
+      toast({
+        title: "Added to Series",
+        description: `${currentBook.title} has been added to the ${potentialSeries.name} series.`,
+      });
+    } catch (error) {
+      console.error('Error adding book to series:', error);
+      toast({
+        title: "Error Adding to Series",
+        description: `Failed to add book to series: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: "destructive"
+      });
+    } finally {
+      setShowSeriesDialog(false);
+      setPotentialSeries(null);
+      setCurrentBook(null);
     }
   };
 
@@ -244,6 +356,68 @@ export const BookSearch = ({ onAddBook, existingBooks }: BookSearchProps) => {
               </Card>
             ))}
           </div>
+        </div>
+      )}
+      
+      {/* Series Detection Dialog */}
+      <AlertDialog open={showSeriesDialog} onOpenChange={setShowSeriesDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Library className="h-5 w-5 text-primary" />
+              Series Detected
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              We detected that <span className="font-semibold">{currentBook?.title}</span> might be part of a series.
+              Would you like to add it to the detected series?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          
+          {potentialSeries && (
+            <div className="border rounded-md p-3 bg-muted/30 my-4">
+              <div className="flex items-center gap-4">
+                {potentialSeries.coverImage && (
+                  <img 
+                    src={potentialSeries.coverImage} 
+                    alt={potentialSeries.name} 
+                    className="h-16 w-12 object-cover rounded-sm"
+                  />
+                )}
+                <div>
+                  <h4 className="font-medium">{potentialSeries.name}</h4>
+                  <p className="text-sm text-muted-foreground">{potentialSeries.author}</p>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {potentialSeries.status && (
+                      <Badge variant="outline">{potentialSeries.status}</Badge>
+                    )}
+                    {potentialSeries.totalBooks && (
+                      <Badge variant="secondary">{potentialSeries.totalBooks} Books</Badge>
+                    )}
+                  </div>
+                </div>
+              </div>
+              {potentialSeries.description && (
+                <p className="text-sm mt-3 text-muted-foreground line-clamp-3">
+                  {potentialSeries.description}
+                </p>
+              )}
+            </div>
+          )}
+          
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleAddToSeries} className="bg-primary">
+              <Check className="h-4 w-4 mr-1" /> Add to Series
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      
+      {/* Series Detection Status */}
+      {detectingSeries && (
+        <div className="mt-4 p-3 border rounded-md bg-muted/30 flex items-center gap-2">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          <p className="text-sm">Checking if this book is part of a series...</p>
         </div>
       )}
     </div>

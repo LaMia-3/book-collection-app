@@ -1,13 +1,21 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Book } from "@/types/book";
+import { Series } from "@/types/series";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, Star, BookOpen, X } from "lucide-react";
+import { 
+  Calendar, Star, BookOpen, X, Library, Plus, ChevronRight,
+  Pencil, Trash2, Check, ChevronDown, ChevronUp
+} from "lucide-react";
 import { cn } from "@/lib/utils";
+import { seriesService } from "@/services/SeriesService";
+import { Skeleton } from "@/components/ui/skeleton";
+import { toast } from "sonner";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
 interface BookDetailsProps {
   book: Book;
@@ -18,17 +26,95 @@ interface BookDetailsProps {
 
 export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsProps) => {
   const [editedBook, setEditedBook] = useState<Book>({ ...book });
+  const [availableSeries, setAvailableSeries] = useState<Series[]>([]);
+  const [loadingSeries, setLoadingSeries] = useState(false);
+  const [selectedSeriesId, setSelectedSeriesId] = useState<string>(book.seriesId || '');
+  const [volumeNumber, setVolumeNumber] = useState<number | undefined>(book.volumeNumber);
+  const [isTitleEditing, setIsTitleEditing] = useState(false);
+  const [editedTitle, setEditedTitle] = useState(book.title);
+  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
+  const [showSeriesInfo, setShowSeriesInfo] = useState(!!book.seriesId);
 
-  const handleSave = () => {
-    onUpdate(editedBook);
+  // Load available series on component mount
+  useEffect(() => {
+    const loadSeries = async () => {
+      setLoadingSeries(true);
+      try {
+        const seriesList = await seriesService.getAllSeries();
+        setAvailableSeries(seriesList);
+        
+        // If the book is already in a series, select it
+        if (book.seriesId) {
+          setSelectedSeriesId(book.seriesId);
+        }
+      } catch (error) {
+        console.error('Error loading series:', error);
+      } finally {
+        setLoadingSeries(false);
+      }
+    };
+    
+    loadSeries();
+  }, [book.seriesId]);
+
+  const handleSave = async () => {
+    // Update book with series information and title if it was edited
+    const updatedBook: Book = {
+      ...editedBook,
+      title: editedTitle,
+      isPartOfSeries: !!selectedSeriesId,
+      seriesId: selectedSeriesId || undefined,
+      volumeNumber: volumeNumber
+    };
+    
+    // If a series was selected, make sure the book is added to that series
+    if (selectedSeriesId) {
+      try {
+        await seriesService.addBookToSeries(selectedSeriesId, book.id);
+        toast.success('Book added to series');
+      } catch (error) {
+        console.error('Error adding book to series:', error);
+        toast.error('Error adding book to series');
+      }
+    }
+    
+    onUpdate(updatedBook);
     onClose();
+  };
+
+  const handleDeleteConfirmation = () => {
+    setShowDeleteConfirmation(true);
   };
 
   const handleDelete = () => {
     if (onDelete) {
       onDelete(book.id);
+      setShowDeleteConfirmation(false);
     }
   };
+
+  // Utility function to clean HTML from description
+  const cleanDescription = (html: string): string => {
+    if (!html) return '';
+    
+    // Remove HTML tags but preserve line breaks
+    const withoutTags = html
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/p>/gi, '\n\n')
+      .replace(/<[^>]*>/g, '');
+      
+    // Decode HTML entities
+    const decoded = withoutTags
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"');
+      
+    return decoded.trim();
+  };
+
+
 
   const handleRatingClick = (rating: number) => {
     setEditedBook({ ...editedBook, rating });
@@ -40,9 +126,63 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
         <CardHeader className="bg-gradient-warm text-primary-foreground">
           <div className="flex items-start justify-between">
             <div className="flex-1">
-              <CardTitle className="font-serif text-xl mb-2">
-                {book.title}
-              </CardTitle>
+              {isTitleEditing ? (
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={editedTitle}
+                    onChange={(e) => setEditedTitle(e.target.value)}
+                    className="font-serif text-lg mb-2 bg-white/20 text-primary-foreground border-white/30"
+                    autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && editedTitle.trim()) {
+                        setEditedBook({...editedBook, title: editedTitle});
+                        setIsTitleEditing(false);
+                      } else if (e.key === 'Escape') {
+                        setEditedTitle(editedBook.title);
+                        setIsTitleEditing(false);
+                      }
+                    }}
+                  />
+                  <div className="flex gap-1">
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        if (editedTitle.trim()) {
+                          setEditedBook({...editedBook, title: editedTitle});
+                          setIsTitleEditing(false);
+                        } else {
+                          toast.error("Title cannot be empty");
+                        }
+                      }}
+                      className="h-8 w-8 p-0 text-primary-foreground hover:bg-white/20"
+                    >
+                      <Check className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setEditedTitle(editedBook.title);
+                        setIsTitleEditing(false);
+                      }}
+                      className="h-8 w-8 p-0 text-primary-foreground hover:bg-white/20"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <CardTitle 
+                  className="font-serif text-xl mb-2 cursor-pointer hover:underline hover:underline-offset-4 flex items-center" 
+                  onClick={() => {
+                    setIsTitleEditing(true);
+                    setEditedTitle(editedBook.title);
+                  }}
+                >
+                  {editedBook.title}
+                  <Pencil className="h-4 w-4 ml-2 opacity-50" />
+                </CardTitle>
+              )}
               <p className="text-primary-foreground/90 font-medium">
                 by {book.author}
               </p>
@@ -160,97 +300,181 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
             />
           </div>
 
-          {/* Series Information */}
-          <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="isPartOfSeries"
-                checked={editedBook.isPartOfSeries || false}
-                onChange={(e) =>
-                  setEditedBook({ ...editedBook, isPartOfSeries: e.target.checked })
-                }
-                className="rounded"
-              />
-              <Label htmlFor="isPartOfSeries">Part of a series</Label>
-            </div>
 
-            {editedBook.isPartOfSeries && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pl-6">
-                <div>
-                  <Label htmlFor="seriesName">Series Name</Label>
-                  <Input
-                    id="seriesName"
-                    placeholder="e.g., The Chronicles of Narnia"
-                    value={editedBook._legacySeriesName || ""}
-                    onChange={(e) =>
-                      setEditedBook({ ...editedBook, _legacySeriesName: e.target.value })
-                    }
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="nextBookTitle">Next Book Title</Label>
-                  <Input
-                    id="nextBookTitle"
-                    placeholder="Title of the next book"
-                    value={editedBook._legacyNextBookTitle || ""}
-                    onChange={(e) =>
-                      setEditedBook({ ...editedBook, _legacyNextBookTitle: e.target.value })
-                    }
-                  />
-                </div>
-
-                <div className="md:col-span-2">
-                  <Label htmlFor="nextBookExpectedYear">Expected Year</Label>
-                  <Input
-                    id="nextBookExpectedYear"
-                    type="number"
-                    placeholder="2024"
-                    value={editedBook._legacyNextBookExpectedYear || ""}
-                    onChange={(e) =>
-                      setEditedBook({
-                        ...editedBook,
-                        _legacyNextBookExpectedYear: parseInt(e.target.value) || undefined,
-                      })
-                    }
-                  />
-                </div>
-              </div>
-            )}
-          </div>
 
           {/* Description */}
           {book.description && (
             <div>
               <Label>Description</Label>
-              <div className="text-sm text-muted-foreground mt-1 p-3 bg-muted rounded leading-relaxed">
-                {book.description.length > 300
-                  ? `${book.description.substring(0, 300)}...`
-                  : book.description}
+              <div 
+                className="text-sm text-muted-foreground mt-1 p-3 bg-muted rounded leading-relaxed max-h-[200px] overflow-y-auto scrollbar-thin scrollbar-thumb-rounded scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent"
+              >
+                {cleanDescription(book.description)}
               </div>
             </div>
           )}
+          
+          {/* Series Information */}
+          <div className="space-y-3">
+            <div 
+              className="flex items-center justify-between cursor-pointer"
+              onClick={() => setShowSeriesInfo(!showSeriesInfo)}
+            >
+              <div className="flex items-center gap-2">
+                <Library className="h-5 w-5 text-primary" />
+                <h3 className="text-base font-medium">Series Information</h3>
+              </div>
+              <Button variant="ghost" size="sm" className="p-1 h-8 w-8">
+                {showSeriesInfo ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </Button>
+            </div>
+            
+            {showSeriesInfo && (
+              <div className="bg-muted/30 p-4 rounded-md border">
+                <div className="mb-4">
+                  <Label htmlFor="seriesSelect">Add to Series</Label>
+                  {loadingSeries ? (
+                    <Skeleton className="h-10 w-full mt-1" />
+                  ) : (
+                    <div className="relative w-full">
+                      <select
+                        id="seriesSelect"
+                        className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
+                        value={selectedSeriesId}
+                        onChange={(e) => setSelectedSeriesId(e.target.value)}
+                      >
+                        <option value="">None</option>
+                        {availableSeries.map(series => (
+                          <option key={series.id} value={series.id}>
+                            {series.name} ({series.author || 'Unknown author'})
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronRight className="absolute right-3 top-2.5 h-4 w-4 rotate-90 text-muted-foreground" />
+                    </div>
+                  )}
+                </div>
+                
+                {selectedSeriesId && (
+                  <div className="space-y-3">
+                    <div>
+                      <Label htmlFor="volumeNumber">Volume in Series</Label>
+                      <Input
+                        id="volumeNumber"
+                        type="number"
+                        min="1"
+                        placeholder="Volume number"
+                        value={volumeNumber || ''}
+                        onChange={(e) => setVolumeNumber(parseInt(e.target.value) || undefined)}
+                        className="mt-1"
+                      />
+                    </div>
+                    
+                    <div className="flex items-center justify-between">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-xs"
+                        onClick={() => {
+                          const seriesId = selectedSeriesId;
+                          if (seriesId) {
+                            window.location.href = `/series/${seriesId}`;
+                          }
+                        }}
+                      >
+                        View Series Details
+                        <ChevronRight className="ml-1 h-3 w-3" />
+                      </Button>
+
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-xs text-destructive"
+                        onClick={() => {
+                          setSelectedSeriesId('');
+                          setVolumeNumber(undefined);
+                        }}
+                      >
+                        Remove from Series
+                        <X className="ml-1 h-3 w-3" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                
+                {!selectedSeriesId && (
+                  <div className="flex flex-col items-center justify-center p-4 border border-dashed rounded-md bg-muted/50">
+                    <p className="text-sm text-muted-foreground mb-2">This book is not part of any series</p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex items-center"
+                      onClick={() => {
+                        window.open('/series', '_blank');
+                      }}
+                    >
+                      <Plus className="mr-1 h-3 w-3" />
+                      Create New Series
+                    </Button>
+                  </div>
+                )}
+                
+                {/* Legacy fields - hidden but preserved for data migration */}
+                <input 
+                  type="hidden" 
+                  value={editedBook._legacySeriesName || ''}
+                />
+                <input 
+                  type="hidden" 
+                  value={editedBook._legacyNextBookTitle || ''}
+                />
+                <input 
+                  type="hidden" 
+                  value={editedBook._legacyNextBookExpectedYear || ''}
+                />
+              </div>
+            )}
+          </div>
 
           {/* Action Buttons */}
           <div className="flex flex-wrap gap-2 pt-4">
-            <Button onClick={handleSave} className="bg-gradient-warm hover:bg-primary-glow">
-              Save Changes
-            </Button>
-            <Button variant="outline" onClick={onClose}>
-              Cancel
-            </Button>
-            <div className="flex-grow"></div>
             {onDelete && (
               <Button 
                 variant="destructive" 
-                onClick={handleDelete}
-                className="bg-gradient-danger hover:bg-destructive/90"
+                onClick={handleDeleteConfirmation}
+                className="bg-gradient-danger hover:bg-destructive/90 mr-auto"
               >
+                <Trash2 className="h-4 w-4 mr-2" />
                 Delete Book
               </Button>
             )}
+            <div className="flex-grow"></div>
+            <Button variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button onClick={handleSave} className="bg-gradient-warm hover:bg-primary-glow">
+              Save Changes
+            </Button>
           </div>
+
+          {/* Delete Confirmation Dialog */}
+          <AlertDialog open={showDeleteConfirmation} onOpenChange={setShowDeleteConfirmation}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete Book</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Are you sure you want to delete "{editedBook.title}"? This action cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90">
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete Book
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </CardContent>
       </Card>
     </div>

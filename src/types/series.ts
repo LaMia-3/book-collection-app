@@ -15,6 +15,8 @@ export interface Series {
   status?: 'ongoing' | 'completed' | 'cancelled';
   genre?: string[];
   isTracked: boolean; // Whether the user is tracking this series for notifications
+  hasUpcoming?: boolean; // Whether the series has upcoming releases
+  apiEnriched?: boolean; // Whether the series data has been enriched with API data
   createdAt: Date;
   updatedAt: Date;
 }
