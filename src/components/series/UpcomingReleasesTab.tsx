@@ -43,13 +43,15 @@ export const UpcomingReleasesTab = ({
     const loadUpcomingBooks = async () => {
       setIsLoading(true);
       try {
-        // In a real app, this would fetch from an API
-        // For now, we'll load from localStorage
-        const savedUpcomingBooks = localStorage.getItem("upcomingBooks");
-        if (savedUpcomingBooks) {
-          const parsedBooks = JSON.parse(savedUpcomingBooks) as UpcomingBook[];
-          const seriesBooks = parsedBooks.filter(book => book.seriesId === seriesId);
-          setUpcomingBooks(seriesBooks);
+        // Load upcoming books from IndexedDB - the exclusive source of truth
+        const { enhancedStorageService } = await import('@/services/storage/EnhancedStorageService');
+        await enhancedStorageService.initialize();
+        
+        // Get upcoming releases for this series from IndexedDB
+        const upcomingReleases = await enhancedStorageService.getUpcomingReleasesBySeriesId(seriesId);
+        
+        if (upcomingReleases && upcomingReleases.length > 0) {
+          setUpcomingBooks(upcomingReleases);
         } else {
           setUpcomingBooks([]);
         }
@@ -69,13 +71,11 @@ export const UpcomingReleasesTab = ({
     loadUpcomingBooks();
   }, [seriesId, toast]);
   
-  // Function for refreshing upcoming releases has been removed
-  
   // Handle manual addition of an upcoming book
-  const handleAddBook = () => {
-    setIsSaving(true);
-    
+  const handleAddBook = async () => {
     try {
+      setIsSaving(true);
+      
       // Validate
       if (!newBookData.title?.trim()) {
         toast({
@@ -101,11 +101,12 @@ export const UpcomingReleasesTab = ({
         amazonProductId: undefined
       };
       
-      // Add to localStorage
-      const savedUpcomingBooks = localStorage.getItem("upcomingBooks");
-      const existingBooks = savedUpcomingBooks ? JSON.parse(savedUpcomingBooks) as UpcomingBook[] : [];
-      const updatedBooks = [...existingBooks, newBook];
-      localStorage.setItem("upcomingBooks", JSON.stringify(updatedBooks));
+      // Add to IndexedDB - the exclusive source of truth
+      const { enhancedStorageService } = await import('@/services/storage/EnhancedStorageService');
+      await enhancedStorageService.initialize();
+      
+      // Save the upcoming book to IndexedDB
+      await enhancedStorageService.saveUpcomingRelease(newBook);
       
       // Update state
       setUpcomingBooks(prev => [...prev, newBook]);
@@ -139,24 +140,23 @@ export const UpcomingReleasesTab = ({
   };
   
   // Handle deletion of an upcoming book
-  const handleDeleteBook = (bookId: string) => {
+  const handleDeleteBook = async (bookId: string) => {
     if (confirm("Are you sure you want to remove this upcoming book?")) {
       try {
-        // Remove from localStorage
-        const savedUpcomingBooks = localStorage.getItem("upcomingBooks");
-        if (savedUpcomingBooks) {
-          const existingBooks = JSON.parse(savedUpcomingBooks) as UpcomingBook[];
-          const updatedBooks = existingBooks.filter(book => book.id !== bookId);
-          localStorage.setItem("upcomingBooks", JSON.stringify(updatedBooks));
-          
-          // Update state
-          setUpcomingBooks(prev => prev.filter(book => book.id !== bookId));
-          
-          toast({
-            title: "Book removed",
-            description: "The upcoming book has been removed."
-          });
-        }
+        // Remove from IndexedDB - the exclusive source of truth
+        const { enhancedStorageService } = await import('@/services/storage/EnhancedStorageService');
+        await enhancedStorageService.initialize();
+        
+        // Delete the upcoming book from IndexedDB
+        await enhancedStorageService.deleteUpcomingRelease(bookId);
+        
+        // Update state
+        setUpcomingBooks(prev => prev.filter(book => book.id !== bookId));
+        
+        toast({
+          title: "Book removed",
+          description: "The upcoming book has been removed."
+        });
       } catch (error) {
         console.error("Error removing upcoming book:", error);
         toast({

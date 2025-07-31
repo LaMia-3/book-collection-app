@@ -19,7 +19,8 @@ export interface Book {
   // Series fields - enhanced for new series feature
   isPartOfSeries: boolean;
   seriesId?: string; // Link to Series object
-  volumeNumber?: number; // Position in the series
+  volumeNumber?: number; // Position in the series (legacy)
+  seriesPosition?: number; // Position in the series (used by enhanced storage)
   
   // Legacy series fields - maintained for data migration
   _legacySeriesName?: string; // Renamed from seriesName

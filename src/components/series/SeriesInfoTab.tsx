@@ -6,24 +6,26 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Pencil, Save, X } from 'lucide-react';
+import { Pencil, Save, X, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { enhancedStorageService } from '@/services/storage/EnhancedStorageService';
 
 interface SeriesInfoTabProps {
   series: Series;
+  onSeriesUpdated?: (updatedSeries: Series) => void;
 }
 
 /**
  * Tab for displaying and editing series information
  */
-export const SeriesInfoTab = ({ series }: SeriesInfoTabProps) => {
+export const SeriesInfoTab = ({ series, onSeriesUpdated }: SeriesInfoTabProps) => {
   const { toast } = useToast();
   const [isEditing, setIsEditing] = useState(false);
   const [editedSeries, setEditedSeries] = useState({ ...series });
   const [isSaving, setIsSaving] = useState(false);
   
   // Handle save
-  const handleSave = () => {
+  const handleSave = async () => {
     setIsSaving(true);
     
     try {
@@ -38,25 +40,64 @@ export const SeriesInfoTab = ({ series }: SeriesInfoTabProps) => {
         return;
       }
       
-      // Update in localStorage
-      const savedSeries = localStorage.getItem("seriesLibrary");
-      if (savedSeries) {
-        const parsedSeries = JSON.parse(savedSeries) as Series[];
-        const updatedSeriesList = parsedSeries.map(s => 
-          s.id === series.id ? { ...editedSeries, updatedAt: new Date() } : s
-        );
-        localStorage.setItem("seriesLibrary", JSON.stringify(updatedSeriesList));
-        
-        toast({
-          title: "Changes saved",
-          description: "Series information has been updated."
-        });
-        
-        setIsEditing(false);
-        
-        // In a real app, we would refetch the data here
-        // For now, just reload the page after a short delay
-        setTimeout(() => window.location.reload(), 500);
+      // Keep a copy of the series for UI updates - it uses the original UI Series type
+      const uiUpdatedSeries: Series = {
+        ...series, // Start with original series to ensure all fields are present
+        ...editedSeries, // Override with edited values
+        updatedAt: new Date(), // Update the timestamp
+        // Ensure required fields are present
+        books: editedSeries.books || series.books || [],
+        isTracked: typeof editedSeries.isTracked === 'boolean' ? editedSeries.isTracked : series.isTracked,
+        readingOrder: editedSeries.readingOrder || series.readingOrder || 'publication',
+        createdAt: editedSeries.createdAt || series.createdAt || new Date()
+      };
+      
+      // Save to IndexedDB (exclusive source of truth)
+      await enhancedStorageService.initialize();
+      
+      // Create a proper IndexedDB Series object
+      const indexedDBSeries = {
+        id: series.id,
+        name: editedSeries.name,
+        description: editedSeries.description,
+        author: editedSeries.author,
+        coverImage: editedSeries.coverImage,
+        books: editedSeries.books || series.books || [],
+        totalBooks: editedSeries.books?.length || series.books?.length || 0,
+        completedBooks: 0, // Default if not tracking
+        readingProgress: 0, // Default if not tracking
+        readingOrder: editedSeries.readingOrder || series.readingOrder || 'publication',
+        customOrder: editedSeries.customOrder || series.customOrder,
+        status: editedSeries.status || series.status,
+        isTracked: typeof editedSeries.isTracked === 'boolean' ? editedSeries.isTracked : series.isTracked,
+        dateAdded: series.dateAdded || new Date().toISOString(),
+        lastModified: new Date().toISOString(),
+        // Handle required fields not in the UI Series type but needed for IndexedDB
+        categories: series.genre || [],
+        apiEnriched: series.apiEnriched || false,
+        hasUpcoming: series.hasUpcoming || false
+      };
+      
+      // Log what we're about to save
+      console.log('Saving series to IndexedDB:', indexedDBSeries);
+      
+      // Save to IndexedDB - the source of truth
+      await enhancedStorageService.saveSeries(indexedDBSeries);
+      
+      console.log('Series saved successfully to IndexedDB');
+      
+      // No longer need to update localStorage as IndexedDB is now the exclusive source of truth
+      
+      toast({
+        title: "Changes saved",
+        description: "Series information has been updated."
+      });
+      
+      setIsEditing(false);
+      
+      // Notify parent component if callback is provided
+      if (onSeriesUpdated) {
+        onSeriesUpdated(uiUpdatedSeries);
       }
     } catch (error) {
       console.error("Error saving series:", error);

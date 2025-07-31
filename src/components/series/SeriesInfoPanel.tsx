@@ -44,16 +44,28 @@ export const SeriesInfoPanel = ({
         // Try to load books in the series
         const booksInSeries: Book[] = [];
         if (seriesData.books && seriesData.books.length > 0) {
-          // Note: In a real implementation, you'd have a method to bulk load books
-          // Here we're using localStorage as our data source to match other components
-          const savedBooks = localStorage.getItem("bookLibrary");
-          if (savedBooks) {
-            const allBooks = JSON.parse(savedBooks);
-            const filteredBooks = allBooks.filter((book: Book) => 
-              seriesData.books.includes(book.id)
-            );
-            setSeriesBooks(filteredBooks);
-          }
+          // Load books from IndexedDB - the exclusive source of truth
+          try {
+            const { enhancedStorageService } = await import('@/services/storage/EnhancedStorageService');
+            await enhancedStorageService.initialize();
+            
+            // Get all books from IndexedDB
+            const allBooks = await enhancedStorageService.getBooks();
+            
+            // Filter books that are in this series
+            const filteredBooks = allBooks
+              .filter(book => seriesData.books.includes(book.id))
+              .map(book => ({
+                ...book,
+                // Convert from IndexedDB format to UI format
+                addedDate: book.dateAdded,
+                completedDate: book.dateCompleted
+              }));
+              
+            setSeriesBooks(filteredBooks as Book[]);
+          } catch (error) {
+            console.error('Error loading books from IndexedDB:', error);
+          }    
         }
       } catch (error) {
         console.error('Error loading series details:', error);

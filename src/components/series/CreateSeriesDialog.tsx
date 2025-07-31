@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Book } from '@/types/book';
 import { Series, SeriesCreationData } from '@/types/series';
 import {
@@ -17,12 +17,12 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from '@/hooks/use-toast';
+import { enhancedStorageService } from '@/services/storage/EnhancedStorageService';
 
 interface CreateSeriesDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSeriesCreated: (newSeries: Series) => void;
-  books: Book[];
 }
 
 /**
@@ -31,12 +31,13 @@ interface CreateSeriesDialogProps {
 export const CreateSeriesDialog = ({
   open,
   onOpenChange,
-  onSeriesCreated,
-  books
+  onSeriesCreated
 }: CreateSeriesDialogProps) => {
   const { toast } = useToast();
   const [step, setStep] = useState<'info' | 'books'>('info');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [availableBooks, setAvailableBooks] = useState<Book[]>([]);
   const [seriesData, setSeriesData] = useState<SeriesCreationData>({
     name: '',
     author: '',
@@ -45,6 +46,62 @@ export const CreateSeriesDialog = ({
     bookIds: [],
   });
   const [selectedBookIds, setSelectedBookIds] = useState<Record<string, boolean>>({});
+  
+  // Fetch books directly from IndexedDB when dialog opens or when switching to books step
+  useEffect(() => {
+    if (open && step === 'books') {
+      loadBooksNotInSeries();
+    }
+  }, [open, step]);
+  
+  // Function to load books not already in a series directly from IndexedDB
+  const loadBooksNotInSeries = async () => {
+    setIsLoading(true);
+    try {
+      // Initialize storage service
+      await enhancedStorageService.initialize();
+      
+      // Get all books directly from IndexedDB
+      const allBooks = await enhancedStorageService.getBooks();
+      console.log('All books from IndexedDB:', allBooks.length);
+      
+      // Get all books that are not already part of a series
+      const booksNotInSeries = allBooks.filter(book => {
+        const notInSeries = !book.seriesId; // The definitive check from IndexedDB
+        console.log(`Book "${book.title}": seriesId=${book.seriesId} => notInSeries=${notInSeries}`);
+        return notInSeries;
+      });
+      
+      // Convert to UI Book format for display
+      const uiBooks = booksNotInSeries.map(book => ({
+        id: book.id,
+        title: book.title,
+        author: book.author || 'Unknown Author',
+        // Add required Book fields
+        isPartOfSeries: false,
+        spineColor: book.spineColor || '#6366f1',
+        addedDate: book.dateAdded,
+        status: book.status || 'toread',
+        // Add empty strings for optional fields to avoid null/undefined issues
+        description: book.description || '',
+        genre: book.genre || []
+      } as unknown as Book)); // Use unknown as intermediate to satisfy TypeScript
+      
+      console.log('Books not in series:', booksNotInSeries.length);
+      console.log('Books available for series:', uiBooks.map(b => b.title));
+      
+      setAvailableBooks(uiBooks);
+    } catch (error) {
+      console.error('Error loading books from IndexedDB:', error);
+      toast({
+        title: 'Error loading books',
+        description: 'Could not load books from your collection.',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
   
   const handleNextStep = () => {
     if (!seriesData.name.trim()) {
@@ -63,7 +120,7 @@ export const CreateSeriesDialog = ({
     setStep('info');
   };
   
-  const handleCreateSeries = () => {
+  const handleCreateSeries = async () => {
     setIsSubmitting(true);
     try {
       // Collect selected book IDs
@@ -71,21 +128,36 @@ export const CreateSeriesDialog = ({
         .filter(([_, isSelected]) => isSelected)
         .map(([id]) => id);
       
-      // Generate a mock series ID (will be handled by backend later)
-      const newSeries: Series = {
+      // Create a new series with proper IndexedDB fields
+      const newSeries = {
         id: `series-${Date.now()}`,
         name: seriesData.name,
         description: seriesData.description,
         author: seriesData.author,
         books: bookIds,
         totalBooks: bookIds.length,
-        readingOrder: 'publication',
+        completedBooks: 0,
+        readingProgress: 0,
+        readingOrder: 'publication' as 'publication' | 'chronological' | 'custom', // Use type assertion for enum
         isTracked: seriesData.isTracked,
-        createdAt: new Date(),
-        updatedAt: new Date()
+        dateAdded: new Date().toISOString(),
+        lastModified: new Date().toISOString()
       };
       
-      onSeriesCreated(newSeries);
+      // Save to IndexedDB
+      await enhancedStorageService.saveSeries(newSeries);
+      
+      // Update selected books with seriesId
+      for (const bookId of bookIds) {
+        const book = await enhancedStorageService.getBookById(bookId);
+        if (book) {
+          book.seriesId = newSeries.id;
+          book.lastModified = new Date().toISOString();
+          await enhancedStorageService.saveBook(book);
+        }
+      }
+      
+      onSeriesCreated(newSeries as any);
       
       // Reset form
       setSeriesData({
@@ -101,7 +173,7 @@ export const CreateSeriesDialog = ({
       
       toast({
         title: "Series created",
-        description: `Successfully created "${newSeries.name}" series`
+        description: `Successfully created "${newSeries.name}" series with ${bookIds.length} books`
       });
     } catch (error) {
       console.error('Error creating series:', error);
@@ -121,9 +193,6 @@ export const CreateSeriesDialog = ({
       [bookId]: !prev[bookId]
     }));
   };
-  
-  // Filter out books that are already in a series
-  const availableBooks = books.filter(book => !(book.isPartOfSeries || book.seriesId));
   
   // Group available books by author for easier selection
   const booksByAuthor = availableBooks.reduce<Record<string, Book[]>>((acc, book) => {
@@ -146,30 +215,31 @@ export const CreateSeriesDialog = ({
             {step === 'info' ? 'Create New Series' : 'Add Books to Series'}
           </DialogTitle>
           <DialogDescription>
-            {step === 'info' 
-              ? 'Enter the details for your new book series.'
+            {step === 'info'
+              ? 'Enter the details for your new book series'
               : 'Select books from your collection to add to this series.'}
           </DialogDescription>
         </DialogHeader>
         
         {step === 'info' ? (
-          <div className="space-y-4 py-4">
-            <div className="grid grid-cols-1 gap-4">
+          <div className="py-4">
+            <div className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="name">Series Name <span className="text-destructive">*</span></Label>
+                <Label htmlFor="name">Series Name</Label>
                 <Input
                   id="name"
-                  placeholder="e.g., The Chronicles of Narnia"
+                  placeholder="Enter series name"
                   value={seriesData.name}
                   onChange={(e) => setSeriesData({...seriesData, name: e.target.value})}
+                  autoFocus
                 />
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="author">Series Author</Label>
+                <Label htmlFor="author">Author</Label>
                 <Input
                   id="author"
-                  placeholder="e.g., C.S. Lewis"
+                  placeholder="Enter author name (if series has consistent author)"
                   value={seriesData.author || ''}
                   onChange={(e) => setSeriesData({...seriesData, author: e.target.value})}
                 />
@@ -203,53 +273,57 @@ export const CreateSeriesDialog = ({
           </div>
         ) : (
           <div className="py-4">
-            <p className="text-sm mb-4">
-              {books.length === 0 
-                ? "You don't have any books in your collection yet." 
-                : availableBooks.length === 0
-                  ? "All your books are already assigned to series. You can create an empty series."
-                  : `Select books to add to "${seriesData.name}" (${selectedCount} selected)`}
-            </p>
-            <p className="text-xs text-muted-foreground mb-2">
-              Note: Only books not already assigned to a series are shown here.
-            </p>
-            
-            {books.length > 0 && availableBooks.length > 0 ? (
-              <ScrollArea className="h-[400px] pr-4">
-                <div className="space-y-6">
-                  {authorGroups.map(author => (
-                    <div key={author} className="space-y-2">
-                      <h3 className="text-sm font-medium border-b pb-1">{author}</h3>
-                      <div className="space-y-1">
-                        {booksByAuthor[author].map(book => (
-                          <div key={book.id} className="flex items-start space-x-2">
-                            <Checkbox
-                              id={`book-${book.id}`}
-                              checked={!!selectedBookIds[book.id]}
-                              onCheckedChange={() => toggleBookSelection(book.id)}
-                            />
-                            <Label
-                              htmlFor={`book-${book.id}`}
-                              className="text-sm leading-tight cursor-pointer"
-                            >
-                              {book.title}
-                              {book.isPartOfSeries && book._legacySeriesName && (
-                                <span className="text-xs text-muted-foreground ml-2">
-                                  (Part of: {book._legacySeriesName})
-                                </span>
-                              )}
-                            </Label>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </ScrollArea>
-            ) : (
-              <div className="text-center py-10 text-muted-foreground">
-                <p>Add books to your collection first</p>
+            {isLoading ? (
+              // Loading state
+              <div className="flex flex-col items-center justify-center py-16 space-y-4">
+                <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full"></div>
+                <p className="text-sm text-muted-foreground">Loading books from your collection...</p>
               </div>
+            ) : (
+              <>
+                <p className="text-sm mb-4">
+                  {availableBooks.length === 0
+                    ? "You don't have any books available to add to this series. Books already in other series won't appear here."
+                    : `Select books to add to "${seriesData.name}" (${selectedCount} selected)`}
+                </p>
+                
+                <p className="text-xs text-muted-foreground mb-2">
+                  Note: Only books not already assigned to a series are shown here.
+                </p>
+                
+                {availableBooks.length > 0 ? (
+                  <ScrollArea className="h-[400px] pr-4">
+                    <div className="space-y-6">
+                      {authorGroups.map(author => (
+                        <div key={author} className="space-y-2">
+                          <h3 className="text-sm font-medium border-b pb-1">{author}</h3>
+                          <div className="space-y-1">
+                            {booksByAuthor[author].map(book => (
+                              <div key={book.id} className="flex items-start space-x-2">
+                                <Checkbox
+                                  id={`book-${book.id}`}
+                                  checked={!!selectedBookIds[book.id]}
+                                  onCheckedChange={() => toggleBookSelection(book.id)}
+                                />
+                                <Label
+                                  htmlFor={`book-${book.id}`}
+                                  className="text-sm leading-tight cursor-pointer"
+                                >
+                                  {book.title}
+                                </Label>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                ) : (
+                  <div className="text-center py-10 text-muted-foreground">
+                    <p>Add books to your collection first</p>
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}

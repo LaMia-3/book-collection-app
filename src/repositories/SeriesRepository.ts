@@ -1,9 +1,11 @@
 import { Series } from '@/types/series';
 import { DatabaseService } from '@/services/DatabaseService';
+import { enhancedStorageService } from '@/services/storage/EnhancedStorageService';
 import { v4 as uuidv4 } from 'uuid';
 
 /**
- * Repository for managing series data in the database
+ * Repository for managing series data
+ * Uses IndexedDB as the exclusive source of truth for all series data
  */
 export class SeriesRepository {
   private readonly dbService: DatabaseService;
@@ -17,14 +19,50 @@ export class SeriesRepository {
    * Get all series in the database
    */
   async getAll(): Promise<Series[]> {
-    return this.dbService.getAll<Series>(this.storeName);
+    try {
+      // Get series from IndexedDB as the exclusive source of truth
+      const seriesFromDB = await enhancedStorageService.getSeries();
+      
+      // Convert from IndexedDB format to the app's Series format
+      const convertedSeries = seriesFromDB.map(series => ({
+        ...series,
+        // Convert Date fields to ensure proper format for UI
+        createdAt: new Date(series.dateAdded || new Date().toISOString()),
+        updatedAt: new Date(series.lastModified || new Date().toISOString())
+      }));
+      
+      return convertedSeries as Series[];
+    } catch (error) {
+      console.error('Error getting all series from IndexedDB:', error);
+      return [];
+    }
   }
   
   /**
    * Get a series by ID
    */
   async getById(id: string): Promise<Series | null> {
-    return this.dbService.getById<Series>(this.storeName, id);
+    try {
+      // Get from IndexedDB as the exclusive source of truth
+      const seriesFromDB = await enhancedStorageService.getSeriesById(id);
+      if (seriesFromDB) {
+        // Convert to the app's Series format
+        const convertedSeries = {
+          ...seriesFromDB,
+          // Convert Date fields
+          createdAt: new Date(seriesFromDB.dateAdded || new Date().toISOString()),
+          updatedAt: new Date(seriesFromDB.lastModified || new Date().toISOString())
+        };
+        
+        return convertedSeries as Series;
+      }
+      
+      // Not found in IndexedDB
+      return null;
+    } catch (error) {
+      console.error(`Error getting series ${id}:`, error);
+      return null;
+    }
   }
   
   /**
@@ -48,16 +86,30 @@ export class SeriesRepository {
    */
   async add(series: Omit<Series, 'id' | 'createdAt' | 'updatedAt'>): Promise<Series> {
     const now = new Date();
-    
     const newSeries: Series = {
-      id: `series-${uuidv4()}`,
       ...series,
+      id: `series-${uuidv4()}`,
       createdAt: now,
       updatedAt: now
     };
     
-    await this.dbService.add(this.storeName, newSeries);
-    return newSeries;
+    try {
+      // Add to IndexedDB as the exclusive source of truth
+      const enhancedSeries = {
+        ...newSeries,
+        // Add required IndexedDB fields
+        dateAdded: now.toISOString(),
+        lastModified: now.toISOString(),
+        readingProgress: 0,
+        completedBooks: 0
+      };
+      
+      await enhancedStorageService.saveSeries(enhancedSeries as any);
+      return newSeries;
+    } catch (error) {
+      console.error('Error adding series:', error);
+      throw error;
+    }
   }
   
   /**
@@ -67,13 +119,31 @@ export class SeriesRepository {
     const series = await this.getById(id);
     if (!series) return null;
     
+    const now = new Date();
     const updatedSeries: Series = {
       ...series,
       ...updates,
-      updatedAt: new Date()
+      updatedAt: now
     };
     
-    await this.dbService.update(this.storeName, id, updatedSeries);
+    try {
+      // Update IndexedDB as the exclusive source of truth
+      const enhancedSeries = {
+        ...updatedSeries,
+        // Add required IndexedDB fields if they don't exist
+        readingProgress: (updatedSeries as any).readingProgress || 0,
+        completedBooks: (updatedSeries as any).completedBooks || 0,
+        dateAdded: (updatedSeries as any).dateAdded || 
+                   updatedSeries.createdAt.toISOString(),
+        lastModified: now.toISOString()
+      };
+      
+      await enhancedStorageService.saveSeries(enhancedSeries as any);
+    } catch (error) {
+      console.error(`Error updating series ${id}:`, error);
+      throw error; // Re-throw to notify calling code of the failure
+    }
+    
     return updatedSeries;
   }
   
@@ -125,7 +195,14 @@ export class SeriesRepository {
    * Delete a series from the database
    */
   async delete(id: string): Promise<boolean> {
-    return this.dbService.delete(this.storeName, id);
+    try {
+      // Delete from IndexedDB as the exclusive source of truth
+      await enhancedStorageService.deleteSeries(id);
+      return true;
+    } catch (error) {
+      console.error(`Error deleting series ${id}:`, error);
+      return false;
+    }
   }
   
   /**

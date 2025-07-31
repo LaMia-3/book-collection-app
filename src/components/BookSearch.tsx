@@ -14,6 +14,7 @@ import { seriesApiService, SeriesDetectionResult } from "@/services/api/SeriesAp
 import { seriesService } from "@/services/SeriesService";
 import { SeriesAssignmentDialog } from "@/components/dialogs/SeriesAssignmentDialog";
 import { Badge } from "@/components/ui/badge";
+import { enhancedStorageService } from "@/services/storage/EnhancedStorageService";
 
 interface BookSearchProps {
   onAddBook: (book: Book) => void;
@@ -192,44 +193,28 @@ export const BookSearch = ({ onAddBook, existingBooks }: BookSearchProps) => {
   };
   
   const handleAssignToSeries = async (book: Book, seriesId: string, volumeNumber?: number) => {
+    if (!book || !seriesId) return;
+    
     try {
-      // Update the book with series information
-      const updatedBook = {
+      // Add/update the book in the collection
+      // In our revised flow, the book has not been added yet in automatic mode
+      const updatedBook: Book = {
         ...book,
         isPartOfSeries: true,
         seriesId: seriesId,
-        volumeNumber
+        seriesPosition: volumeNumber || undefined
       };
       
-      // Add the book to the series in the database
-      await seriesService.addBookToSeries(seriesId, book.id);
-      
-      // Add/update the book in the collection
-      // In our revised flow, the book has not been added yet in automatic mode
+      // Update the onAddBook callback with the updated book
       onAddBook(updatedBook);
       
-      // Get the series name for the toast
-      const series = await seriesService.getSeriesById(seriesId);
-      const seriesName = series?.name || 'selected series';
+      // Initialize storage service and add the book to series
+      await enhancedStorageService.initialize();
+      await enhancedStorageService.addBookToSeries(book.id, seriesId, volumeNumber);
       
-      // Ensure the series in localStorage contains this book
-      // This fixes the issue where the book doesn't show in the Series page
-      const seriesJson = localStorage.getItem('seriesLibrary');
-      if (seriesJson) {
-        const allSeries = JSON.parse(seriesJson);
-        const updatedSeries = allSeries.map((s: Series) => {
-          if (s.id === seriesId) {
-            // Ensure the book is in the series.books array
-            const books = s.books || [];
-            if (!books.includes(book.id)) {
-              books.push(book.id);
-            }
-            return { ...s, books };
-          }
-          return s;
-        });
-        localStorage.setItem('seriesLibrary', JSON.stringify(updatedSeries));
-      }
+      // Get the series name for the toast
+      const series = await enhancedStorageService.getSeriesById(seriesId);
+      const seriesName = series?.name || 'selected series';
       
       toast({
         title: "Added to Series",
@@ -267,41 +252,34 @@ export const BookSearch = ({ onAddBook, existingBooks }: BookSearchProps) => {
         hasUpcoming: false
       });
       
+      // Initialize storage service
+      await enhancedStorageService.initialize();
+      
+      // Convert the series to IndexedDB format and save it
+      const indexedDbSeries = {
+        ...newSeries,
+        readingProgress: 0,
+        completedBooks: 0,
+        dateAdded: new Date().toISOString(),
+        lastModified: new Date().toISOString()
+      };
+      
+      await enhancedStorageService.saveSeries(indexedDbSeries as any);
+      
       // Update the book with series information
       const updatedBook = {
         ...book,
         isPartOfSeries: true,
         seriesId: newSeries.id,
-        volumeNumber
+        seriesPosition: volumeNumber
       };
       
       // Add the book to the collection
       // In our revised flow, the book has not been added yet in automatic mode
       onAddBook(updatedBook);
       
-      // Ensure the newly created series is correctly saved in localStorage
-      // This fixes the issue where the book doesn't show in the Series page
-      const seriesJson = localStorage.getItem('seriesLibrary');
-      if (seriesJson) {
-        const allSeries = JSON.parse(seriesJson);
-        
-        // Make sure the new series has the book in its books array
-        if (!newSeries.books?.includes(book.id)) {
-          newSeries.books = [...(newSeries.books || []), book.id];
-        }
-        
-        // Check if the series already exists in localStorage
-        const existingSeriesIndex = allSeries.findIndex((s: Series) => s.id === newSeries.id);
-        if (existingSeriesIndex >= 0) {
-          // Update existing series
-          allSeries[existingSeriesIndex] = newSeries;
-        } else {
-          // Add new series
-          allSeries.push(newSeries);
-        }
-        
-        localStorage.setItem('seriesLibrary', JSON.stringify(allSeries));
-      }
+      // Add book to series in IndexedDB
+      await enhancedStorageService.addBookToSeries(book.id, newSeries.id, volumeNumber);
       
       toast({
         title: "New Series Created",

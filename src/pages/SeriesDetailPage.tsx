@@ -10,8 +10,10 @@ import { ArrowLeft, BookOpen, Bell, BellOff, Pencil, Trash2, Loader2 } from 'luc
 import { SeriesBooksTab } from '@/components/series/SeriesBooksTab';
 import { SeriesInfoTab } from '@/components/series/SeriesInfoTab';
 import { UpcomingReleasesTab } from '@/components/series/UpcomingReleasesTab';
+import { SeriesEditDialog } from '@/components/series/SeriesEditDialog';
 import { seriesApiService } from '@/services/api/SeriesApiService';
 import { upcomingReleasesApiService } from '@/services/api/UpcomingReleasesApiService';
+import { enhancedStorageService } from '@/services/storage/EnhancedStorageService';
 
 /**
  * Detailed view of a specific series
@@ -27,6 +29,7 @@ const SeriesDetailPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<string>('books');
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
   // Load series and related books
   useEffect(() => {
@@ -34,46 +37,50 @@ const SeriesDetailPage = () => {
       setIsLoading(true);
       
       try {
-        // Load series
-        const savedSeries = localStorage.getItem("seriesLibrary");
-        if (savedSeries) {
-          const parsedSeries = JSON.parse(savedSeries) as Series[];
-          const currentSeries = parsedSeries.find(s => s.id === seriesId);
+        await enhancedStorageService.initialize();
+        
+        // Load series from IndexedDB
+        const seriesFromDB = await enhancedStorageService.getSeriesById(seriesId || '');
+        if (seriesFromDB) {
+          // Convert IndexedDB series to UI format
+          const currentSeries: Series = {
+            ...seriesFromDB,
+            // Add UI-specific fields for compatibility
+            createdAt: new Date(seriesFromDB.dateAdded),
+            updatedAt: new Date(seriesFromDB.lastModified),
+            // Any other fields needed for UI compatibility
+            addedDate: seriesFromDB.dateAdded,
+          } as Series;
           
-          if (currentSeries) {
-            setSeries(currentSeries);
-            
-            // Load books
-            const savedBooks = localStorage.getItem("bookLibrary");
-            if (savedBooks) {
-              const parsedBooks = JSON.parse(savedBooks) as Book[];
-              setBooks(parsedBooks);
-              
-              // Filter for books in this series
-              const seriesBooksData = parsedBooks.filter(book => 
-                currentSeries.books.includes(book.id)
-              );
-              setSeriesBooks(seriesBooksData);
-              
-              // If series has a representative book, try to enhance series data from APIs
-              if (seriesBooksData.length > 0 && !currentSeries.apiEnriched) {
-                refreshSeriesData(currentSeries, seriesBooksData[0]);
-              }
-            }
-          } else {
-            // Series not found
-            toast({
-              title: "Series not found",
-              description: "The requested series could not be found.",
-              variant: "destructive"
-            });
-            navigate('/series');
+          setSeries(currentSeries);
+          
+          // Load all books from IndexedDB
+          const booksFromDB = await enhancedStorageService.getBooks();
+          // Convert IndexedDB books to UI book format
+          const uiBooks = booksFromDB.map(book => ({
+            ...book,
+            // Convert fields for UI format
+            addedDate: book.dateAdded || new Date().toISOString(),
+            completedDate: book.dateCompleted,
+          } as Book));
+          
+          setBooks(uiBooks);
+          
+          // Filter for books in this series
+          const seriesBooksData = uiBooks.filter(book => 
+            currentSeries.books.includes(book.id)
+          );
+          setSeriesBooks(seriesBooksData);
+          
+          // If series has a representative book, try to enhance series data from APIs
+          if (seriesBooksData.length > 0 && !currentSeries.apiEnriched) {
+            refreshSeriesData(currentSeries, seriesBooksData[0]);
           }
         } else {
-          // No series data
+          // Series not found
           toast({
-            title: "No series data",
-            description: "No series information is available.",
+            title: "Series not found",
+            description: "The requested series could not be found.",
             variant: "destructive"
           });
           navigate('/series');
@@ -111,7 +118,7 @@ const SeriesDetailPage = () => {
       
       if (enhancedInfo) {
         // Update series with API data
-        const updatedSeries = {
+        const updatedSeries: Series = {
           ...currentSeries,
           description: enhancedInfo.description || currentSeries.description,
           coverImage: enhancedInfo.coverImage || currentSeries.coverImage,
@@ -121,17 +128,14 @@ const SeriesDetailPage = () => {
           apiEnriched: true
         };
         
-        setSeries(updatedSeries);
+        // Save to IndexedDB
+        await enhancedStorageService.saveSeries({
+          ...updatedSeries,
+          lastModified: new Date().toISOString()
+        });
         
-        // Update in localStorage
-        const savedSeries = localStorage.getItem("seriesLibrary");
-        if (savedSeries) {
-          const allSeries = JSON.parse(savedSeries) as Series[];
-          const updatedAllSeries = allSeries.map(s => 
-            s.id === currentSeries.id ? updatedSeries : s
-          );
-          localStorage.setItem("seriesLibrary", JSON.stringify(updatedAllSeries));
-        }
+        // Update state
+        setSeries(updatedSeries);
         
         // Check for upcoming releases
         checkForUpcomingReleases(updatedSeries);
@@ -156,83 +160,83 @@ const SeriesDetailPage = () => {
       
       if (upcomingBooks.length > 0) {
         // Update series to indicate it has upcoming books
-        const updatedSeries = {
+        const updatedSeries: Series = {
           ...currentSeries,
           hasUpcoming: true
         };
         
+        // Save to IndexedDB
+        await enhancedStorageService.saveSeries({
+          ...updatedSeries,
+          lastModified: new Date().toISOString()
+        });
+        
+        // Update state
         setSeries(updatedSeries);
-        
-        // Save upcoming books to localStorage
-        const savedUpcoming = localStorage.getItem("upcomingBooks");
-        const existingUpcoming = savedUpcoming ? JSON.parse(savedUpcoming) : [];
-        
-        // Merge existing and new upcoming books, avoiding duplicates
-        const mergedUpcoming = [...existingUpcoming];
-        for (const book of upcomingBooks) {
-          if (!mergedUpcoming.some(b => b.id === book.id)) {
-            mergedUpcoming.push(book);
-          }
-        }
-        
-        localStorage.setItem("upcomingBooks", JSON.stringify(mergedUpcoming));
-        
-        // Update in series library as well
-        const savedSeries = localStorage.getItem("seriesLibrary");
-        if (savedSeries) {
-          const allSeries = JSON.parse(savedSeries) as Series[];
-          const updatedAllSeries = allSeries.map(s => 
-            s.id === currentSeries.id ? updatedSeries : s
-          );
-          localStorage.setItem("seriesLibrary", JSON.stringify(updatedAllSeries));
-        }
       }
     } catch (error) {
       console.error("Error checking for upcoming releases:", error);
     }
   };
-  
+
   // Handle tracking toggle
-  const handleToggleTracking = () => {
+  const handleToggleTracking = async () => {
     if (!series) return;
     
-    const updatedSeries = { ...series, isTracked: !series.isTracked };
-    setSeries(updatedSeries);
+    const updatedSeries: Series = { ...series, isTracked: !series.isTracked };
     
-    // Update in localStorage
-    const savedSeries = localStorage.getItem("seriesLibrary");
-    if (savedSeries) {
-      const parsedSeries = JSON.parse(savedSeries) as Series[];
-      const updatedSeriesList = parsedSeries.map(s => 
-        s.id === seriesId ? updatedSeries : s
-      );
-      localStorage.setItem("seriesLibrary", JSON.stringify(updatedSeriesList));
+    try {
+      // Save to IndexedDB
+      await enhancedStorageService.saveSeries({
+        ...updatedSeries,
+        lastModified: new Date().toISOString()
+      });
+      
+      // Update state
+      setSeries(updatedSeries);
+      
+      toast({
+        title: updatedSeries.isTracked ? "Series tracking enabled" : "Series tracking disabled",
+        description: updatedSeries.isTracked 
+          ? "You'll be notified about new releases in this series" 
+          : "You won't receive notifications for this series anymore"
+      });
+    } catch (error) {
+      console.error("Error updating series tracking:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update series tracking status",
+        variant: "destructive"
+      });
     }
-    
-    toast({
-      title: updatedSeries.isTracked ? "Series tracking enabled" : "Series tracking disabled",
-      description: updatedSeries.isTracked 
-        ? "You'll be notified about new releases in this series" 
-        : "You won't receive notifications for this series anymore"
-    });
   };
   
   // Handle delete series
-  const handleDeleteSeries = () => {
-    if (confirm("Are you sure you want to delete this series? This action cannot be undone.")) {
-      // Update in localStorage
-      const savedSeries = localStorage.getItem("seriesLibrary");
-      if (savedSeries && series) {
-        const parsedSeries = JSON.parse(savedSeries) as Series[];
-        const updatedSeriesList = parsedSeries.filter(s => s.id !== series.id);
-        localStorage.setItem("seriesLibrary", JSON.stringify(updatedSeriesList));
+  const handleDeleteSeries = async () => {
+    if (!seriesId || !series) return;
+    
+    if (window.confirm(`Are you sure you want to delete the series "${series.name}"? Books will remain in your collection but will no longer be associated with this series. This cannot be undone.`)) {
+      try {
+        // Initialize storage service
+        await enhancedStorageService.initialize();
+        
+        // Delete the series from IndexedDB
+        await enhancedStorageService.deleteSeries(seriesId);
         
         toast({
-          title: "Series deleted",
-          description: `"${series.name}" series has been deleted.`
+          title: "Series Deleted",
+          description: `Series "${series.name}" has been deleted.`
         });
         
+        // Navigate back to the series list
         navigate('/series');
+      } catch (error) {
+        console.error('Error deleting series:', error);
+        toast({
+          title: "Error",
+          description: "Failed to delete the series",
+          variant: "destructive"
+        });
       }
     }
   };
@@ -351,6 +355,7 @@ const SeriesDetailPage = () => {
                 size="icon"
                 className="border-white/30 text-white hover:bg-white/20"
                 title="Edit series"
+                onClick={() => setIsEditDialogOpen(true)}
               >
                 <Pencil className="h-4 w-4" />
               </Button>
@@ -408,13 +413,32 @@ const SeriesDetailPage = () => {
         </TabsContent>
         
         <TabsContent value="info" className="space-y-4">
-          <SeriesInfoTab series={series} />
+          <SeriesInfoTab 
+            series={series} 
+            onSeriesUpdated={(updatedSeries) => {
+              // Update local state with the updated series
+              setSeries(updatedSeries);
+            }}
+          />
         </TabsContent>
         
         <TabsContent value="upcoming" className="space-y-4">
           <UpcomingReleasesTab seriesId={series.id} seriesName={series.name} author={series.author} />
         </TabsContent>
       </Tabs>
+      
+      {/* Series Edit Dialog */}
+      {series && (
+        <SeriesEditDialog
+          series={series}
+          isOpen={isEditDialogOpen}
+          onClose={() => setIsEditDialogOpen(false)}
+          onSave={(updatedSeries) => {
+            setSeries(updatedSeries);
+            setIsEditDialogOpen(false);
+          }}
+        />
+      )}
     </div>
   );
 };

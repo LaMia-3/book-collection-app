@@ -369,13 +369,14 @@ export class SeriesApiService {
    */
   private async detectSeriesFromExistingCollection(title: string, author: string): Promise<SeriesDetectionResult | null> {
     try {
-      // Load existing series from localStorage (the source of truth for UI)
-      const seriesData = localStorage.getItem('seriesLibrary');
-      if (!seriesData) {
-        return null;
-      }
+      // Load existing series from IndexedDB (the exclusive source of truth)
+      const { enhancedStorageService } = await import('@/services/storage/EnhancedStorageService');
       
-      const existingSeries = JSON.parse(seriesData) as Series[];
+      // Initialize storage if needed
+      await enhancedStorageService.initialize();
+      
+      // Get all series from IndexedDB
+      const existingSeries = await enhancedStorageService.getSeries();
       if (!existingSeries || existingSeries.length === 0) {
         return null;
       }
@@ -391,8 +392,16 @@ export class SeriesApiService {
       for (const series of seriesToCheck) {
         // Check if title directly contains series name
         if (series.name && title.toLowerCase().includes(series.name.toLowerCase())) {
+          // Create a series object with required UI properties
+          const uiSeries: Series = {
+            ...series,
+            // Add UI-specific fields if they don't exist in the IndexedDB series
+            createdAt: new Date(series.dateAdded || new Date().toISOString()),
+            updatedAt: new Date(series.lastModified || new Date().toISOString())
+          };
+          
           return {
-            series,
+            series: uiSeries,
             confidence: 90, // Very high confidence for direct name match
             source: 'collection_exact'
           };
@@ -403,31 +412,36 @@ export class SeriesApiService {
       let bestMatch: Series | null = null;
       let highestSimilarity = 0;
       
+      // Get all books from IndexedDB
+      const allBooks = await enhancedStorageService.getBooks();
+      
       for (const series of seriesToCheck) {
         // Compare with each book in the series
         if (series.books && series.books.length > 0) {
-          // Get books in this series
-          const booksJson = localStorage.getItem('bookLibrary');
-          if (booksJson) {
-            const books = JSON.parse(booksJson) as Book[];
-            const seriesBooks = books.filter(book => series.books?.includes(book.id));
-            
-            // Calculate average title similarity
-            let totalSimilarity = 0;
-            for (const book of seriesBooks) {
-              const similarity = this.calculateTitleSimilarity(
-                this.cleanTitleForMatching(title),
-                this.cleanTitleForMatching(book.title)
-              );
-              totalSimilarity += similarity;
-            }
-            
-            const avgSimilarity = seriesBooks.length > 0 ? totalSimilarity / seriesBooks.length : 0;
-            
-            if (avgSimilarity > highestSimilarity) {
-              highestSimilarity = avgSimilarity;
-              bestMatch = series;
-            }
+          // Filter books that belong to this series
+          const seriesBooks = allBooks.filter(book => series.books?.includes(book.id));
+          
+          // Calculate average title similarity
+          let totalSimilarity = 0;
+          for (const book of seriesBooks) {
+            const similarity = this.calculateTitleSimilarity(
+              this.cleanTitleForMatching(title),
+              this.cleanTitleForMatching(book.title)
+            );
+            totalSimilarity += similarity;
+          }
+          
+          const avgSimilarity = seriesBooks.length > 0 ? totalSimilarity / seriesBooks.length : 0;
+          
+          if (avgSimilarity > highestSimilarity) {
+            highestSimilarity = avgSimilarity;
+            // Create a series object with required UI properties
+            bestMatch = {
+              ...series,
+              // Add UI-specific fields if they don't exist in the IndexedDB series
+              createdAt: new Date(series.dateAdded || new Date().toISOString()),
+              updatedAt: new Date(series.lastModified || new Date().toISOString())
+            };
           }
         }
       }
@@ -446,6 +460,11 @@ export class SeriesApiService {
       return null;
     }
   }
+  
+  /**
+   * Detect series by matching with existing books in the collection
+   * Prioritizes matching with existing books over creating new ones
+   */
 
   private async detectSeriesFromExistingBooks(title: string, author: string, existingBooks: Book[]): Promise<SeriesDetectionResult | null> {
     // Only proceed if we have enough books to compare

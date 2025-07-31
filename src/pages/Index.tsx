@@ -47,24 +47,127 @@ const Index = () => {
     ? `${settings.preferredName}'s Personal Library`
     : "My Personal Library";
 
-  // Load books from localStorage on component mount
-  useEffect(() => {
-    const savedBooks = localStorage.getItem("bookLibrary");
-    if (savedBooks) {
+  // Function to map IndexedDB Book to UI Book type
+  const mapIndexedDBBookToUIBook = (indexedDBBook: any): Book => {
+    return {
+      ...indexedDBBook,
+      // Map fields with different names
+      addedDate: indexedDBBook.dateAdded || new Date().toISOString(),
+      completedDate: indexedDBBook.dateCompleted,
+      // Ensure all required fields are present
+      isPartOfSeries: indexedDBBook.isPartOfSeries || false,
+      spineColor: indexedDBBook.spineColor || 1
+    };
+  };
+
+  // Helper function to clear an IndexedDB object store
+  const clearIndexedDBStore = (dbName: string, storeName: string): Promise<void> => {
+    return new Promise((resolve, reject) => {
       try {
-        const parsedBooks = JSON.parse(savedBooks);
-        setBooks(parsedBooks);
-        setFilteredBooks(parsedBooks);
+        const openRequest = indexedDB.open(dbName);
+        
+        openRequest.onerror = (event) => {
+          const error = (event.target as any).error;
+          reject(new Error(`Failed to open database: ${error?.message || 'Unknown error'}`));
+        };
+        
+        openRequest.onsuccess = (event) => {
+          const db = openRequest.result;
+          
+          // Check if the store exists
+          if (!Array.from(db.objectStoreNames).includes(storeName)) {
+            db.close();
+            reject(new Error(`Store "${storeName}" does not exist in database`));
+            return;
+          }
+          
+          try {
+            // Create a transaction
+            const transaction = db.transaction(storeName, 'readwrite');
+            const objectStore = transaction.objectStore(storeName);
+            
+            // Request to clear the store
+            const clearRequest = objectStore.clear();
+            
+            // Handle success case
+            clearRequest.onsuccess = () => {
+              // Note: we don't resolve here, we wait for transaction completion
+              console.log(`Clear operation for ${storeName} successful`);
+            };
+            
+            // Handle clear request error
+            clearRequest.onerror = (event) => {
+              const error = (event.target as any).error;
+              transaction.abort();
+              db.close();
+              reject(new Error(`Failed to clear ${storeName} store: ${error?.message || 'Unknown error'}`));
+            };
+            
+            // Handle transaction completion (success)
+            transaction.oncomplete = () => {
+              db.close();
+              console.log(`Transaction for clearing ${storeName} completed successfully`);
+              resolve();
+            };
+            
+            // Handle transaction error
+            transaction.onerror = (event) => {
+              const error = (event.target as any).error;
+              db.close();
+              reject(new Error(`Transaction failed: ${error?.message || 'Unknown error'}`));
+            };
+            
+            // Handle transaction abort
+            transaction.onabort = (event) => {
+              const error = (event.target as any).error;
+              db.close();
+              reject(new Error(`Transaction aborted: ${error?.message || 'Unknown error'}`));
+            };
+            
+          } catch (txError) {
+            db.close();
+            reject(new Error(`Error setting up transaction: ${txError instanceof Error ? txError.message : String(txError)}`));
+          }
+        };
+        
+      } catch (outerError) {
+        reject(new Error(`Unexpected error during clear operation: ${outerError instanceof Error ? outerError.message : String(outerError)}`));
+      }
+    });
+  };
+  
+  // Load books from IndexedDB on component mount
+  useEffect(() => {
+    const loadBooksFromIndexedDB = async () => {
+      try {
+        // Import the storage service
+        const { enhancedStorageService } = await import('@/services/storage/EnhancedStorageService');
+        
+        // Get books from IndexedDB
+        const indexedDBBooks = await enhancedStorageService.getBooks();
+        
+        // Convert to UI book format
+        const uiBooks = indexedDBBooks.map(mapIndexedDBBookToUIBook);
+        
+        setBooks(uiBooks);
+        setFilteredBooks(uiBooks);
         
         // Initialize the search index with the books
         searchService.clearIndex();
-        searchService.indexBooks(parsedBooks);
+        searchService.indexBooks(uiBooks);
       } catch (error) {
-        console.error("Error loading books from localStorage:", error);
+        console.error("Error loading books from IndexedDB:", error);
+        toast({
+          title: "Error Loading Books",
+          description: "There was an error loading your books. Please refresh the page.",
+          variant: "destructive"
+        });
         setBooks([]);
         setFilteredBooks([]);
       }
-    }
+    };
+    
+    loadBooksFromIndexedDB();
   }, []);
   
   // Calculate books completed in the current month whenever books change
@@ -91,25 +194,62 @@ const Index = () => {
     setBooksCompletedThisMonth(completedThisMonth);
   }, [books]);
 
-  // Save books to localStorage whenever books change
-  useEffect(() => {
-    localStorage.setItem("bookLibrary", JSON.stringify(books));
-  }, [books]);
+  // Note: No need for books sync effect anymore since IndexedDB is the source of truth
+  // and all individual operations (add, update, delete) handle IndexedDB updates directly
 
-  const addBook = (newBook: Book) => {
-    setBooks((prev) => [...prev, newBook]);
-    
-    // Add the new book to the search index
-    searchService.indexBook(newBook);
-    
-    // If there's an active search, update filtered results
-    if (searchQuery) {
-      handleSearch(searchQuery, searchOptions);
-    } else {
-      setFilteredBooks(prev => [...prev, newBook]);
+  const addBook = async (newBook: Book) => {
+    try {
+      // Import the storage service directly to avoid import cycle issues
+      const { enhancedStorageService } = await import('@/services/storage/EnhancedStorageService');
+      
+      // Convert UI book to IndexedDB format
+      // We need to adapt the UI book model to the IndexedDB format that the service expects
+      const indexedDBBook = {
+        ...newBook,
+        // Map required fields for IndexedDB
+        dateAdded: newBook.addedDate || new Date().toISOString(),
+        dateCompleted: newBook.completedDate,
+        lastModified: new Date().toISOString(),
+        syncStatus: 'synced' as const,
+        // Default to 0 progress if not specified
+        // @ts-ignore - progress field exists in the IndexedDB Book type but not UI Book type
+        progress: 0
+      };
+      
+      // Save to IndexedDB first
+      const bookId = await enhancedStorageService.saveBook(indexedDBBook as any);
+      
+      // Update the book with the returned ID if needed
+      const savedBook = {
+        ...newBook,
+        id: bookId || newBook.id
+      };
+      
+      // Then update local state
+      setBooks((prev) => [...prev, savedBook]);
+      
+      // Add the new book to the search index
+      searchService.indexBook(savedBook);
+      
+      // If there's an active search, update filtered results
+      if (searchQuery) {
+        handleSearch(searchQuery, searchOptions);
+      } else {
+        setFilteredBooks(prev => [...prev, savedBook]);
+      }
+      
+      // Close the search interface
+      setShowSearch(false);
+      
+      console.log('Book successfully saved to IndexedDB with ID:', bookId);
+    } catch (error) {
+      console.error('Error saving book to IndexedDB:', error);
+      toast({
+        title: "Error Saving Book",
+        description: `Failed to save book to database: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: "destructive"
+      });
     }
-    
-    setShowSearch(false);
   };
 
   const updateBook = (updatedBook: Book) => {
@@ -130,18 +270,29 @@ const Index = () => {
     }
   };
 
-  const deleteBook = (bookId: string) => {
-    setBooks((prev) => prev.filter((book) => book.id !== bookId));
-    
-    // Remove the book from the search index
-    searchService.removeBook(bookId);
-    
-    // Update filtered books
-    setFilteredBooks((prev) => prev.filter((book) => book.id !== bookId));
-    
-    // Close the details modal if the deleted book was selected
-    if (selectedBook && selectedBook.id === bookId) {
+  const deleteBook = async (bookId: string) => {
+    try {
+      // Import the storage service
+      const { enhancedStorageService } = await import('@/services/storage/EnhancedStorageService');
+      
+      // Delete book from IndexedDB
+      await enhancedStorageService.deleteBook(bookId);
+      
+      // Update local state
+      setBooks((prevBooks) => prevBooks.filter((book) => book.id !== bookId));
       setSelectedBook(null);
+      
+      toast({
+        title: "Book Deleted",
+        description: "Book removed from your library"
+      });
+    } catch (error) {
+      console.error('Error deleting book:', error);
+      toast({
+        title: "Delete Failed",
+        description: `Error deleting book: ${error instanceof Error ? error.message : String(error)}`,
+        variant: "destructive"
+      });
     }
     
     // Show success toast
@@ -324,37 +475,44 @@ const Index = () => {
           onDeleteLibrary={async () => {
             try {
               // Import required services only when needed
+              const { enhancedStorageService } = await import('@/services/storage/EnhancedStorageService');
               const { seriesService } = await import('@/services/SeriesService');
-              // Import of upcomingReleasesService removed as that functionality is no longer supported
               const { notificationService } = await import('@/services/NotificationService');
-              const { databaseService } = await import('@/services/DatabaseService');
               
-              // Clear the books array
+              // Clear UI state first for immediate feedback
               setBooks([]);
+              setFilteredBooks([]);
+              
+              // Clear all books in IndexedDB
+              try {
+                // Use a helper function to clear the IndexedDB books store
+                await clearIndexedDBStore('book-collection-db', 'books');
+                console.log('Successfully cleared books from IndexedDB');
+              } catch (booksError) {
+                console.error('Error clearing books from IndexedDB:', booksError);
+                // Continue with other deletion even if books deletion fails
+              }
               
               // Clear series and related data
               try {
-                // Get all series to delete them one by one (allows for proper cleanup of related data)
-                const allSeries = await seriesService.getAllSeries();
-                
-                // Delete each series and its related data
-                for (const series of allSeries) {
-                  await seriesService.deleteSeries(series.id);
-                }
+                // Clear all series in IndexedDB
+                await clearIndexedDBStore('book-collection-db', 'series');
+                console.log('Successfully cleared series from IndexedDB');
                 
                 // Clear any remaining notifications
                 await notificationService.clearAllNotifications();
-                
-                console.log('Series data deleted successfully');
+                console.log('Notifications cleared successfully');
               } catch (seriesError) {
-                console.error('Error deleting series data:', seriesError);
+                console.error('Error clearing series data:', seriesError);
                 // Continue with library deletion even if series deletion fails
               }
               
               // Also clear localStorage for compatibility with old implementation
+              localStorage.removeItem('bookLibrary');
               localStorage.removeItem('seriesLibrary');
               localStorage.removeItem('upcomingBooks');
               localStorage.removeItem('releaseNotifications');
+              console.log('localStorage items removed');
               
               // Show success toast
               toast({
@@ -384,12 +542,43 @@ const Index = () => {
               
               // Add the successfully imported books to the collection
               if (importResult.successful.length > 0) {
-                setBooks(prevBooks => [...prevBooks, ...importResult.successful]);
-                
-                toast({
-                  title: "Import Successful",
-                  description: `${importResult.successful.length} books were imported successfully. ${importResult.failed.length > 0 ? `${importResult.failed.length} failed.` : ''}`
-                });
+                try {
+                  // Import the storage service
+                  const { enhancedStorageService } = await import('@/services/storage/EnhancedStorageService');
+                  
+                  // Save each book to IndexedDB
+                  const savedBooks = [];
+                  for (const book of importResult.successful) {
+                    // Convert UI book to IndexedDB book format
+                    const indexedDBBook = {
+                      ...book,
+                      dateAdded: book.addedDate || new Date().toISOString(),
+                      dateCompleted: book.completedDate,
+                      lastModified: new Date().toISOString(),
+                      syncStatus: 'synced',
+                      progress: typeof book.progress === 'number' ? book.progress : 0
+                    };
+                    
+                    // Save to IndexedDB
+                    await enhancedStorageService.saveBook(indexedDBBook);
+                    savedBooks.push(book);
+                  }
+                  
+                  // Update UI state with the saved books
+                  setBooks(prevBooks => [...prevBooks, ...savedBooks]);
+                  
+                  toast({
+                    title: "Import Successful",
+                    description: `${importResult.successful.length} books were imported successfully. ${importResult.failed.length > 0 ? `${importResult.failed.length} failed.` : ''}`
+                  });
+                } catch (saveError) {
+                  console.error('Error saving imported books to IndexedDB:', saveError);
+                  toast({
+                    title: "Import Partial Success",
+                    description: `Books imported but may not appear in all views. Please refresh the page. Error: ${saveError instanceof Error ? saveError.message : String(saveError)}`,
+                    variant: "warning"
+                  });
+                }
               } else {
                 toast({
                   title: "Import Failed",
@@ -417,12 +606,43 @@ const Index = () => {
               
               // Add the successfully imported books to the collection
               if (importResult.successful.length > 0) {
-                setBooks(prevBooks => [...prevBooks, ...importResult.successful]);
-                
-                toast({
-                  title: "Import Successful",
-                  description: `${importResult.successful.length} books were imported successfully. ${importResult.failed.length > 0 ? `${importResult.failed.length} failed.` : ''}`
-                });
+                try {
+                  // Import the storage service
+                  const { enhancedStorageService } = await import('@/services/storage/EnhancedStorageService');
+                  
+                  // Save each book to IndexedDB
+                  const savedBooks = [];
+                  for (const book of importResult.successful) {
+                    // Convert UI book to IndexedDB book format
+                    const indexedDBBook = {
+                      ...book,
+                      dateAdded: book.addedDate || new Date().toISOString(),
+                      dateCompleted: book.completedDate,
+                      lastModified: new Date().toISOString(),
+                      syncStatus: 'synced',
+                      progress: typeof book.progress === 'number' ? book.progress : 0
+                    };
+                    
+                    // Save to IndexedDB
+                    await enhancedStorageService.saveBook(indexedDBBook);
+                    savedBooks.push(book);
+                  }
+                  
+                  // Update UI state with the saved books
+                  setBooks(prevBooks => [...prevBooks, ...savedBooks]);
+                  
+                  toast({
+                    title: "Import Successful",
+                    description: `${importResult.successful.length} books were imported successfully. ${importResult.failed.length > 0 ? `${importResult.failed.length} failed.` : ''}`
+                  });
+                } catch (saveError) {
+                  console.error('Error saving imported books to IndexedDB:', saveError);
+                  toast({
+                    title: "Import Partial Success",
+                    description: `Books imported but may not appear in all views. Please refresh the page. Error: ${saveError instanceof Error ? saveError.message : String(saveError)}`,
+                    variant: "warning"
+                  });
+                }
               } else {
                 toast({
                   title: "Import Failed",
@@ -473,13 +693,41 @@ const Index = () => {
               const restoreResult = await restoreFromBackup(file);
               
               if (restoreResult.success && restoreResult.books.length > 0) {
-                // Replace the current book collection with the restored books
-                setBooks(restoreResult.books);
-                
-                toast({
-                  title: "Restore Successful",
-                  description: restoreResult.message
-                });
+                try {
+                  // Import the storage service
+                  const { enhancedStorageService } = await import('@/services/storage/EnhancedStorageService');
+                  
+                  // Save each book to IndexedDB
+                  for (const book of restoreResult.books) {
+                    // Convert UI book to IndexedDB book format
+                    const indexedDBBook = {
+                      ...book,
+                      dateAdded: book.addedDate || new Date().toISOString(),
+                      dateCompleted: book.completedDate,
+                      lastModified: new Date().toISOString(),
+                      syncStatus: 'synced',
+                      progress: typeof book.progress === 'number' ? book.progress : 0
+                    };
+                    
+                    // Save to IndexedDB
+                    await enhancedStorageService.saveBook(indexedDBBook);
+                  }
+                  
+                  // Replace the current book collection with the restored books
+                  setBooks(restoreResult.books);
+                  
+                  toast({
+                    title: "Restore Successful",
+                    description: restoreResult.message
+                  });
+                } catch (saveError) {
+                  console.error('Error saving restored books to IndexedDB:', saveError);
+                  toast({
+                    title: "Restore Partial Success",
+                    description: `Books restored but may not appear in all views. Please refresh the page. Error: ${saveError instanceof Error ? saveError.message : String(saveError)}`,
+                    variant: "destructive"
+                  });
+                }
               } else {
                 toast({
                   title: "Restore Failed",

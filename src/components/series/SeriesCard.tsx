@@ -24,12 +24,13 @@ import {
 interface SeriesCardProps {
   series: Series;
   onToggleTracking?: (seriesId: string, tracked: boolean) => void;
+  onDeleteSeries?: (seriesId: string) => void;
 }
 
 /**
  * Card component for displaying a book series in a grid
  */
-export const SeriesCard = ({ series, onToggleTracking }: SeriesCardProps) => {
+export const SeriesCard = ({ series, onToggleTracking, onDeleteSeries }: SeriesCardProps) => {
   // State for expandable books panel
   const [showBooks, setShowBooks] = useState(false);
   
@@ -123,6 +124,23 @@ export const SeriesCard = ({ series, onToggleTracking }: SeriesCardProps) => {
             <Button variant="ghost" size="sm" asChild>
               <Link to={`/series/${series.id}`}>View Series</Link>
             </Button>
+            
+            {onDeleteSeries && (
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (window.confirm(`Are you sure you want to delete "${series.name}"? This action cannot be undone.`)) {
+                    onDeleteSeries(series.id);
+                  }
+                }}
+              >
+                Delete
+              </Button>
+            )}
             
             {series.books?.length > 0 && (
               <Collapsible

@@ -7,6 +7,7 @@ import { Book } from '@/types/book';
 
 /**
  * Service for managing series operations
+ * All operations use IndexedDB as the exclusive source of truth
  */
 export class SeriesService {
   /**

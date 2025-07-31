@@ -40,6 +40,7 @@ import { seriesService } from "@/services/SeriesService";
 import { seriesApiService } from "@/services/api/SeriesApiService";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/use-toast";
+import { enhancedStorageService } from "@/services/storage/EnhancedStorageService";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -107,76 +108,81 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
   
   // Handle removing a book from series with database update
   const handleRemoveFromSeries = async () => {
-    if (!book.seriesId && !selectedSeriesId) {
-      // No series to remove from
-      return;
-    }
+    if (!book.seriesId) return;
     
     try {
-      const seriesId = selectedSeriesId || book.seriesId || '';
+      setIsSaving(true);
       
-      // Update database
-      if (seriesId) {
-        await seriesService.removeBookFromSeries(seriesId, book.id);
+      // Initialize storage
+      await enhancedStorageService.initialize();
+      
+      // First, update the series in IndexedDB
+      const seriesInDb = await enhancedStorageService.getSeriesById(book.seriesId);
+      if (seriesInDb) {
+        // Update series books list
+        const updatedSeriesForDb = {
+          ...seriesInDb,
+          books: seriesInDb.books.filter(id => id !== book.id),
+          lastModified: new Date().toISOString()
+        };
         
-        // Update the series in localStorage
-        const updatedSeries = availableSeries.map(series => {
-          if (series.id === seriesId) {
-            return {
-              ...series,
-              books: series.books?.filter(id => id !== book.id) || []
-            };
-          }
-          return series;
-        });
-        
-        // Update series in localStorage
-        localStorage.setItem('seriesLibrary', JSON.stringify(updatedSeries));
-        
-        // IMPORTANT: Update the book in localStorage too
-        const booksJson = localStorage.getItem('bookLibrary');
-        if (booksJson) {
-          const books = JSON.parse(booksJson);
-          const updatedBooks = books.map((b: Book) => {
-            if (b.id === book.id) {
-              // Update the book to remove series association
-              return {
-                ...b,
-                isPartOfSeries: false,
-                seriesId: undefined,
-                volumeNumber: undefined
-              };
-            }
-            return b;
-          });
-          localStorage.setItem('bookLibrary', JSON.stringify(updatedBooks));
-        }
+        await enhancedStorageService.saveSeries(updatedSeriesForDb);
+        console.log('Updated series in IndexedDB:', updatedSeriesForDb.id);
       }
       
-      // Update UI
-      setSelectedSeriesId('');
-      setVolumeNumber(undefined);
-      setShowRemoveConfirm(false);
+      // Update the book in IndexedDB to remove series association
+      const bookInDb = await enhancedStorageService.getBookById(book.id);
+      if (bookInDb) {
+        const updatedBookForDb = {
+          ...bookInDb,
+          seriesId: undefined,
+          isPartOfSeries: false,
+          seriesPosition: undefined,
+          lastModified: new Date().toISOString()
+        };
+        
+        await enhancedStorageService.saveBook(updatedBookForDb);
+        console.log('Updated book in IndexedDB, removed series association');
+      }
       
-      // Update the edited book to ensure it gets saved correctly
-      setEditedBook({
-        ...editedBook,
-        isPartOfSeries: false,
+      // Update UI state
+      setSelectedSeriesId(null);
+      
+      // Update available series list in UI
+      const updatedSeries = availableSeries.map(series => {
+        if (series.id === book.seriesId) {
+          return {
+            ...series,
+            books: series.books.filter(id => id !== book.id),
+            updatedAt: new Date()
+          };
+        }
+        return series;
+      });
+      setAvailableSeries(updatedSeries);
+      
+      // Call the parent's update function to update the book in the UI
+      onUpdate({
+        ...book,
         seriesId: undefined,
-        volumeNumber: undefined
+        isPartOfSeries: false,
+        volumeNumber: undefined,
+        seriesPosition: undefined
       });
       
       toast({
-        title: "Removed from Series",
-        description: "Book has been removed from the series."
+        title: "Series removed",
+        description: "Book removed from series successfully",
       });
     } catch (error) {
       console.error('Error removing book from series:', error);
       toast({
         title: "Error",
-        description: `Failed to remove book from series: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        variant: "destructive"
+        description: "Failed to remove book from series",
+        variant: "destructive",
       });
+    } finally {
+      setIsSaving(false);
     }
   };
   
@@ -195,46 +201,90 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
   
   // Handle series creation from dialog
   const handleCreateNewSeries = async (seriesData: Partial<any>, bookToUpdate: Book, volumeNumber?: number) => {
+    setIsSaving(true);
     try {
-      // Create the new series
-      const newSeries = await seriesService.createSeries({
+      // Initialize storage
+      await enhancedStorageService.initialize();
+      
+      // Create a new series ID
+      const newSeriesId = `series-${Date.now()}`;
+      
+      // Prepare series for IndexedDB (the only source of truth)
+      const newSeriesForIndexedDB = {
+        id: newSeriesId,
         name: seriesData.name || `Unknown Series`,
         description: seriesData.description || `Series featuring ${book.title}`,
         author: seriesData.author || book.author,
         books: [book.id],
         coverImage: seriesData.coverImage || book.thumbnail,
-        genre: seriesData.genre || (book.genre ? [book.genre] : []),
+        // Convert genre to categories for IndexedDB format
+        categories: seriesData.genre || (book.genre ? [book.genre] : []),
         status: seriesData.status || 'ongoing',
-        readingOrder: 'publication',
-        totalBooks: seriesData.totalBooks,
-        isTracked: false,
-        hasUpcoming: false
-      });
+        readingOrder: 'publication' as 'publication' | 'chronological' | 'custom',
+        totalBooks: seriesData.totalBooks || 1,
+        completedBooks: 0,
+        readingProgress: 0,
+        isTracked: seriesData.isTracked || false,
+        hasUpcoming: false,
+        apiEnriched: false,
+        dateAdded: new Date().toISOString(),
+        lastModified: new Date().toISOString()
+      };
+      
+      // Save the series to IndexedDB
+      await enhancedStorageService.saveSeries(newSeriesForIndexedDB as any);
+      console.log('New series saved to IndexedDB:', newSeriesId);
+      
+      // Update the book in IndexedDB to associate with this series
+      const bookInDb = await enhancedStorageService.getBookById(book.id);
+      if (bookInDb) {
+        const updatedBook = {
+          ...bookInDb,
+          seriesId: newSeriesId,
+          isPartOfSeries: true,
+          seriesPosition: volumeNumber || 1,
+          lastModified: new Date().toISOString()
+        };
+        await enhancedStorageService.saveBook(updatedBook);
+        console.log('Book updated with series association in IndexedDB');
+      }
+      
+      // Create a UI-friendly version of the series
+      const newUISeriesObject = {
+        ...newSeriesForIndexedDB,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        // Copy categories to genre for UI compatibility
+        genre: newSeriesForIndexedDB.categories
+      };
       
       // Update local state
-      const updatedSeries = [...availableSeries, newSeries];
+      const updatedSeries = [...availableSeries, newUISeriesObject];
       setAvailableSeries(updatedSeries);
-      setSelectedSeriesId(newSeries.id);
+      setSelectedSeriesId(newSeriesId);
       if (volumeNumber) {
         setVolumeNumber(volumeNumber);
       }
       
-      // IMPORTANT: Update localStorage to synchronize with SeriesPage
-      localStorage.setItem('seriesLibrary', JSON.stringify(updatedSeries));
+      // Close the dialog and show confirmation
+      setShowSeriesAssignmentDialog(false);
       
       toast({
-        title: "New Series Created",
-        description: `Created new series "${newSeries.name}". Changes will be saved when you save the book.`
+        title: "Series Created",
+        description: `Series "${newSeriesForIndexedDB.name}" created with ${book.title}`
       });
+      
+      return newUISeriesObject;
     } catch (error) {
-      console.error('Error creating new series:', error);
+      console.error('Error creating series:', error);
       toast({
-        title: "Error Creating Series",
-        description: `Failed to create series: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        title: "Error",
+        description: "Failed to create series",
         variant: "destructive"
       });
+      return null;
     } finally {
-      setShowSeriesAssignmentDialog(false);
+      setIsSaving(false);
     }
   };
   
@@ -243,83 +293,40 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
     const loadSeries = async () => {
       setLoadingSeries(true);
       try {
-        console.log('Loading series data...');
+        console.log('Loading series data from IndexedDB...');
         
-        // IMPORTANT: Match the same data source as SeriesPage - use localStorage directly
-        const savedSeries = localStorage.getItem('seriesLibrary');
-        console.log('Series in localStorage:', savedSeries ? 'Found' : 'Not found');
+        // Initialize the enhanced storage service
+        await enhancedStorageService.initialize();
         
-        if (savedSeries) {
-          // Parse series data from localStorage
-          const parsedSeries = JSON.parse(savedSeries);
-          console.log('Parsed series from localStorage:', parsedSeries);
-          setAvailableSeries(parsedSeries);
-          
-          // Also sync this data to IndexedDB for future use
-          try {
-            // Clear existing series first
-            await seriesService.clearAllSeries();
-            
-            // Add each series to IndexedDB
-            for (const series of parsedSeries) {
-              await seriesService.createSeries({
-                ...series,
-                books: series.books || [],
-                readingOrder: series.readingOrder || 'publication',
-                isTracked: series.isTracked !== undefined ? series.isTracked : false,
-                hasUpcoming: series.hasUpcoming !== undefined ? series.hasUpcoming : false
-              });
-            }
-            console.log('Series data synchronized with IndexedDB');
-          } catch (syncError) {
-            console.error('Error syncing series data to IndexedDB:', syncError);
-            // Continue with localStorage data even if sync fails
-          }
+        // Get all series directly from IndexedDB - the only source of truth
+        const seriesFromDB = await enhancedStorageService.getSeries();
+        console.log(`Found ${seriesFromDB.length} series in IndexedDB`);
+        
+        if (seriesFromDB.length === 0) {
+          console.log('No series found in the database');
+          setAvailableSeries([]);
         } else {
-          // No localStorage data, try IndexedDB
-          const seriesList = await seriesService.getAllSeries();
-          console.log('Series in IndexedDB:', seriesList);
+          // Convert IndexedDB format to UI format
+          const uiSeriesList = seriesFromDB.map(s => ({
+            ...s,
+            // Convert date strings to Date objects for UI
+            createdAt: new Date(s.dateAdded),
+            updatedAt: new Date(s.lastModified)
+          }));
           
-          if (seriesList.length === 0) {
-            // Create a sample series if no series found anywhere
-            console.log('No series found. Creating sample series...');
-            const newSeries = await seriesService.createSeries({
-              name: "Sample Series",
-              description: "A sample series for testing",
-              author: "Test Author",
-              books: [book.id],
-              coverImage: "",
-              readingOrder: "publication",
-              isTracked: false,
-              hasUpcoming: false
-            });
-            
-            // Update localStorage to match SeriesPage data source
-            localStorage.setItem('seriesLibrary', JSON.stringify([newSeries]));
-            console.log('Created sample series:', newSeries);
-            setAvailableSeries([newSeries]);
-          } else {
-            // We have series in IndexedDB, use them and sync to localStorage
-            console.log('Using existing series from IndexedDB');
-            setAvailableSeries(seriesList);
-            localStorage.setItem('seriesLibrary', JSON.stringify(seriesList));
-          }
-        }
-        
-        // If the book is already in a series, select it
-        if (book.seriesId) {
-          console.log('Book is already in series:', book.seriesId);
-          setSelectedSeriesId(book.seriesId);
+          console.log('Series loaded for UI:', uiSeriesList);
+          setAvailableSeries(uiSeriesList);
         }
       } catch (error) {
-        console.error('Error loading series:', error);
+        console.error('Error loading series from IndexedDB:', error);
+        setAvailableSeries([]);
       } finally {
         setLoadingSeries(false);
       }
     };
     
     loadSeries();
-  }, [book.seriesId]);
+  }, []);
 
   // Enhanced save handler with loading state
   const handleSave = useCallback(async () => {
@@ -336,13 +343,25 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
         title: titleToUse,
         isPartOfSeries: !!selectedSeriesId,
         seriesId: selectedSeriesId || undefined,
-        volumeNumber: volumeNumber
+        volumeNumber: volumeNumber,
+        seriesPosition: volumeNumber // Set both for compatibility
       };
       
       // If a series was selected, make sure the book is added to that series
       if (selectedSeriesId) {
         try {
+          // First update using seriesService (which now updates IndexedDB - exclusive source of truth)
           await seriesService.addBookToSeries(selectedSeriesId, book.id);
+          
+          // Also update directly in IndexedDB for data consistency
+          try {
+            await enhancedStorageService.initialize();
+            await enhancedStorageService.addBookToSeries(book.id, selectedSeriesId, volumeNumber);
+          } catch (indexedDBError) {
+            console.error('Error updating book-series relationship in IndexedDB:', indexedDBError);
+            // Continue even if IndexedDB update fails - we'll still update the UI
+          }
+          
           toast({
             title: "Series Updated",
             description: "Book successfully added to series."
@@ -356,10 +375,34 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
           });
         }
       }
-      
+
+      // First call parent update to update UI state
       onUpdate(updatedBook);
+
+      // Then also save to IndexedDB in the background for data persistence
+      try {
+        await enhancedStorageService.initialize();
+
+        // Convert to IndexedDB format and save
+        const enhancedBook = {
+          ...updatedBook,
+          // Add required IndexedDB fields
+          dateAdded: updatedBook.addedDate,
+          lastModified: new Date().toISOString(),
+          // Add reading progress if not present
+          progress: (updatedBook as any).progress || 0
+        };
+
+        await enhancedStorageService.saveBook(enhancedBook as any);
+        console.log('Book saved to IndexedDB successfully');
+      } catch (indexedDBError) {
+        console.error('Error saving book to IndexedDB:', indexedDBError);
+        // Continue even if IndexedDB update fails - we'll still update the UI
+      }
+
+      // Close the dialog
       onClose();
-      
+
       toast({
         title: "Changes Saved",
         description: "Book details updated successfully."
