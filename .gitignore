@@ -114,6 +114,7 @@ $RECYCLE.BIN/
 # Package specific files
 .npmignore
 
-# architecture
+# testingdocs
 prompts
 docs
+smallbookwdates.csv
