@@ -7,7 +7,18 @@ import { Series, SeriesMetadata } from '@/types/indexeddb/Series';
 import { UpcomingBook } from '@/types/indexeddb/UpcomingBook';
 import { Notification } from '@/types/indexeddb/Notification';
 import { StoreNames, DB_CONFIG } from '@/types/indexeddb';
-import { useToast } from '@/hooks/use-toast';
+
+// Import error handling utilities
+import { 
+  withRetry, 
+  DatabaseConnectionError,
+  EntityNotFoundError,
+  TransactionError,
+  StorageQuotaError,
+  classifyIndexedDBError,
+  RecoveryStrategies,
+  ErrorTelemetry 
+} from './IndexedDBErrorHandling';
 
 /**
  * Service for enhanced IndexedDB operations with proper schema design and indices
@@ -19,16 +30,18 @@ export class IndexedDBService {
   private toastService: any = null;
 
   constructor() {
-    // Try to get toast service (will be available in React components)
-    try {
-      this.toastService = useToast();
-    } catch (error) {
-      // Toast service not available (outside React context)
-    }
+    // Note: We no longer try to use React hooks directly in services
+    // Toast notifications are now handled through the custom event system
+    this.toastService = null;
   }
 
   /**
-   * Initialize the database connection with enhanced schema and indices
+   * Initialize the database connection with enhanced schema, indices, and error handling
+   * 
+   * Features:
+   * - Connection retry with exponential backoff
+   * - Error classification and recovery
+   * - Telemetry for tracking connection issues
    */
   async initDb(): Promise<IDBPDatabase> {
     // Return existing DB if already initialized
@@ -37,35 +50,72 @@ export class IndexedDBService {
     // Prevent multiple concurrent initializations
     if (this.isInitializing) {
       if (this.initPromise) return this.initPromise;
-      throw new Error('Database initialization in progress, but no promise available');
+      throw new DatabaseConnectionError('Database initialization in progress, but no promise available');
     }
     
     this.isInitializing = true;
     
     try {
-      this.initPromise = openDB(DB_CONFIG.NAME, DB_CONFIG.VERSION, {
-        upgrade: (db, oldVersion, newVersion) => {
-          console.log(`Upgrading database from version ${oldVersion} to ${newVersion}`);
-          this.applyMigrations(db, oldVersion, newVersion || DB_CONFIG.VERSION);
+      // Use retry mechanism for database initialization
+      this.initPromise = withRetry(
+        async () => {
+          const db = await openDB(DB_CONFIG.NAME, DB_CONFIG.VERSION, {
+            upgrade: (db, oldVersion, newVersion) => {
+              console.log(`Upgrading database from version ${oldVersion} to ${newVersion}`);
+              try {
+                this.applyMigrations(db, oldVersion, newVersion || DB_CONFIG.VERSION);
+              } catch (upgradeError) {
+                console.error('Error during database upgrade:', upgradeError);
+                // Log error for telemetry but don't throw (would block upgrade)
+                ErrorTelemetry.logError(
+                  classifyIndexedDBError(upgradeError),
+                  false,
+                  { oldVersion, newVersion, operation: 'upgrade' }
+                );
+              }
+            },
+            blocking: () => {
+              // Handle blocking connections (e.g., older versions of the database open in other tabs)
+              console.warn('A newer version of the application wants to upgrade the database. Closing connection.');
+              if (this.db) {
+                this.db.close();
+                this.db = null;
+              }
+            },
+            terminated: () => {
+              // Handle abnormal connection termination
+              console.warn('Database connection was abnormally terminated');
+              this.db = null;
+              // Invalidate the promise so next attempt creates a fresh connection
+              this.initPromise = null;
+              this.isInitializing = false;
+            }
+          });
+          
+          return db;
         },
-        blocking: () => {
-          // Handle blocking connections (e.g., older versions of the database open in other tabs)
-          console.warn('A newer version of the application wants to upgrade the database. Closing connection.');
-          if (this.db) {
-            this.db.close();
-            this.db = null;
-          }
-        },
-      });
+        { 
+          maxRetries: 3,
+          initialDelay: 200,
+          retryableErrors: ['DatabaseConnectionError', 'TransactionError', 'IndexedDBError']
+        }
+      );
       
       this.db = await this.initPromise;
       this.isInitializing = false;
       return this.db;
     } catch (error) {
       this.isInitializing = false;
-      console.error('Failed to initialize IndexedDB:', error);
+      
+      // Classify and log the error
+      const classifiedError = classifyIndexedDBError(error);
+      ErrorTelemetry.logError(classifiedError, false, { operation: 'initDb' });
+      
+      console.error('Failed to initialize IndexedDB:', classifiedError);
       this.showUserNotification('Database initialization failed. Some features may not work correctly.');
-      throw error;
+      
+      // Rethrow the classified error
+      throw classifiedError;
     }
   }
 
@@ -137,15 +187,32 @@ export class IndexedDBService {
 
   /**
    * Show user notification for database errors
+   * Uses custom event system to dispatch notifications that can be picked up by React components
+   * 
+   * @param message The error message to display
+   * @param type The type of notification (error or info)
    */
-  private showUserNotification(message: string): void {
-    console.warn(`IndexedDB notification: ${message}`);
-    if (this.toastService) {
-      this.toastService.toast({
-        title: "Storage Error",
-        description: message,
-        variant: "destructive"
+  private showUserNotification(message: string, type: 'error' | 'info' = 'error'): void {
+    // Always log to console
+    type === 'error' 
+      ? console.error(`IndexedDB: ${message}`) 
+      : console.info(`IndexedDB: ${message}`);
+    
+    // Dispatch a custom event that React components can listen for
+    try {
+      const event = new CustomEvent('book-collection:notification', {
+        detail: {
+          title: type === 'error' ? 'Database Error' : 'Database Information',
+          description: message,
+          variant: type === 'error' ? 'destructive' : 'default',
+          timestamp: new Date().toISOString(),
+          source: 'IndexedDB'
+        }
       });
+      document.dispatchEvent(event);
+    } catch (e) {
+      console.error('Failed to dispatch notification event:', e);
+      // If we can't dispatch the event, at least we've logged to console
     }
   }
 
@@ -213,37 +280,146 @@ export class IndexedDBService {
   }
 
   /**
-   * Get a series by its ID
+   * Get a series by its ID with enhanced error handling
+   * 
+   * In accordance with the hybrid storage model, this method checks localStorage first
+   * as it is the primary source of truth for series data in the UI.
    */
   async getSeriesById(id: string): Promise<Series | undefined> {
+    // First check localStorage since it's the primary source of truth for series in the UI
     try {
-      const db = await this.initDb();
-      return db.get(StoreNames.SERIES, id);
+      const seriesLibraryJson = localStorage.getItem('seriesLibrary');
+      if (seriesLibraryJson) {
+        const seriesLibrary = JSON.parse(seriesLibraryJson) as Series[];
+        const localStorageSeries = seriesLibrary.find(s => s.id === id);
+        if (localStorageSeries) {
+          return localStorageSeries;
+        }
+        // If not found in localStorage, continue to check IndexedDB
+      }
+    } catch (localStorageError) {
+      console.warn(`Failed to get series ${id} from localStorage:`, localStorageError);
+      // Continue to IndexedDB as fallback
+    }
+    
+    // If not in localStorage or localStorage access failed, try IndexedDB with retry
+    try {
+      return await withRetry(
+        async () => {
+          const db = await this.initDb();
+          const series = await db.get(StoreNames.SERIES, id);
+          
+          if (!series) {
+            // Log the not found case but don't throw an error
+            console.info(`Series ${id} not found in IndexedDB`);
+            return undefined;
+          }
+          
+          // If found in IndexedDB but not in localStorage, update localStorage
+          // to maintain the hybrid storage model consistency
+          try {
+            const seriesLibraryJson = localStorage.getItem('seriesLibrary');
+            if (seriesLibraryJson) {
+              const seriesLibrary = JSON.parse(seriesLibraryJson) as Series[];
+              if (!seriesLibrary.some(s => s.id === id)) {
+                seriesLibrary.push(series);
+                localStorage.setItem('seriesLibrary', JSON.stringify(seriesLibrary));
+              }
+            }
+          } catch (syncError) {
+            console.warn('Failed to sync series to localStorage:', syncError);
+            // Non-critical error, continue with returning the series
+          }
+          
+          return series;
+        },
+        { maxRetries: 2, initialDelay: 100 }
+      );
     } catch (error) {
-      console.error(`Failed to get series ${id} from IndexedDB:`, error);
-      const series = this.silentFallbackToLocalStorage<Series[]>('seriesLibrary', []);
+      // Classify and log the error
+      const classifiedError = classifyIndexedDBError(error);
+      ErrorTelemetry.logError(classifiedError, true, { operation: 'getSeriesById', seriesId: id });
+      
+      console.error(`Failed to get series ${id} from IndexedDB:`, classifiedError);
+      
+      // Last resort: try one more time with localStorage recovery
+      const series = RecoveryStrategies.localStorageFallback<Series[]>('seriesLibrary', []);
       return series.find(s => s.id === id);
     }
   }
 
   /**
-   * Save a series (create or update)
+   * Save a series (create or update) with enhanced error handling and hybrid storage support
+   * 
+   * This method ensures that series data is properly saved to both localStorage (primary for UI)
+   * and IndexedDB (for persistence), with retries and proper error classification.
    */
   async saveSeries(series: Series): Promise<string> {
+    // Set last modified timestamp
+    const seriesToSave: Series = {
+      ...series,
+      lastModified: new Date().toISOString()
+    };
+    
+    // First update localStorage as it's the primary source of truth for series in UI
     try {
-      // Set last modified timestamp
-      const seriesToSave: Series = {
-        ...series,
-        lastModified: new Date().toISOString()
-      };
+      const seriesLibraryJson = localStorage.getItem('seriesLibrary');
+      let seriesLibrary: Series[] = [];
       
-      const db = await this.initDb();
-      await db.put(StoreNames.SERIES, seriesToSave);
+      if (seriesLibraryJson) {
+        seriesLibrary = JSON.parse(seriesLibraryJson);
+      }
+      
+      // Find and update or add the series
+      const existingIndex = seriesLibrary.findIndex(s => s.id === series.id);
+      if (existingIndex >= 0) {
+        seriesLibrary[existingIndex] = seriesToSave;
+      } else {
+        seriesLibrary.push(seriesToSave);
+      }
+      
+      localStorage.setItem('seriesLibrary', JSON.stringify(seriesLibrary));
+    } catch (localStorageError) {
+      console.warn(`Failed to save series ${series.id} to localStorage:`, localStorageError);
+      // Continue to IndexedDB even if localStorage fails
+      // This is non-critical since we're about to attempt saving to IndexedDB
+    }
+    
+    // Now save to IndexedDB with retry logic
+    try {
+      await withRetry(
+        async () => {
+          const db = await this.initDb();
+          await db.put(StoreNames.SERIES, seriesToSave);
+        },
+        { 
+          maxRetries: 3,
+          initialDelay: 100,
+          retryableErrors: ['TransactionError', 'DatabaseConnectionError'] 
+        }
+      );
+      
       return series.id;
     } catch (error) {
-      console.error(`Failed to save series ${series.id} to IndexedDB:`, error);
-      this.showUserNotification('Failed to save series. Please try again.');
-      throw error;
+      // Classify and log the error
+      const classifiedError = classifyIndexedDBError(error);
+      ErrorTelemetry.logError(classifiedError, false, { operation: 'saveSeries', seriesId: series.id });
+      
+      console.error(`Failed to save series ${series.id} to IndexedDB:`, classifiedError);
+      
+      // Show notification with more specific error info
+      let errorMessage = 'Failed to save series.';
+      
+      if (classifiedError instanceof DatabaseConnectionError) {
+        errorMessage = 'Cannot connect to database. Series saved locally but may not persist if you clear browser data.';
+      } else if (classifiedError instanceof TransactionError) {
+        errorMessage = 'Database transaction failed. Please try again.';
+      } else if (classifiedError instanceof StorageQuotaError) {
+        errorMessage = 'Storage quota exceeded. Please free up space and try again.';
+      }
+      
+      this.showUserNotification(errorMessage);
+      throw classifiedError;
     }
   }
 
@@ -252,35 +428,62 @@ export class IndexedDBService {
    */
   async deleteSeries(seriesId: string): Promise<void> {
     try {
-      const db = await this.initDb();
-      
-      // Start a transaction that spans both series and books stores
-      const tx = db.transaction([StoreNames.SERIES, StoreNames.BOOKS], 'readwrite');
-      const seriesStore = tx.objectStore(StoreNames.SERIES);
-      const bookStore = tx.objectStore(StoreNames.BOOKS);
-      
-      // Get books in this series using the seriesId index
-      const seriesIndex = bookStore.index('seriesId');
-      const booksInSeries = await seriesIndex.getAll(seriesId);
-      
-      // Update books to remove series association
-      for (const book of booksInSeries) {
-        book.seriesId = undefined;
-        book.isPartOfSeries = false;
-        book.seriesPosition = undefined;
-        book.lastModified = new Date().toISOString();
-        await bookStore.put(book);
+      // First remove from localStorage to prevent resyncing
+      try {
+        const seriesLibraryJson = localStorage.getItem('seriesLibrary');
+        if (seriesLibraryJson) {
+          const seriesLibrary = JSON.parse(seriesLibraryJson);
+          const filteredSeries = seriesLibrary.filter((s: any) => s.id !== seriesId);
+          localStorage.setItem('seriesLibrary', JSON.stringify(filteredSeries));
+        }
+        
+        // Also clear any other series-related localStorage items for this series
+        localStorage.removeItem(`seriesCache_${seriesId}`);
+        localStorage.removeItem(`seriesMetadata_${seriesId}`);
+      } catch (localStorageError) {
+        console.warn(`Error removing series ${seriesId} from localStorage:`, localStorageError);
+        // Continue with IndexedDB deletion even if localStorage fails
       }
       
-      // Delete the series
-      await seriesStore.delete(seriesId);
+      // Now handle IndexedDB deletion with retry mechanism
+      await withRetry(async () => {
+        const db = await this.initDb();
+        
+        // Start a transaction that spans both series and books stores
+        const tx = db.transaction([StoreNames.SERIES, StoreNames.BOOKS], 'readwrite');
+        const seriesStore = tx.objectStore(StoreNames.SERIES);
+        const bookStore = tx.objectStore(StoreNames.BOOKS);
+        
+        // Get books in this series using the seriesId index
+        const seriesIdIndex = bookStore.index('seriesId');
+        const booksInSeries = await seriesIdIndex.getAll(seriesId);
+        
+        // Update books to remove series references
+        for (const book of booksInSeries) {
+          book.seriesId = undefined;
+          book.isPartOfSeries = false;
+          book.seriesPosition = undefined;
+          book.lastModified = new Date().toISOString();
+          await bookStore.put(book);
+        }
+        
+        // Delete the series
+        await seriesStore.delete(seriesId);
+        
+        // Complete the transaction
+        await tx.done;
+      }, { maxRetries: 2, initialDelay: 100 });
       
-      // Complete the transaction
-      await tx.done;
+      // Notify success with custom event
+      this.showUserNotification(`Series deleted successfully.`, 'info');
     } catch (error) {
-      console.error(`Failed to delete series ${seriesId} from IndexedDB:`, error);
+      // Classify and log the error
+      const classifiedError = classifyIndexedDBError(error);
+      ErrorTelemetry.logError(classifiedError, false, { operation: 'deleteSeries', seriesId });
+      
+      console.error(`Failed to delete series ${seriesId}:`, classifiedError);
       this.showUserNotification('Failed to delete series. Please try again.');
-      throw error;
+      throw classifiedError;
     }
   }
 

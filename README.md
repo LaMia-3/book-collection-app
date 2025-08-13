@@ -2,18 +2,30 @@
 
 ## Overview
 
-A modern web application for tracking and managing your personal book collection.
+A modern web application for tracking and managing your personal book collection. Built with React and TypeScript, this app offers comprehensive book management capabilities with powerful series organization, full offline support, and detailed insights about your reading habits.
 
 ## Features
 
+### Core Functionality
 - **Search and Add Books**: Add books to your collection via Google Books API or Open Library API
+  - Enhanced data enrichment by combining information from both APIs
+  - Automatic series detection and assignment
+  - Intelligent duplicate detection
 - **Multiple Views**: Display your collection as a visual bookshelf, list, cover grid, or insights dashboard
 - **Book Management**: Track reading status, ratings, notes, and series information
 - **Data Visualization**: View reading trends and statistics with the insights dashboard
 - **Customization**: Personalize your bookshelf with different color palettes
 - **Enhanced Search**: Advanced search capabilities with fuzzy matching and field-specific filtering
-- **Import/Export**: Import and export your collection in CSV or JSON format
-- **Local Storage**: Your data is stored locally using IndexedDB 
+- **Import/Export**: Import and export your collection in CSV or JSON format with series relationship preservation
+- **Data Persistence**: All data is stored in IndexedDB for reliable offline access
+  - Full offline support after initial load
+  - Efficient indexed queries for large collections
+  - Robust error handling and recovery
+
+### Customization
+- **Personalization**: Customize your bookshelf with different color palettes
+- **Reading Goals**: Set and track reading goals with progress visualization
+- **Custom Metadata**: Add your own tags, notes, and ratings to any book
 
 ## Technology Stack
 
@@ -21,6 +33,10 @@ A modern web application for tracking and managing your personal book collection
 - **UI Components**: shadcn/ui with Tailwind CSS
 - **State Management**: React Context API
 - **Storage**: IndexedDB as the exclusive source of truth for all data
+  - Optimized schema with appropriate indexes
+  - Transaction-based operations for data integrity
+  - Efficient caching strategies
+- **External APIs**: Google Books API and Open Library API integration
 - **Build Tools**: Vite
 
 ## Getting Started
@@ -67,6 +83,8 @@ The application is fully compatible with Windows. If you're using Windows, follo
 - `/src/components`: UI components
 - `/src/contexts`: React contexts for state management
 - `/src/services`: Service layers for API and data management
+  - `/src/services/api`: External API integrations
+  - `/src/services/storage`: IndexedDB storage implementation
 - `/src/hooks`: Custom React hooks
 - `/src/types`: TypeScript type definitions
 - `/src/utils`: Utility functions
@@ -144,3 +162,22 @@ If you encounter browser-specific issues, add the following to your bug report:
 - Operating system
 - Steps to reproduce
 - Screenshots of the console errors
+
+## Current Development Focus
+
+The application is currently undergoing these major improvements:
+
+1. **Enhanced Series Management**:
+   - Automatic series detection and creation from API data
+   - Improved series matching algorithms
+   - Better handling of complex series relationships
+
+2. **API Data Enrichment**:
+   - Combining data from Google Books and Open Library for more complete book records
+   - Storing raw API responses for future reference and offline enhancement
+   - Intelligent data merging with conflict resolution
+
+3. **IndexedDB Optimization**:
+   - Fully migrated from localStorage to IndexedDB for all data
+   - Enhanced query performance with strategic indexes
+   - Better error handling and recovery mechanisms

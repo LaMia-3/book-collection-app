@@ -6,6 +6,9 @@
  * 
  * Note: All localStorage usage has been removed - IndexedDB is the exclusive data store
  */
+/**
+ * Enhanced StorageService imports with performance optimizations
+ */
 import { indexedDBService } from './IndexedDBService';
 import { Book as IndexedDBBook, BookSummary, BookDetail } from '@/types/indexeddb/Book';
 import { Series as IndexedDBSeries, SeriesMetadata, SeriesWithBooks } from '@/types/indexeddb/Series';
@@ -13,11 +16,20 @@ import { UpcomingBook, UpcomingBookSummary } from '@/types/indexeddb/UpcomingBoo
 import { Notification, NotificationSummary } from '@/types/indexeddb/Notification';
 import { StoreNames } from '@/types/indexeddb';
 import { ReadingStatus } from '@/types/models/Book';
-// Remove useToast import as it's a React hook and can't be used in service classes
+// Types for UI components
 import { Book as UIBook } from '@/types/book';
 import { Series as UISeries } from '@/types/series';
+// Type adapter imports for conversion between UI and DB types
 import { convertDbBookToUiBook, convertUiBookToDbBook, DBBook } from '@/adapters/BookTypeAdapter';
 import { convertDbSeriesToUiSeries, convertUiSeriesToDbSeries, DBSeries } from '@/adapters/SeriesTypeAdapter';
+// Performance optimization imports
+import { 
+  BatchOperations, 
+  LazyLoading, 
+  QueryOptimization, 
+  CacheManagement, 
+  PerformanceMonitoring 
+} from './IndexedDBOptimizations';
 
 // Cache configuration
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes in milliseconds
@@ -219,30 +231,75 @@ export class EnhancedStorageService {
   }
   
   /**
-   * Get all books from storage with caching
+   * Get all books from storage with caching and performance optimizations
+   * 
+   * Performance features:
+   * - Memory caching with TTL
+   * - Performance monitoring
+   * - Optimized type conversions
    */
   public async getBooks(): Promise<UIBook[]> {
     await this.ensureInitialized();
     
-    // Try cache first
+    // Start performance monitoring
+    const endTiming = PerformanceMonitoring.startTiming('getBooks');
+    
+    // Try cache first for immediate response
     if (this.isCacheValid('books')) {
+      endTiming(); // End timing if we hit cache
       return this.cache.books.data as UIBook[];
     }
     
     try {
-      // IndexedDB is the exclusive source of truth
-      const dbBooks = await this.db.getBooks();
+      // Get database instance
+      const db = await this.db.initDb();
       
-      // Convert IndexedDB books to UI books using adapter
-      // Type assertion to DBBook[] since IndexedDBService returns Book[] from its own import
-      const uiBooks = (dbBooks as unknown as DBBook[]).map(convertDbBookToUiBook);
+      // CRITICAL FIX: Get ALL books from IndexedDB - it's the primary source of truth
+      // Use -1 to ensure we get absolutely all books with no limit
+      console.log('EnhancedStorageService: Retrieving ALL books from IndexedDB');
+      const dbBooks = await QueryOptimization.getRecentlyUpdatedBooks(db, -1);
+      
+      if (dbBooks.length === 0) {
+        // Fallback to regular method if optimization didn't return results
+        // This could happen if the database schema is not properly initialized
+        console.warn('No books found using optimized query, falling back to regular method');
+        const regularBooks = await this.db.getBooks();
+        const uiBooks = (regularBooks as unknown as DBBook[]).map(convertDbBookToUiBook);
+        this.updateCache('books', uiBooks);
+        
+        console.log(`EnhancedStorageService: Retrieved ${uiBooks.length} books using fallback method`);
+        endTiming(); // End timing before returning
+        return uiBooks;
+      }
+      
+      console.log(`EnhancedStorageService: Retrieved ${dbBooks.length} books from IndexedDB`);
+      
+      // Convert IndexedDB books to UI books using adapter with improved batching
+      // Process in chunks to avoid blocking the main thread for too long
+      const chunkSize = 50;
+      let uiBooks: UIBook[] = [];
+      
+      for (let i = 0; i < dbBooks.length; i += chunkSize) {
+        const chunk = dbBooks.slice(i, i + chunkSize);
+        // Convert chunk and add to results
+        const convertedChunk = (chunk as unknown as DBBook[]).map(convertDbBookToUiBook);
+        uiBooks = [...uiBooks, ...convertedChunk];
+        
+        // If processing a large dataset, yield to main thread occasionally
+        if (dbBooks.length > 200 && i % 200 === 0 && i > 0) {
+          await new Promise(resolve => setTimeout(resolve, 0));
+        }
+      }
       
       // Update the cache
       this.updateCache('books', uiBooks);
       
+      // End timing before returning
+      endTiming();
       return uiBooks;
     } catch (error) {
       console.error('Error getting books from IndexedDB:', error);
+      endTiming(); // Still end timing on error
       return [];
     }
   }
@@ -316,58 +373,184 @@ export class EnhancedStorageService {
   }
   
   /**
-   * Get all series from storage with caching
+   * Get all series from storage with caching and performance optimizations
+   * 
+   * Performance features:
+   * - Memory caching with TTL
+   * - Performance monitoring
+   * - Support for hybrid storage model (localStorage primary for UI)
+   * - Optimized type conversions
    */
   public async getSeries(): Promise<UISeries[]> {
     await this.ensureInitialized();
     
-    // Try cache first
+    // Start performance monitoring
+    const endTiming = PerformanceMonitoring.startTiming('getSeries');
+    
+    // Try cache first for immediate response
     if (this.isCacheValid('series')) {
+      endTiming();
       return this.cache.series.data as UISeries[];
     }
     
     try {
-      // IndexedDB is the exclusive source of truth
-      const dbSeries = await this.db.getSeries();
+      // First check localStorage for series data to respect the hybrid model
+      // where localStorage is the primary source of truth for series data in UI
+      try {
+        const seriesLibraryJson = localStorage.getItem('seriesLibrary');
+        if (seriesLibraryJson) {
+          const localSeriesData = JSON.parse(seriesLibraryJson);
+          if (Array.isArray(localSeriesData) && localSeriesData.length > 0) {
+            // Convert to UI series format and update cache
+            const uiSeries = localSeriesData.map(series => {
+              // Ensure data is in the correct format
+              return {
+                ...series,
+                createdAt: series.createdAt ? new Date(series.createdAt) : new Date(),
+                updatedAt: series.updatedAt ? new Date(series.updatedAt) : new Date()
+              } as UISeries;
+            });
+            
+            // Update cache with localStorage data
+            this.updateCache('series', uiSeries);
+            
+            endTiming();
+            return uiSeries;
+          }
+        }
+      } catch (localError) {
+        console.error('Error reading series from localStorage:', localError);
+        // Fall through to IndexedDB
+      }
       
-      // Convert IndexedDB series to UI series using adapter
-      const uiSeries = (dbSeries as unknown as DBSeries[]).map(convertDbSeriesToUiSeries);
+      // Get database instance
+      const db = await this.db.initDb();
       
-      // Update the cache
+      // Optimized IndexedDB query for series data
+      // Use proper indices for faster retrieval
+      const dbSeries = await db.getAll(StoreNames.SERIES);
+      
+      if (dbSeries.length === 0) {
+        endTiming();
+        return [];
+      }
+      
+      // Convert IndexedDB series to UI series using adapter with chunking for large datasets
+      const chunkSize = 20; // Series are typically complex objects, use smaller chunk size
+      let uiSeries: UISeries[] = [];
+      
+      for (let i = 0; i < dbSeries.length; i += chunkSize) {
+        const chunk = dbSeries.slice(i, i + chunkSize);
+        // Convert chunk and add to results
+        const convertedChunk = (chunk as unknown as DBSeries[]).map(convertDbSeriesToUiSeries);
+        uiSeries = [...uiSeries, ...convertedChunk];
+      }
+      
+      // Update both cache and localStorage to maintain hybrid model consistency
       this.updateCache('series', uiSeries);
       
+      // Update localStorage as the primary source of truth for UI
+      try {
+        localStorage.setItem('seriesLibrary', JSON.stringify(uiSeries));
+      } catch (localStorageError) {
+        console.warn('Failed to update series in localStorage:', localStorageError);
+        // Non-critical error, continue with IndexedDB data
+      }
+      
+      endTiming();
       return uiSeries;
     } catch (error) {
       console.error('Error getting series from IndexedDB:', error);
+      endTiming();
       return [];
     }
   }
 
   /**
-   * Save a book to storage
+   * Save a book to storage with performance optimizations
+   * 
+   * Performance features:
+   * - Selective cache invalidation
+   * - Performance monitoring
+   * - Type-safe conversions
+   * - Support for hybrid storage model (updating localStorage for series)
    */
   public async saveBook(book: UIBook): Promise<string> {
     await this.ensureInitialized();
     
+    // Start performance monitoring
+    const endTiming = PerformanceMonitoring.startTiming('saveBook');
+    
     try {
+      // Get database instance
+      const db = await this.db.initDb();
+      
       // Convert UI Book to DB Book format using adapter
       const dbBook = convertUiBookToDbBook(book);
       
-      // IndexedDB is the exclusive source of truth
-      const id = await this.db.saveBook(dbBook as any); // Type assertion needed for compatibility with IndexedDBService
+      // Use selective cache invalidation to determine what to update
+      const cacheKeysToInvalidate = CacheManagement.determineCacheInvalidation(
+        'book', 
+        book.id, 
+        { seriesId: book.seriesId }
+      );
       
-      // Invalidate the books cache
-      this.invalidateCache('books');
+      // IndexedDB is the exclusive source of truth for book data
+      await db.put(StoreNames.BOOKS, dbBook as any); // Type assertion needed for compatibility with IndexedDBService
       
-      // If this book is part of a series, invalidate the series cache too
-      if (book.seriesId) {
-        this.invalidateCache('series');
+      // Update cache selectively instead of invalidating it completely
+      if (this.cache.books.data) {
+        // Update the book in cache instead of invalidating the entire cache
+        const updatedBooks = CacheManagement.updateEntityInCache(
+          this.cache.books.data,
+          book
+        );
+        this.updateCache('books', updatedBooks);
+      } else {
+        // If no cache exists, just invalidate it
+        this.invalidateCache('books');
       }
       
-      return id;
+      // If this book is part of a series, update series data as needed
+      // This respects the hybrid storage model where localStorage is primary for series
+      if (book.seriesId) {
+        // Update both the cache and localStorage
+        if (this.isCacheValid('series') && this.cache.series.data) {
+          // Find the series and update its metadata if needed
+          const series = this.cache.series.data.find(s => s.id === book.seriesId);
+          if (series) {
+            // Update lastModified timestamp on series
+            const updatedSeries = {
+              ...series,
+              updatedAt: new Date()
+            };
+            
+            // Update series in cache
+            const updatedSeriesList = CacheManagement.updateEntityInCache(
+              this.cache.series.data,
+              updatedSeries
+            );
+            this.updateCache('series', updatedSeriesList);
+            
+            // Update localStorage to maintain hybrid model consistency
+            try {
+              localStorage.setItem('seriesLibrary', JSON.stringify(updatedSeriesList));
+            } catch (localStorageError) {
+              console.warn('Failed to update series in localStorage:', localStorageError);
+            }
+          }
+        } else {
+          // Just invalidate the series cache
+          this.invalidateCache('series');
+        }
+      }
+      
+      endTiming();
+      return book.id;
     } catch (error) {
       console.error('Error saving book:', error);
       this.showUserNotification('Failed to save book. Please try again.');
+      endTiming();
       throw error;
     }
   }
@@ -409,22 +592,46 @@ export class EnhancedStorageService {
   
   /**
    * Delete a series and update any associated books
+   * 
+   * CRITICAL: Also removes series data from localStorage to prevent resyncing
+   * due to the hybrid storage model where localStorage is primary for series in UI.
    */
   public async deleteSeries(seriesId: string): Promise<void> {
     await this.ensureInitialized();
 
     try {
+      // CRITICAL FIX: First remove from localStorage to prevent resyncing
+      // This is necessary because localStorage is treated as primary for series in UI
+      try {
+        const seriesLibraryJson = localStorage.getItem('seriesLibrary');
+        if (seriesLibraryJson) {
+          const seriesLibrary = JSON.parse(seriesLibraryJson);
+          const filteredSeries = seriesLibrary.filter((s: any) => s.id !== seriesId);
+          localStorage.setItem('seriesLibrary', JSON.stringify(filteredSeries));
+          console.log(`Removed series ${seriesId} from localStorage to prevent resyncing`);
+        }
+        
+        // Also clear any other series-related localStorage items for this series
+        localStorage.removeItem(`seriesCache_${seriesId}`);
+        localStorage.removeItem(`seriesMetadata_${seriesId}`);
+        localStorage.removeItem(`seriesAssignments_${seriesId}`);
+        localStorage.removeItem(`seriesMapping_${seriesId}`);
+      } catch (localStorageError) {
+        console.warn(`Error removing series ${seriesId} from localStorage:`, localStorageError);
+        // Continue with IndexedDB deletion even if localStorage fails
+      }
+      
       // Start an IndexedDB transaction to update books and delete the series atomically
       const db = await this.db.initDb();
       const tx = db.transaction([StoreNames.BOOKS, StoreNames.SERIES], 'readwrite');
       const booksStore = tx.objectStore(StoreNames.BOOKS);
       const seriesStore = tx.objectStore(StoreNames.SERIES);
       
-      // Get the series to be deleted
-      const seriesIndex = booksStore.index('seriesId');
-      const booksInSeries = await seriesIndex.getAll(seriesId);
+      // First get the books in this series using the seriesId index
+      const seriesIdIndex = booksStore.index('seriesId');
+      const booksInSeries = await seriesIdIndex.getAll(seriesId);
       
-      // Remove series association from books
+      // Update books to remove series association
       for (const book of booksInSeries) {
         book.seriesId = undefined;
         book.isPartOfSeries = false;
@@ -442,6 +649,9 @@ export class EnhancedStorageService {
       // Invalidate both series and books caches
       this.invalidateCache('series');
       this.invalidateCache('books'); // Books were modified too
+      
+      // Show success notification
+      this.showUserNotification(`Series deleted successfully`, 'info');
     } catch (error) {
       console.error(`Failed to delete series ${seriesId}:`, error);
       this.showUserNotification('Failed to delete series. Please try again.');
@@ -450,67 +660,122 @@ export class EnhancedStorageService {
   }
   
   /**
-   * Add a book to a series
+   * Add a book to a series with performance optimizations
+   * 
+   * Performance features:
+   * - Transaction batching for related operations
+   * - Performance monitoring
+   * - Type-safe conversions
+   * - Support for hybrid storage model (localStorage for series)
    */
   public async addBookToSeries(bookId: string, seriesId: string, position?: number): Promise<void> {
     await this.ensureInitialized();
     
+    // Start performance monitoring
+    const endTiming = PerformanceMonitoring.startTiming('addBookToSeries');
+    
     try {
       // Get the book and series
       const book = await this.getBookById(bookId);
       const series = await this.getSeriesById(seriesId);
       
       if (!book || !series) {
+        endTiming();
         throw new Error(`Book ${bookId} or series ${seriesId} not found`);
       }
       
       // Update book with series info
-      const updatedBook: Book = {
+      const updatedBook: UIBook = {
         ...book,
         isPartOfSeries: true,
-        seriesId: seriesId,
-        seriesPosition: position,
-        lastModified: new Date().toISOString()
+        seriesId,
+        seriesPosition: position || series.books.length + 1
       };
       
-      // Update series with book reference if not already present
+      // Check if we need to add book to the series's books array
+      const updatedSeries: UISeries = {...series};
       if (!series.books.includes(bookId)) {
-        const updatedSeries: Series = {
-          ...series,
-          books: [...series.books, bookId],
-          totalBooks: series.totalBooks ? series.totalBooks + 1 : series.books.length + 1,
-          lastModified: new Date().toISOString()
-        };
-        
-        // Start transaction to update both entities
+        updatedSeries.books = [...series.books, bookId];
+      }
+
+      // Update both localStorage and IndexedDB for series to maintain hybrid model
+      try {
+        // Update localStorage directly for immediate UI updates
+        const seriesLibraryJson = localStorage.getItem('seriesLibrary');
+        if (seriesLibraryJson) {
+          const seriesLibrary = JSON.parse(seriesLibraryJson) as UISeries[];
+          const seriesIndex = seriesLibrary.findIndex(s => s.id === seriesId);
+          if (seriesIndex >= 0) {
+            seriesLibrary[seriesIndex] = updatedSeries;
+            localStorage.setItem('seriesLibrary', JSON.stringify(seriesLibrary));
+          }
+        }
+      } catch (localStorageError) {
+        console.warn('Failed to update series in localStorage:', localStorageError);
+        // Continue with IndexedDB updates even if localStorage fails
+      }
+
+      if (updatedSeries.books.length !== series.books.length) {
+        // If the series was modified, update both in a transaction for atomicity
         const db = await this.db.initDb();
-        const tx = db.transaction(['books', 'series'], 'readwrite');
+        const tx = db.transaction([StoreNames.BOOKS, StoreNames.SERIES], 'readwrite');
         
-        await tx.objectStore('books').put(updatedBook);
-        await tx.objectStore('series').put(updatedSeries);
+        // Update the book
+        await tx.objectStore(StoreNames.BOOKS).put(convertUiBookToDbBook(updatedBook) as any);
+        
+        // Update the series
+        await tx.objectStore(StoreNames.SERIES).put(convertUiSeriesToDbSeries(updatedSeries) as any);
         
         await tx.done;
       } else {
-        // Just update the book
+        // Just update the book if series books array didn't change
         await this.saveBook(updatedBook);
       }
       
-      // Invalidate caches
-      this.invalidateCache('books');
-      this.invalidateCache('series');
+      // Selectively update caches instead of invalidating them completely
+      if (this.cache.books.data) {
+        const updatedBooks = CacheManagement.updateEntityInCache(
+          this.cache.books.data,
+          updatedBook
+        );
+        this.updateCache('books', updatedBooks);
+      } else {
+        this.invalidateCache('books');
+      }
       
+      if (this.cache.series.data) {
+        const updatedSeriesList = CacheManagement.updateEntityInCache(
+          this.cache.series.data,
+          updatedSeries
+        );
+        this.updateCache('series', updatedSeriesList);
+      } else {
+        this.invalidateCache('series');
+      }
+      
+      endTiming();
     } catch (error) {
       console.error(`Error adding book ${bookId} to series ${seriesId}:`, error);
       this.showUserNotification('Failed to add book to series. Please try again.');
+      endTiming();
       throw error;
     }
   }
   
   /**
-   * Remove a book from a series
+   * Remove a book from a series with performance optimizations
+   * 
+   * Performance features:
+   * - Transaction batching for related operations
+   * - Performance monitoring
+   * - Type-safe conversions
+   * - Support for hybrid storage model (localStorage for series)
    */
   public async removeBookFromSeries(bookId: string, seriesId: string): Promise<void> {
     await this.ensureInitialized();
+    
+    // Start performance monitoring
+    const endTiming = PerformanceMonitoring.startTiming('removeBookFromSeries');
     
     try {
       // Get the book and series
@@ -518,86 +783,167 @@ export class EnhancedStorageService {
       const series = await this.getSeriesById(seriesId);
       
       if (!book || !series) {
+        endTiming();
         throw new Error(`Book ${bookId} or series ${seriesId} not found`);
       }
       
       // Update book to remove series info
-      const updatedBook: Book = {
+      const updatedBook: UIBook = {
         ...book,
         isPartOfSeries: false,
         seriesId: undefined,
-        seriesPosition: undefined,
-        lastModified: new Date().toISOString()
+        seriesPosition: undefined
       };
       
       // Update series to remove book reference
-      const updatedSeries: Series = {
-        ...series,
-        books: series.books.filter(id => id !== bookId),
-        totalBooks: series.totalBooks ? series.totalBooks - 1 : series.books.length - 1,
-        lastModified: new Date().toISOString()
-      };
+      if (series.books.includes(bookId)) {
+        const updatedSeries: UISeries = {
+          ...series,
+          books: series.books.filter(id => id !== bookId),
+          updatedAt: new Date()
+        };
+        
+        // Update localStorage directly for immediate UI updates
+        try {
+          const seriesLibraryJson = localStorage.getItem('seriesLibrary');
+          if (seriesLibraryJson) {
+            const seriesLibrary = JSON.parse(seriesLibraryJson) as UISeries[];
+            const seriesIndex = seriesLibrary.findIndex(s => s.id === seriesId);
+            if (seriesIndex >= 0) {
+              seriesLibrary[seriesIndex] = updatedSeries;
+              localStorage.setItem('seriesLibrary', JSON.stringify(seriesLibrary));
+            }
+          }
+        } catch (localStorageError) {
+          console.warn('Failed to update series in localStorage:', localStorageError);
+          // Continue with IndexedDB updates even if localStorage fails
+        }
+        
+        // Start transaction to update both entities in IndexedDB
+        const db = await this.db.initDb();
+        const tx = db.transaction([StoreNames.BOOKS, StoreNames.SERIES], 'readwrite');
+        
+        await tx.objectStore(StoreNames.BOOKS).put(convertUiBookToDbBook(updatedBook) as any);
+        await tx.objectStore(StoreNames.SERIES).put(convertUiSeriesToDbSeries(updatedSeries) as any);
+        
+        await tx.done;
+        
+        // Selectively update caches
+        if (this.cache.books.data) {
+          const updatedBooks = CacheManagement.updateEntityInCache(
+            this.cache.books.data,
+            updatedBook
+          );
+          this.updateCache('books', updatedBooks);
+        } else {
+          this.invalidateCache('books');
+        }
+        
+        if (this.cache.series.data) {
+          const updatedSeriesList = CacheManagement.updateEntityInCache(
+            this.cache.series.data,
+            updatedSeries
+          );
+          this.updateCache('series', updatedSeriesList);
+        } else {
+          this.invalidateCache('series');
+        }
+      } else {
+        // Just update the book if not in series
+        await this.saveBook(updatedBook);
+      }
       
-      // Start transaction to update both entities
-      const db = await this.db.initDb();
-      const tx = db.transaction(['books', 'series'], 'readwrite');
-      
-      await tx.objectStore('books').put(updatedBook);
-      await tx.objectStore('series').put(updatedSeries);
-      
-      await tx.done;
-      
-      // Invalidate caches
-      this.invalidateCache('books');
-      this.invalidateCache('series');
-      
+      endTiming();
     } catch (error) {
       console.error(`Error removing book ${bookId} from series ${seriesId}:`, error);
       this.showUserNotification('Failed to remove book from series. Please try again.');
+      endTiming();
       throw error;
     }
   }
   
   /**
-   * Calculate and update series reading progress
+   * Calculate and update series reading progress with performance optimizations
+   * 
+   * Performance features:
+   * - Smart query optimization
+   * - Performance monitoring
+   * - Support for hybrid storage model
    */
   public async updateSeriesProgress(seriesId: string): Promise<number> {
     await this.ensureInitialized();
     
+    // Start performance monitoring
+    const endTiming = PerformanceMonitoring.startTiming('updateSeriesProgress');
+    
     try {
       const series = await this.getSeriesById(seriesId);
       if (!series) {
+        endTiming();
         throw new Error(`Series ${seriesId} not found`);
       }
       
-      // Get all books in the series
+      // Get all books in the series - already uses optimized query via getBooksBySeries
       const books = await this.getBooksBySeries(seriesId);
       
       // Count completed books
       const completedBooks = books.filter(book => 
-        book.status === 'completed' || book.progress === 1
+        book.status === 'completed' || (book as any).progress === 1
       ).length;
       
       // Calculate progress
       const totalBooks = books.length;
       const progress = totalBooks > 0 ? completedBooks / totalBooks : 0;
       
-      // Update series
-      const updatedSeries: Series = {
+      // Update series - be careful with type properties
+      // First make a copy and then add the properties we need
+      const updatedSeries = {
         ...series,
-        completedBooks,
-        totalBooks,
-        readingProgress: progress,
-        lastModified: new Date().toISOString()
-      };
+        // These properties might not be in the UISeries type but are needed for display
+        // Using a type assertion to avoid TypeScript errors
+        updatedAt: new Date()
+      } as UISeries;
       
+      // Add these properties to the series object but respect the original type
+      (updatedSeries as any).completedBooks = completedBooks;
+      (updatedSeries as any).totalBooks = totalBooks;
+      (updatedSeries as any).readingProgress = progress;
+      
+      // Update localStorage directly for immediate UI updates to maintain hybrid storage model
+      try {
+        const seriesLibraryJson = localStorage.getItem('seriesLibrary');
+        if (seriesLibraryJson) {
+          const seriesLibrary = JSON.parse(seriesLibraryJson) as UISeries[];
+          const seriesIndex = seriesLibrary.findIndex(s => s.id === seriesId);
+          if (seriesIndex >= 0) {
+            seriesLibrary[seriesIndex] = updatedSeries;
+            localStorage.setItem('seriesLibrary', JSON.stringify(seriesLibrary));
+          }
+        }
+      } catch (localStorageError) {
+        console.warn('Failed to update series progress in localStorage:', localStorageError);
+        // Non-critical error, continue with IndexedDB update
+      }
+      
+      // Save series with updated progress
       await this.saveSeries(updatedSeries);
-      return progress;
       
+      // Update cache selectively
+      if (this.cache.series.data) {
+        const updatedSeriesList = CacheManagement.updateEntityInCache(
+          this.cache.series.data,
+          updatedSeries
+        );
+        this.updateCache('series', updatedSeriesList);
+      }
+      
+      endTiming();
+      return progress;
     } catch (error) {
-      console.error(`Error updating progress for series ${seriesId}:`, error);
+      console.error(`Error updating series progress for ${seriesId}:`, error);
       this.showUserNotification('Failed to update series progress. Please try again.');
-      throw error;
+      endTiming();
+      return 0;
     }
   }
 

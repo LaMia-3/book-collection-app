@@ -757,7 +757,7 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
                             {series.name} {series.author && `(${series.author})`}
                           </option>
                         ))}
-                        <option value="advanced" className="font-medium italic border-t border-muted">Advanced Series Selection...</option>
+                        {/* Advanced series selection disabled pending improved implementation */}
                       </select>
                       <ChevronDown className="pointer-events-none absolute right-3 top-2.5 h-4 w-4 text-muted-foreground" />
                     </div>

@@ -240,7 +240,9 @@ function convertRawToBook(rawBook: RawBookImport): Partial<Book> {
     
     // Validate that the date is in YYYY-MM-DD format
     if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      // FIXED: Accept all valid YYYY-MM-DD dates, including future dates
       book.completedDate = dateStr;
+      console.log(`Valid date format accepted: ${dateStr} (even if in future)`);
     } else {
       console.warn(`Invalid date format: ${dateStr}. Expected YYYY-MM-DD format.`);
       // Still use the date but log a warning
