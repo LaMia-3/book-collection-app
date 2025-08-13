@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useSettings } from '@/contexts/SettingsContext';
 import { Cake, X } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import { enhancedStorageService } from '@/services/storage/EnhancedStorageService';
 
 export const BirthdayCelebration: React.FC = () => {
   const { settings } = useSettings();
@@ -40,12 +41,43 @@ export const BirthdayCelebration: React.FC = () => {
     }
   };
   
-  // Check local storage for dismissed status on load
+  // Check for dismissed status on load from IndexedDB, with localStorage fallback
   useEffect(() => {
     const checkDismissed = async () => {
-      const storedDismissed = localStorage.getItem(dismissStorageKey);
-      if (storedDismissed === 'true') {
-        setDismissed(true);
+      try {
+        // Initialize storage service
+        await enhancedStorageService.initialize();
+        
+        // Try to get from IndexedDB first
+        const settings = await enhancedStorageService.getSettings();
+        const notificationSettings = settings?.notifications || {};
+        
+        if (notificationSettings[dismissStorageKey] === true) {
+          setDismissed(true);
+          return;
+        }
+        
+        // Fallback to localStorage for backward compatibility
+        const storedDismissed = localStorage.getItem(dismissStorageKey);
+        if (storedDismissed === 'true') {
+          setDismissed(true);
+          
+          // Migrate setting to IndexedDB
+          await enhancedStorageService.saveSettings({
+            ...settings,
+            notifications: {
+              ...notificationSettings,
+              [dismissStorageKey]: true
+            }
+          });
+        }
+      } catch (error) {
+        console.error('Error checking birthday celebration dismissed status:', error);
+        // Silent fallback to localStorage
+        const storedDismissed = localStorage.getItem(dismissStorageKey);
+        if (storedDismissed === 'true') {
+          setDismissed(true);
+        }
       }
     };
     checkDismissed();
@@ -95,9 +127,28 @@ export const BirthdayCelebration: React.FC = () => {
           <p className="text-sm">Enjoy your special day with your favorite books!</p>
         </div>
         <button 
-          onClick={() => {
-            // Store the dismissed state in localStorage
-            localStorage.setItem(dismissStorageKey, 'true');
+          onClick={async () => {
+            try {
+              // Store the dismissed state in IndexedDB
+              const settings = await enhancedStorageService.getSettings() || {};
+              const notificationSettings = settings.notifications || {};
+              
+              await enhancedStorageService.saveSettings({
+                ...settings,
+                notifications: {
+                  ...notificationSettings,
+                  [dismissStorageKey]: true
+                }
+              });
+              
+              // Keep localStorage for backwards compatibility
+              localStorage.setItem(dismissStorageKey, 'true');
+            } catch (error) {
+              console.error('Error saving birthday celebration dismissed status:', error);
+              // Fallback to localStorage
+              localStorage.setItem(dismissStorageKey, 'true');
+            }
+            
             setDismissed(true);
             setShowCelebration(false);
           }}

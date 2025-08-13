@@ -1,7 +1,7 @@
-import { LayoutGrid, List, Bookmark, BarChart, FileDown } from "lucide-react";
+import { LayoutGrid, List, Bookmark, BarChart, LibrarySquare } from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
-export type ViewMode = 'shelf' | 'list' | 'cover' | 'insights';
+export type ViewMode = 'shelf' | 'list' | 'cover' | 'insights' | 'series';
 
 interface ViewToggleProps {
   viewMode: ViewMode;
@@ -48,6 +48,14 @@ export const ViewToggle = ({ viewMode, onChange }: ViewToggleProps) => {
         className="data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
       >
         <BarChart className="h-4 w-4" />
+      </ToggleGroupItem>
+
+      <ToggleGroupItem 
+        value="series" 
+        aria-label="Series View"
+        className="data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+      >
+        <LibrarySquare className="h-4 w-4" />
       </ToggleGroupItem>
     </ToggleGroup>
   );

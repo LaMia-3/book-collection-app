@@ -1,14 +1,20 @@
 import { useState, useEffect } from "react";
 import { useSettings } from "@/contexts/SettingsContext";
-import { Search, Plus, Loader2, BookOpen } from "lucide-react";
+import { Search, Plus, Loader2, BookOpen, Library, Check } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Book } from "@/types/book";
+import { Series } from "@/types/series";
 import { useToast } from "@/hooks/use-toast";
 import { bookApiClient } from "@/services/api";
 import { BookSearchItem } from "@/types/api/BookApiProvider";
 import { Select } from "@/components/ui/select";
+import { seriesApiService, SeriesDetectionResult } from "@/services/api/SeriesApiService";
+import { seriesService } from "@/services/SeriesService";
+import { SeriesAssignmentDialog } from "@/components/dialogs/SeriesAssignmentDialog";
+import { Badge } from "@/components/ui/badge";
+import { enhancedStorageService } from "@/services/storage/EnhancedStorageService";
 
 interface BookSearchProps {
   onAddBook: (book: Book) => void;
@@ -20,6 +26,10 @@ export const BookSearch = ({ onAddBook, existingBooks }: BookSearchProps) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<BookSearchItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [seriesDetectionResult, setSeriesDetectionResult] = useState<SeriesDetectionResult | null>(null);
+  const [showSeriesDialog, setShowSeriesDialog] = useState(false);
+  const [currentBook, setCurrentBook] = useState<Book | null>(null);
+  const [detectingSeries, setDetectingSeries] = useState(false);
   const [activeProvider, setActiveProvider] = useState(
     // Initialize from settings if available, otherwise use current provider
     settings.defaultApi || bookApiClient.activeProviderId
@@ -91,6 +101,23 @@ export const BookSearch = ({ onAddBook, existingBooks }: BookSearchProps) => {
     searchBooks(searchQuery);
   };
 
+  const detectSeries = async (book: Book): Promise<SeriesDetectionResult | null> => {
+    try {
+      // Use the enhanced Series API service to check if this book might be part of a series
+      const detectionResult = await seriesApiService.detectSeries(
+        book.googleBooksId || '',
+        book.title,
+        book.author,
+        existingBooks
+      );
+      
+      return detectionResult;
+    } catch (error) {
+      console.error('Error detecting series:', error);
+      return null;
+    }
+  };
+  
   const addBookToCollection = async (book: BookSearchItem) => {
     setIsLoading(true);
     try {
@@ -101,39 +128,175 @@ export const BookSearch = ({ onAddBook, existingBooks }: BookSearchProps) => {
       // Use user's preferred default status if no status is provided
       const defaultStatus = settings.defaultStatus || 'want-to-read';
       
-      // Log the current settings for debugging
-      console.log('Current default status setting:', settings.defaultStatus);
-      console.log('Using default status:', defaultStatus);
+      // Create a book object compatible with the existing application
+      const newBook: Book = {
+        id: `book-${Math.random().toString(36).substring(2, 10)}`,
+        title: detailedBook.title,
+        author: Array.isArray(detailedBook.author) && detailedBook.author.length > 0 
+          ? detailedBook.author[0] : typeof detailedBook.author === 'string' ? detailedBook.author : 'Unknown',
+        thumbnail: detailedBook.thumbnail,
+        genre: Array.isArray(detailedBook.genre) && detailedBook.genre.length > 0 
+          ? detailedBook.genre[0] : typeof detailedBook.genre === 'string' ? detailedBook.genre : undefined,
+        description: detailedBook.description,
+        publishedDate: detailedBook.publishedDate,
+        pageCount: detailedBook.pageCount,
+        googleBooksId: detailedBook.sourceType === 'google' ? detailedBook.id : undefined,
+        openLibraryId: detailedBook.sourceType === 'openlib' ? detailedBook.id : undefined,
+        status: defaultStatus as 'reading' | 'completed' | 'want-to-read',
+        isPartOfSeries: false, // Initially set to false
+        addedDate: new Date().toISOString(),
+        spineColor: Math.floor(Math.random() * 8) + 1, // Random spine color 1-8
+      };
       
-      const convertedBook = {
-        ...detailedBook,
-        // Map the ReadingStatus enum to string values expected by the rest of the app
-        // Force use of the user's preferred default status unless explicitly set in the API response
-        status: detailedBook.status === undefined ? defaultStatus :
-          detailedBook.status.toString().includes('TO_READ') ? defaultStatus : // Use default instead of hard-coded 'want-to-read'
-          detailedBook.status.toString().includes('READING') ? 'reading' :
-          detailedBook.status.toString().includes('COMPLETED') ? 'completed' :
-          defaultStatus,
-        // Add a backward-compatible googleBooksId field if the source is Google Books
-        ...(detailedBook.sourceType === 'google' ? { googleBooksId: detailedBook.sourceId } : {})
-      } as any;
+      // Set the current book for reference in the series dialog
+      setCurrentBook(newBook);
       
-      // Pass the detailed book to the parent component
-      onAddBook(convertedBook);
+      // First add the book to the collection
+      onAddBook(newBook);
       
+      // Show success toast
       toast({
-        title: "Book Added!",
-        description: `"${detailedBook.title}" has been added to your library.`,
+        title: "Book Added",
+        description: `${detailedBook.title} has been added to your collection.`,
       });
+      
+      // Check if it might be part of a series - but don't add automatically
+      setDetectingSeries(true);
+      const detectionResult = await detectSeries(newBook);
+      setDetectingSeries(false);
+      
+      if (detectionResult && detectionResult.series && detectionResult.series.name) {
+        // We found a potential series
+        setSeriesDetectionResult(detectionResult);
+        
+        // Always show the dialog for user to decide - no automatic assignment
+        setShowSeriesDialog(true);
+        
+        // Detection logic is kept, but we don't set any volume number automatically
+        // The dialog will handle this if the user decides to assign to a series
+      }
+      // Book is already added - no need for additional logic here
+      
+      // Clear search results
+      setSearchResults([]);
+      setSearchQuery("");
     } catch (error) {
-      console.error('Error fetching book details:', error);
+      console.error('Error adding book:', error);
       toast({
         title: "Error Adding Book",
-        description: `Failed to add "${book.title}". ${error instanceof Error ? error.message : ''}`,
+        description: `Failed to add book: ${error instanceof Error ? error.message : 'Unknown error'}`,
         variant: "destructive"
       });
     } finally {
       setIsLoading(false);
+    }
+  };
+  
+  const handleAssignToSeries = async (book: Book, seriesId: string, volumeNumber?: number) => {
+    if (!book || !seriesId) return;
+    
+    try {
+      // Add/update the book in the collection
+      // In our revised flow, the book has not been added yet in automatic mode
+      const updatedBook: Book = {
+        ...book,
+        isPartOfSeries: true,
+        seriesId: seriesId,
+        seriesPosition: volumeNumber || undefined
+      };
+      
+      // Update the onAddBook callback with the updated book
+      onAddBook(updatedBook);
+      
+      // Initialize storage service and add the book to series
+      await enhancedStorageService.initialize();
+      await enhancedStorageService.addBookToSeries(book.id, seriesId, volumeNumber);
+      
+      // Get the series name for the toast
+      const series = await enhancedStorageService.getSeriesById(seriesId);
+      const seriesName = series?.name || 'selected series';
+      
+      toast({
+        title: "Added to Series",
+        description: `${book.title} has been added to the ${seriesName} series.`,
+      });
+      
+      // Close dialog and reset state
+      setShowSeriesDialog(false);
+      setSeriesDetectionResult(null);
+      setCurrentBook(null);
+    } catch (error) {
+      console.error('Error adding book to series:', error);
+      toast({
+        title: "Error Adding to Series",
+        description: `Failed to add book to series: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: "destructive"
+      });
+    }
+  };
+  
+  const handleCreateNewSeries = async (seriesData: Partial<Series>, book: Book, volumeNumber?: number) => {
+    try {
+      // Create new series
+      const newSeries = await seriesService.createSeries({
+        name: seriesData.name || `Unknown Series`,
+        description: seriesData.description || `Series featuring ${book.title}`,
+        author: seriesData.author || book.author,
+        books: [book.id],  // Include the book ID here
+        coverImage: seriesData.coverImage || book.thumbnail,
+        genre: seriesData.genre || (book.genre ? [book.genre] : []),
+        status: seriesData.status || 'ongoing',
+        readingOrder: 'publication',
+        totalBooks: seriesData.totalBooks,
+        isTracked: false,
+        hasUpcoming: false
+      });
+      
+      // Initialize storage service
+      await enhancedStorageService.initialize();
+      
+      // Convert the series to IndexedDB format and save it
+      const indexedDbSeries = {
+        ...newSeries,
+        readingProgress: 0,
+        completedBooks: 0,
+        dateAdded: new Date().toISOString(),
+        lastModified: new Date().toISOString()
+      };
+      
+      await enhancedStorageService.saveSeries(indexedDbSeries as any);
+      
+      // Update the book with series information
+      const updatedBook = {
+        ...book,
+        isPartOfSeries: true,
+        seriesId: newSeries.id,
+        seriesPosition: volumeNumber
+      };
+      
+      // Add the book to the collection
+      // In our revised flow, the book has not been added yet in automatic mode
+      onAddBook(updatedBook);
+      
+      // Add book to series in IndexedDB
+      await enhancedStorageService.addBookToSeries(book.id, newSeries.id, volumeNumber);
+      
+      toast({
+        title: "New Series Created",
+        description: `${book.title} has been added to the new ${newSeries.name} series.`,
+      });
+      
+      // Close dialog and reset state
+      setShowSeriesDialog(false);
+      setSeriesDetectionResult(null);
+      setCurrentBook(null);
+    } catch (error) {
+      console.error('Error creating new series:', error);
+      toast({
+        title: "Error Creating Series",
+        description: `Failed to create series: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: "destructive"
+      });
     }
   };
 
@@ -244,6 +407,27 @@ export const BookSearch = ({ onAddBook, existingBooks }: BookSearchProps) => {
               </Card>
             ))}
           </div>
+        </div>
+      )}
+      
+      {/* Series Assignment Dialog */}
+      {currentBook && (
+        <SeriesAssignmentDialog
+          open={showSeriesDialog}
+          onOpenChange={setShowSeriesDialog}
+          book={currentBook}
+          existingBooks={existingBooks}
+          detectedSeries={seriesDetectionResult}
+          onAssignSeries={handleAssignToSeries}
+          onCreateNewSeries={handleCreateNewSeries}
+        />
+      )}
+      
+      {/* Series Detection Status */}
+      {detectingSeries && (
+        <div className="mt-4 p-3 border rounded-md bg-muted/30 flex items-center gap-2">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          <p className="text-sm">Checking if this book is part of a series...</p>
         </div>
       )}
     </div>
