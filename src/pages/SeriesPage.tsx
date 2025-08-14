@@ -101,7 +101,7 @@ const SeriesPage = () => {
     ? `${settings.preferredName}'s Series Collection`
     : "My Series Collection";
     
-  // Load books and series from IndexedDB with localStorage fallback
+  // Load books and series from IndexedDB as the sole source of truth
   useEffect(() => {
     setIsLoading(true);
     
@@ -110,10 +110,10 @@ const SeriesPage = () => {
         // Initialize the enhanced storage service
         await enhancedStorageService.initialize();
         
-        // Load books data from IndexedDB and convert to expected format if needed
+        // Load books data from IndexedDB
         const booksFromDB = await enhancedStorageService.getBooks();
         
-        // Convert from IndexedDB format to the app's Book format
+        // Books are already in the correct format thanks to the adapter
         const convertedBooks = booksFromDB.map(book => {
           // For debug: log series-related fields from IndexedDB
           console.log(`IndexedDB Book "${book.title}": seriesId=${book.seriesId}, isPartOfSeries=${book.isPartOfSeries}`);
@@ -162,30 +162,15 @@ const SeriesPage = () => {
         setSeries(convertedSeries as Series[]);
       } catch (error) {
         console.error("Error loading data from IndexedDB:", error);
+        toast({
+          title: "Error",
+          description: "There was a problem loading your series data.",
+          variant: "destructive"
+        });
         
-        // Fallback to localStorage if IndexedDB fails
-        // Load books data
-        const savedBooks = localStorage.getItem("bookLibrary");
-        let parsedBooks: Book[] = [];
-        if (savedBooks) {
-          try {
-            parsedBooks = JSON.parse(savedBooks);
-            setBooks(parsedBooks);
-          } catch (error) {
-            console.error("Error parsing book data:", error);
-          }
-        }
-        
-        // Load series data
-        const savedSeries = localStorage.getItem("seriesLibrary");
-        if (savedSeries) {
-          try {
-            const parsedSeries = JSON.parse(savedSeries);
-            setSeries(parsedSeries);
-          } catch (error) {
-            console.error("Error parsing series data:", error);
-          }
-        }
+        // Initialize with empty arrays on error
+        setBooks([]);
+        setSeries([]);
       } finally {
         setIsLoading(false);
       }
@@ -194,48 +179,38 @@ const SeriesPage = () => {
     loadData();
   }, []);
   
-  // Sync to localStorage AND IndexedDB whenever series changes
-  // localStorage remains the primary source of truth for UI per critical implementation detail
+  // Sync changes to IndexedDB whenever series changes
   useEffect(() => {
-    if (series.length > 0) {
-      // FIRST: Update localStorage as primary source of truth for UI
-      localStorage.setItem("seriesLibrary", JSON.stringify(series));
-      
-      // SECOND: Update IndexedDB for persistence
-      // We do this in the background and don't block the UI
+    if (series.length > 0 && !isLoading) {
+      // Update IndexedDB as the sole source of truth
       const updateIndexedDB = async () => {
         try {
-          // Initialize storage if needed
-          await enhancedStorageService.initialize();
-          
-          // Save each series individually with proper type conversion
-          for (const seriesItem of series) {
-            const enhancedSeries = {
-              ...seriesItem,
-              // Add required IndexedDB fields if they don't exist
-              readingProgress: (seriesItem as any).readingProgress || 0,
-              completedBooks: (seriesItem as any).completedBooks || 0,
-              dateAdded: (seriesItem as any).dateAdded || 
-                        (seriesItem.createdAt instanceof Date ? seriesItem.createdAt.toISOString() : 
-                          typeof seriesItem.createdAt === 'string' ? seriesItem.createdAt : 
-                          new Date().toISOString()),
-              lastModified: (seriesItem as any).lastModified || 
-                           (seriesItem.updatedAt instanceof Date ? seriesItem.updatedAt.toISOString() : 
-                            typeof seriesItem.updatedAt === 'string' ? seriesItem.updatedAt : 
-                            new Date().toISOString())
-            };
-            await enhancedStorageService.saveSeries(enhancedSeries as any);
+          // Update each series individually for better error isolation
+          for (const uiSeries of series) {
+            try {
+              await enhancedStorageService.saveSeries(uiSeries);
+            } catch (error) {
+              console.error(`Error updating series ${uiSeries.id} in IndexedDB:`, error);
+              toast({
+                title: "Error",
+                description: `Could not update series ${uiSeries.name}`,
+                variant: "destructive"
+              });
+            }
           }
         } catch (error) {
-          console.error("Failed to sync series to IndexedDB:", error);
-          // Don't show errors to user - localStorage is primary source of truth
+          console.error('Error in batch update of series in IndexedDB:', error);
+          toast({
+            title: "Error",
+            description: "Could not save all series changes",
+            variant: "destructive"
+          });
         }
       };
       
-      // Run the IndexedDB update without blocking
       updateIndexedDB();
     }
-  }, [series]);
+  }, [series, isLoading, toast]);
   
   // Handle deleting a series
   const handleDeleteSeries = async (seriesId: string) => {
@@ -288,21 +263,19 @@ const SeriesPage = () => {
       // Update state
       setSeries(updatedSeries);
       
-      // Persist to localStorage for backward compatibility (PRIMARY SOURCE OF TRUTH FOR UI)
-      localStorage.setItem('seriesLibrary', JSON.stringify(updatedSeries));
-      
-      // Create enhanced object for IndexedDB with all required fields
-      const enhancedSeriesItem = {
-        ...seriesItem,
-        isTracked: tracked,
-        readingProgress: (seriesItem as any).readingProgress || 0,
-        completedBooks: (seriesItem as any).completedBooks || 0,
-        dateAdded: (seriesItem as any).dateAdded || seriesItem.createdAt?.toISOString() || new Date().toISOString(),
-        lastModified: new Date().toISOString()
-      };
-      
-      // Save to IndexedDB
-      await enhancedStorageService.saveSeries(enhancedSeriesItem as any);
+      // Update IndexedDB as the sole source of truth
+      enhancedStorageService.saveSeries(updatedSeriesItem)
+        .then(() => {
+          console.log(`Series ${updatedSeriesItem.id} updated in IndexedDB`);
+        })
+        .catch(error => {
+          console.error(`Error updating series ${updatedSeriesItem.id} in IndexedDB:`, error);
+          toast({
+            title: "Error",
+            description: "Could not update series tracking status in database",
+            variant: "destructive"
+          });
+        });
       
       toast({
         title: tracked ? "Series Tracking Enabled" : "Series Tracking Disabled",
@@ -371,25 +344,23 @@ const SeriesPage = () => {
       // Update state
       setSeries(updatedSeries);
       
-      // Save to IndexedDB individually to avoid type errors
-      for (const seriesItem of updatedSeries) {
-        const enhancedSeries = {
-          ...seriesItem,
-          // Add required IndexedDB fields if they don't exist
-          readingProgress: (seriesItem as any).readingProgress || 0,
-          completedBooks: (seriesItem as any).completedBooks || 0,
-          dateAdded: (seriesItem as any).dateAdded || seriesItem.createdAt?.toISOString() || new Date().toISOString(),
-          lastModified: (seriesItem as any).lastModified || seriesItem.updatedAt?.toISOString() || new Date().toISOString()
-        };
-        await enhancedStorageService.saveSeries(enhancedSeries as any);
+      // Update IndexedDB as the sole source of truth
+      try {
+        for (const seriesItem of updatedSeries) {
+          await enhancedStorageService.saveSeries(seriesItem);
+        }
+      } catch (error) {
+        console.error('Error updating IndexedDB:', error);
+        toast({
+          title: "Error",
+          description: "Could not save all series changes",
+          variant: "destructive"
+        });
       }
-      
-      // Maintain localStorage for backward compatibility
-      localStorage.setItem("seriesLibrary", JSON.stringify(updatedSeries));
       
       toast({
         title: "Series Detection Complete",
-        description: `${detectedSeries.length} potential series found in your collection.`
+        description: `${detectedSeries.length} potential series found in your collection.`,
       });
     } catch (error) {
       console.error('Error during series detection:', error);

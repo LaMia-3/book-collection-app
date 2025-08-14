@@ -576,7 +576,7 @@ const Index = () => {
                   toast({
                     title: "Import Partial Success",
                     description: `Books imported but may not appear in all views. Please refresh the page. Error: ${saveError instanceof Error ? saveError.message : String(saveError)}`,
-                    variant: "warning"
+                    variant: "default"
                   });
                 }
               } else {
@@ -640,7 +640,7 @@ const Index = () => {
                   toast({
                     title: "Import Partial Success",
                     description: `Books imported but may not appear in all views. Please refresh the page. Error: ${saveError instanceof Error ? saveError.message : String(saveError)}`,
-                    variant: "warning"
+                    variant: "default"
                   });
                 }
               } else {

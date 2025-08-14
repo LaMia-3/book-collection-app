@@ -99,29 +99,19 @@ export default function AdminPage() {
     
     checkMigrationNeeded();
   }, [toast]);
-
+  
   // Handle data migration from localStorage to IndexedDB
   const handleMigration = async () => {
+    if (isMigrating) return;
+    
     setIsMigrating(true);
     
     try {
-      const migrationReport = await migrateDataToIndexedDB();
-      setReport(migrationReport);
+      const result = await migrateDataToIndexedDB();
+      setReport(result);
+      setMigrationNeeded(false);
       
-      if (migrationReport.errors.length > 0) {
-        toast({
-          title: "Migration Completed with Issues",
-          description: `Migrated ${migrationReport.booksMigrated} books and ${migrationReport.seriesMigrated} series with ${migrationReport.errors.length} errors.`,
-          variant: "destructive"
-        });
-      } else {
-        toast({
-          title: "Migration Successful",
-          description: `Successfully migrated ${migrationReport.booksMigrated} books and ${migrationReport.seriesMigrated} series.`
-        });
-      }
-      
-      // Refresh stats
+      // Refresh storage stats
       const { enhancedStorageService } = await import('@/services/storage/EnhancedStorageService');
       const books = await enhancedStorageService.getBooks();
       const series = await enhancedStorageService.getSeries();
@@ -131,15 +121,16 @@ export default function AdminPage() {
         series: series.length
       });
       
-      // Check if migration is still needed
-      const needed = await isMigrationNeeded();
-      setMigrationNeeded(needed);
-      
+      toast({
+        title: "Migration Complete",
+        description: `Migrated ${result.booksMigrated} books and ${result.seriesMigrated} series to IndexedDB.`,
+        variant: "default"
+      });
     } catch (error) {
-      console.error('Migration failed:', error);
+      console.error('Error migrating data:', error);
       toast({
         title: "Migration Failed",
-        description: `Error during migration: ${error instanceof Error ? error.message : String(error)}`,
+        description: `Failed to migrate data: ${error instanceof Error ? error.message : String(error)}`,
         variant: "destructive"
       });
     } finally {
@@ -149,44 +140,43 @@ export default function AdminPage() {
   
   // Handle database reset
   const handleReset = async (type: 'indexeddb' | 'localstorage' | 'all') => {
-    if (!confirm(`Are you sure you want to reset ${type === 'all' ? 'all storage' : type}? This action cannot be undone.`)) {
-      return;
-    }
-
+    if (isResetting) return;
+    
+    const confirmReset = window.confirm(
+      type === 'all' 
+        ? 'Are you sure you want to reset all storage? This will delete all your books and series data.'
+        : type === 'indexeddb'
+          ? 'Are you sure you want to reset IndexedDB? This will delete all your books and series data from IndexedDB.'
+          : 'Are you sure you want to reset localStorage? This will delete any legacy data that might still be in localStorage.'
+    );
+    
+    if (!confirmReset) return;
+    
     setIsResetting(true);
     setResetType(type);
-
+    
     try {
-      switch (type) {
-        case 'indexeddb':
-          await resetIndexedDB();
-          toast({
-            title: "IndexedDB Reset",
-            description: "IndexedDB has been successfully reset. Consider refreshing the page."
-          });
-          // Update stats after reset
-          setIndexedDBStats({ books: 0, series: 0 });
-          break;
-        case 'localstorage':
-          resetLocalStorage();
-          toast({
-            title: "localStorage Reset",
-            description: "localStorage has been successfully cleared."
-          });
-          // Update stats after reset
-          setLocalStorageStats({ books: 0, series: 0 });
-          break;
-        case 'all':
-          await resetAllStorage();
-          toast({
-            title: "Storage Reset",
-            description: "All storage systems have been reset successfully. Consider refreshing the page."
-          });
-          // Update all stats after reset
-          setIndexedDBStats({ books: 0, series: 0 });
-          setLocalStorageStats({ books: 0, series: 0 });
-          break;
+      if (type === 'indexeddb') {
+        await resetIndexedDB();
+        // Update IndexedDB stats
+        setIndexedDBStats({ books: 0, series: 0 });
+      } else if (type === 'localstorage') {
+        await resetLocalStorage();
+        // Update localStorage stats
+        setLocalStorageStats({ books: 0, series: 0 });
+      } else {
+        // Reset both
+        await resetAllStorage();
+        // Update both stats
+        setIndexedDBStats({ books: 0, series: 0 });
+        setLocalStorageStats({ books: 0, series: 0 });
       }
+      
+      toast({
+        title: "Reset Successful",
+        description: `Successfully reset ${type === 'all' ? 'all storage' : type}. You may need to refresh the page.`,
+        variant: "default"
+      });
     } catch (error) {
       console.error(`Error resetting ${type}:`, error);
       toast({
@@ -218,30 +208,21 @@ export default function AdminPage() {
             </p>
           </div>
         </div>
-        <div>
-          <Button
-            variant="outline"
-            size="sm"
+        
+        <div className="flex items-center gap-3">
+          <Button 
+            variant="outline" 
+            className="flex items-center gap-2"
             onClick={() => navigate('/')}
-            className="flex items-center gap-1"
           >
             <ArrowLeft className="h-4 w-4" />
             Back to Library
           </Button>
         </div>
       </div>
-
-      <Alert variant="destructive" className="mb-6">
-        <AlertCircle className="h-4 w-4" />
-        <AlertTitle>Admin Area</AlertTitle>
-        <AlertDescription>
-          This area contains advanced functionality for database management. 
-          Be careful with these tools as they can modify or delete your data permanently.
-        </AlertDescription>
-      </Alert>
-
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-5">
+      
+      <Tabs defaultValue={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="flex w-full mb-8">
           <TabsTrigger value="viewer" className="flex items-center gap-2">
             <Database className="h-4 w-4" />
             <span>Database Viewer</span>
@@ -279,15 +260,23 @@ export default function AdminPage() {
         <TabsContent value="migration">
           <Card>
             <CardHeader>
-              <CardTitle>Data Migration</CardTitle>
+              <CardTitle className="flex items-center">
+                <Database className="h-5 w-5 mr-2" />
+                Data Migration
+                <Badge variant="outline" className="ml-2 text-yellow-500 border-yellow-500">Legacy Support</Badge>
+              </CardTitle>
               <CardDescription>
-                Migrate data between localStorage and IndexedDB
+                Migrate any legacy localStorage data to IndexedDB (the app's exclusive source of truth)
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="grid grid-cols-2 gap-4 mb-6">
                 <Card className="p-4">
-                  <h3 className="font-medium mb-2">localStorage Data</h3>
+                  <h3 className="font-medium mb-2">
+                    localStorage Data 
+                    <Badge variant="outline" className="ml-1 text-yellow-500 border-yellow-500 text-xs">Legacy</Badge>
+                    <span className="text-xs text-muted-foreground">(deprecated)</span>
+                  </h3>
                   <div className="space-y-1">
                     <div className="flex justify-between">
                       <span>Books:</span>
@@ -301,7 +290,11 @@ export default function AdminPage() {
                 </Card>
                 
                 <Card className="p-4">
-                  <h3 className="font-medium mb-2">IndexedDB Data</h3>
+                  <h3 className="font-medium mb-2">
+                    IndexedDB Data 
+                    <Badge variant="outline" className="ml-1 text-primary border-primary text-xs">Primary Storage</Badge>
+                    <span className="text-xs text-primary">(exclusive source of truth)</span>
+                  </h3>
                   <div className="space-y-1">
                     <div className="flex justify-between">
                       <span>Books:</span>
@@ -314,13 +307,16 @@ export default function AdminPage() {
                   </div>
                 </Card>
               </div>
-              
+            
               {/* Migration Status */}
               <Card className="mb-6">
                 <CardHeader>
-                  <CardTitle>Migration Status</CardTitle>
+                  <CardTitle className="flex items-center">
+                    <AlertCircle className="h-5 w-5 mr-2" />
+                    Migration Status
+                  </CardTitle>
                   <CardDescription>
-                    Check if your data needs to be migrated from localStorage to IndexedDB
+                    Check if any legacy data needs to be migrated to IndexedDB (the app's exclusive data store)
                   </CardDescription>
                 </CardHeader>
                 
@@ -344,7 +340,7 @@ export default function AdminPage() {
                       <div>
                         <p className="font-medium">Migration needed</p>
                         <p className="text-sm">
-                          You have data in localStorage that needs to be migrated to IndexedDB for proper functionality.
+                          You have legacy data in localStorage that should be migrated to IndexedDB, which is now the exclusive source of truth for all application data.
                           Click the "Migrate Data" button below to transfer your data.
                         </p>
                       </div>
@@ -447,36 +443,40 @@ export default function AdminPage() {
         <TabsContent value="reset">
           <Card>
             <CardHeader>
-              <CardTitle>Database Reset</CardTitle>
+              <CardTitle className="flex items-center">
+                <Trash2 className="h-5 w-5 mr-2" />
+                Database Reset
+              </CardTitle>
               <CardDescription>
-                Reset your database to a clean state
+                Reset your database and start fresh
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
-              <Alert variant="destructive" className="mb-6">
-                <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Warning</AlertTitle>
-                <AlertDescription>
-                  Resetting your database will permanently delete all your books, series, and settings. 
-                  This action cannot be undone.
-                </AlertDescription>
-              </Alert>
-
-              <div className="grid gap-6">
+            <CardContent>
+              <div className="space-y-6">
+                <Alert className="bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950 dark:text-amber-200 dark:border-amber-900">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertTitle>Warning</AlertTitle>
+                  <AlertDescription>
+                    Resetting your database will permanently delete all your data. This action cannot be undone.
+                  </AlertDescription>
+                </Alert>
+                
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center">
                       <Database className="h-5 w-5 mr-2" />
                       Reset IndexedDB
+                      <Badge variant="outline" className="ml-2 text-primary border-primary">Primary Storage</Badge>
                     </CardTitle>
                     <CardDescription>
-                      Clear all data stored in IndexedDB (books, series, etc.)
+                      Clear all data stored in IndexedDB (the app's exclusive source of truth)
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
                     <p>
-                      This will delete all books and series data stored in IndexedDB, which is the primary data store for the application.
-                      After resetting, you'll need to refresh the page to see the changes take effect.
+                      This will delete all your books, series, and settings data stored in IndexedDB.
+                      Since IndexedDB is now the exclusive source of truth for all application data, 
+                      resetting it will give you a completely clean slate.
                     </p>
                   </CardContent>
                   <CardFooter className="flex justify-end">
@@ -495,15 +495,16 @@ export default function AdminPage() {
                     </Button>
                   </CardFooter>
                 </Card>
-
+                
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center">
-                      <Database className="h-5 w-5 mr-2" />
+                      <Server className="h-5 w-5 mr-2" />
                       Reset localStorage
+                      <Badge variant="outline" className="ml-2 text-yellow-500 border-yellow-500">Legacy Storage</Badge>
                     </CardTitle>
                     <CardDescription>
-                      Clear all data stored in localStorage
+                      Clear all data stored in legacy localStorage (deprecated storage)
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -542,9 +543,8 @@ export default function AdminPage() {
                   </CardHeader>
                   <CardContent>
                     <p>
-                      This will reset both IndexedDB and localStorage, giving you a completely clean slate.
-                      After resetting, you should refresh the page to ensure all components 
-                      initialize properly with the empty data stores.
+                      This will reset both IndexedDB (primary storage) and localStorage (legacy storage), giving you a completely clean slate.
+                      After resetting, you should refresh the page to ensure all components initialize properly with the empty data stores.
                     </p>
                     
                     <div className="mt-4 p-4 border rounded-md bg-muted/50">
