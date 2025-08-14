@@ -47,6 +47,11 @@ npm install
 
 # Start development server
 npm run dev
+# or
+npm start
+
+# Stop the application
+npm stop
 ```
 
 ### Windows-Specific Instructions
@@ -68,6 +73,11 @@ The application is fully compatible with Windows. If you're using Windows, follo
 
    # Start development server
    npm run dev
+   # or
+   npm start
+   
+   # Stop the application
+   npm stop
    ```
 
 4. **Troubleshooting Windows-Specific Issues**:
