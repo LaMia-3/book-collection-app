@@ -101,8 +101,7 @@ The application is fully compatible with Windows. If you're using Windows, follo
   - Database Viewer - View and manage IndexedDB data stores
   - Data Migration - Tools for migrating between storage systems
   - Database Reset - Reset database to a clean state
-  - IndexedDB Test - Verify the IndexedDB implementation
-  - Backend Test - Test and verify backend API functionality
+  - Workflow Tester - Comprehensive test that adds 50 books from multiple APIs, creates series relationships, and sets various reading statuses
 
 ## Customization
 
@@ -181,3 +180,10 @@ The application is currently undergoing these major improvements:
    - Fully migrated from localStorage to IndexedDB for all data
    - Enhanced query performance with strategic indexes
    - Better error handling and recovery mechanisms
+
+4. **Improved Testing Infrastructure**:
+   - New WorkflowTester component for comprehensive integration testing
+   - Automated addition of 50 books (25 from Google Books API, 25 from Open Library API)
+   - Diverse reading status assignment (5 reading, 20 completed, 25 want-to-read)
+   - Automatic series detection and creation for popular book series
+   - Data consistency verification and detailed progress reporting
