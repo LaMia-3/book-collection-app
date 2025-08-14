@@ -24,7 +24,8 @@ import {
   ChevronUp,
   Trash2, 
   AlertTriangle,
-  Star
+  Star,
+  Database
 } from "lucide-react";
 import {
   Select,
@@ -98,6 +99,7 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showSeriesAssignmentDialog, setShowSeriesAssignmentDialog] = useState(false);
   const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
+  const [showMetadataInfo, setShowMetadataInfo] = useState(false);
   const [seriesDetectionResult, setSeriesDetectionResult] = useState<any>(null);
   // Parse date from string
   const parseDate = (dateString?: string): Date | undefined => {
@@ -1574,6 +1576,106 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
                   type="hidden" 
                   value={editedBook._legacyNextBookExpectedYear || ''}
                 />
+              </div>
+            )}
+          </div>
+
+          {/* Book Metadata Section */}
+          <div className="space-y-3 mt-6">
+            <div 
+              className="flex items-center justify-between cursor-pointer"
+              onClick={() => setShowMetadataInfo(!showMetadataInfo)}
+            >
+              <div className="flex items-center gap-2">
+                <Database className="h-5 w-5 text-primary" />
+                <h3 className="text-base font-medium">Book Metadata</h3>
+              </div>
+              <Button variant="ghost" size="sm" className="p-1 h-8 w-8">
+                {showMetadataInfo ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </Button>
+            </div>
+            
+            {showMetadataInfo && (
+              <div className="bg-muted/30 p-4 rounded-md border">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <h4 className="text-sm font-medium mb-2">ISBN Information</h4>
+                    <div className="space-y-2 text-sm">
+                      {/* Display ISBN-10 */}
+                      <div>
+                        <span className="font-medium">ISBN-10:</span> 
+                        <div className="pl-4">
+                          {editedBook.isbn10 && editedBook.isbn10.length > 0 ? 
+                            editedBook.isbn10.map((isbn, index) => (
+                              <div key={`isbn10-${index}`}>{isbn}</div>
+                            )) : 
+                            <span className="text-muted-foreground italic">None</span>
+                          }
+                        </div>
+                      </div>
+                      
+                      {/* Display ISBN-13 */}
+                      <div>
+                        <span className="font-medium">ISBN-13:</span>
+                        <div className="pl-4">
+                          {editedBook.isbn13 && editedBook.isbn13.length > 0 ? 
+                            editedBook.isbn13.map((isbn, index) => (
+                              <div key={`isbn13-${index}`}>{isbn}</div>
+                            )) : 
+                            <span className="text-muted-foreground italic">None</span>
+                          }
+                        </div>
+                      </div>
+                      
+                      {/* Legacy ISBN */}
+                      <div>
+                        <span className="font-medium">Legacy ISBN:</span>
+                        <div className="pl-4">
+                          {editedBook.isbn ? 
+                            <div>{editedBook.isbn}</div> : 
+                            <span className="text-muted-foreground italic">None</span>
+                          }
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <h4 className="text-sm font-medium mb-2">API Source</h4>
+                    <div className="space-y-2 text-sm">
+                      <div>
+                        <span className="font-medium">Source Type:</span> 
+                        <span className="ml-2">
+                          {editedBook.sourceType ? (
+                            <Badge variant="outline" className="ml-1">
+                              {editedBook.sourceType === 'google' ? 'Google Books' : 
+                               editedBook.sourceType === 'openlib' ? 'Open Library' : 
+                               editedBook.sourceType === 'manual' ? 'Manual Entry' : 
+                               editedBook.sourceType}
+                            </Badge>
+                          ) : (
+                            <span className="text-muted-foreground italic">Unknown</span>
+                          )}
+                        </span>
+                      </div>
+                      
+                      <div>
+                        <span className="font-medium">Source ID:</span> 
+                        <span className="ml-2">
+                          {editedBook.sourceId ? (
+                            <code className="px-1 py-0.5 bg-muted rounded text-xs">{editedBook.sourceId}</code>
+                          ) : (
+                            <span className="text-muted-foreground italic">None</span>
+                          )}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="mt-4 text-xs text-muted-foreground">
+                  <p>Metadata is read-only and is maintained automatically by the system.</p>
+                </div>
               </div>
             )}
           </div>

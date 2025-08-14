@@ -63,7 +63,9 @@ export interface Book {
   favorite?: boolean;
   
   // Enhanced metadata
-  isbn?: string;
+  isbn?: string;  // Legacy field - keeping for backward compatibility
+  isbn10?: string[];
+  isbn13?: string[];
   language?: string;
   publisher?: string;
   format?: string; // hardcover, paperback, ebook, etc.

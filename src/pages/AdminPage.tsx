@@ -3,21 +3,19 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, Database, AlertCircle, Trash2, RefreshCw, Settings, Server, CheckCircle2, Wrench, Beaker } from "lucide-react";
+import { ArrowLeft, Database, AlertCircle, Trash2, RefreshCw, Settings, Server, CheckCircle2, Wrench, Zap } from "lucide-react";
 import { useToast } from '@/hooks/use-toast';
 
 // Import components and utilities
 import { IndexedDBViewer } from '@/components/debug/IndexedDBViewer';
-import IndexedDBTester from '@/components/debug/IndexedDBTester';
-import BackendTester from '@/components/debug/BackendTester';
+import WorkflowTester from '@/components/debug/WorkflowTester';
 import { resetIndexedDB, resetLocalStorage, resetAllStorage } from '@/utils/ResetDatabaseUtil';
 import { migrateDataToIndexedDB, isMigrationNeeded } from '@/utils/DataMigrationUtil';
 
 // Import UI components
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
-// Import test utilities
-import { testIndexedDBImplementation, compareStorageData } from '@/utils/IndexedDBTester';
+// Import services
 import { databaseService } from '@/services/DatabaseService';
 import { seriesService } from '@/services/SeriesService';
 import { upcomingReleasesService } from '@/services/UpcomingReleasesService';
@@ -256,13 +254,9 @@ export default function AdminPage() {
             <Trash2 className="h-4 w-4" />
             <span>Database Reset</span>
           </TabsTrigger>
-          <TabsTrigger value="indexeddb-test" className="flex items-center gap-2">
-            <Wrench className="h-4 w-4" />
-            <span>IndexedDB Test</span>
-          </TabsTrigger>
-          <TabsTrigger value="backend-test" className="flex items-center gap-2">
-            <Beaker className="h-4 w-4" />
-            <span>Backend Test</span>
+          <TabsTrigger value="workflow-test" className="flex items-center gap-2">
+            <Zap className="h-4 w-4" />
+            <span>Workflow Test</span>
           </TabsTrigger>
         </TabsList>
 
@@ -582,32 +576,17 @@ export default function AdminPage() {
           </Card>
         </TabsContent>
 
-        {/* IndexedDB Test Tab */}
-        <TabsContent value="indexeddb-test">
+        {/* Workflow Test Tab */}
+        <TabsContent value="workflow-test">
           <Card>
             <CardHeader>
-              <CardTitle>IndexedDB Implementation Tester</CardTitle>
+              <CardTitle>Library Workflow Tester</CardTitle>
               <CardDescription>
-                Verify the enhanced IndexedDB implementation is working correctly
+                Add sample books from Google Books and Open Library APIs and organize them into series
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <IndexedDBTester />
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Backend Test Tab */}
-        <TabsContent value="backend-test">
-          <Card>
-            <CardHeader>
-              <CardTitle>Backend Test Dashboard</CardTitle>
-              <CardDescription>
-                Test and verify backend API functionality
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <BackendTester />
+              <WorkflowTester />
             </CardContent>
           </Card>
         </TabsContent>

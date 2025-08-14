@@ -114,6 +114,27 @@ export class OpenLibraryProvider implements BookApiProvider {
       ? `${this.coverBaseUrl}/id/${coverId}-M.jpg` 
       : undefined;
     
+    // Extract ISBNs if available
+    const isbn10: string[] = [];
+    const isbn13: string[] = [];
+
+    // Extract ISBNs from edition data
+    if (editionData.isbn_10) {
+      if (Array.isArray(editionData.isbn_10)) {
+        isbn10.push(...editionData.isbn_10);
+      } else if (typeof editionData.isbn_10 === 'string') {
+        isbn10.push(editionData.isbn_10);
+      }
+    }
+
+    if (editionData.isbn_13) {
+      if (Array.isArray(editionData.isbn_13)) {
+        isbn13.push(...editionData.isbn_13);
+      } else if (typeof editionData.isbn_13 === 'string') {
+        isbn13.push(editionData.isbn_13);
+      }
+    }
+
     // Transform to our Book format
     return {
       id: crypto.randomUUID(), // Generate a unique ID for our system
@@ -128,7 +149,9 @@ export class OpenLibraryProvider implements BookApiProvider {
       sourceType: 'openlib',
       spineColor: Math.floor(Math.random() * 8) + 1, // Random spine color
       addedDate: new Date().toISOString(),
-      status: ReadingStatus.TO_READ // Default status for newly added books
+      status: ReadingStatus.TO_READ, // Default status for newly added books
+      isbn10: isbn10.length > 0 ? isbn10 : undefined,
+      isbn13: isbn13.length > 0 ? isbn13 : undefined
     };
   }
 

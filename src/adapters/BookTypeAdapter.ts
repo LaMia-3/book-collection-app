@@ -20,6 +20,14 @@ export interface DBBook {
   googleBooksId?: string;
   openLibraryId?: string;
   
+  // API source tracking fields
+  sourceId?: string;
+  sourceType?: 'google' | 'openlib' | 'manual';
+  
+  // ISBN fields - stored as arrays
+  isbn10?: string[];
+  isbn13?: string[];
+  
   // Status is a string in DB, not an enum
   status?: string;
   completedDate?: string;

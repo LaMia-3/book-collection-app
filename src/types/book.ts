@@ -10,6 +10,14 @@ export interface Book {
   googleBooksId?: string;
   openLibraryId?: string;
   
+  // API source tracking fields
+  sourceId?: string; // ID from the source API
+  sourceType?: 'google' | 'openlib' | 'manual'; // API source or manual entry
+  
+  // ISBN fields - stored as arrays to support multiple values
+  isbn10?: string[];
+  isbn13?: string[];
+  
   // User tracking fields
   status?: 'reading' | 'completed' | 'want-to-read'; // Track reading status
   completedDate?: string;

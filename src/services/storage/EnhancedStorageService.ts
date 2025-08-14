@@ -88,6 +88,8 @@ export class EnhancedStorageService {
     settings: { data: null, timestamp: 0, invalidated: true }
   };
   
+  // No migrations needed as backward compatibility isn't required
+  
   /**
    * Private constructor to enforce singleton pattern
    */
@@ -142,25 +144,30 @@ export class EnhancedStorageService {
    * Initialize the storage system
    */
   public async initialize(): Promise<void> {
-    if (this.isInitialized) {
-      return Promise.resolve();
-    }
-    
+    // Return existing promise if initialization is in progress
     if (this.initPromise) {
       return this.initPromise;
     }
     
-    this.initPromise = this.db.initDb()
-      .then(() => {
+    // Create a new initialization promise
+    this.initPromise = new Promise<void>(async (resolve) => {
+      try {
+        // Initialize the IndexedDB service
+        await this.db.initDb();
+        
+        // Set initialization flag
         this.isInitialized = true;
-        console.log('Enhanced storage system initialized successfully');
-      })
-      .catch((error) => {
-        console.error('Failed to initialize enhanced storage system:', error);
-        this.showUserNotification('Database initialization failed. Some features may not work correctly.');
-        throw error;
-      });
-      
+        console.log('Enhanced Storage Service initialized successfully');
+        resolve();
+      } catch (error) {
+        console.error('Failed to initialize Enhanced Storage Service:', error);
+        this.showUserNotification('Failed to initialize storage. Some features may not work correctly.');
+        // Even on error, consider the service initialized to prevent endless retries
+        this.isInitialized = true;
+        resolve();
+      }
+    });
+    
     return this.initPromise;
   }
   
@@ -172,7 +179,7 @@ export class EnhancedStorageService {
       await this.initialize();
     }
   }
-
+  
   /**
    * Show a user notification
    * Note: No longer uses toast service directly since hooks can't be used in non-React contexts

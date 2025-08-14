@@ -142,6 +142,15 @@ export const BookSearch = ({ onAddBook, existingBooks }: BookSearchProps) => {
         pageCount: detailedBook.pageCount,
         googleBooksId: detailedBook.sourceType === 'google' ? detailedBook.id : undefined,
         openLibraryId: detailedBook.sourceType === 'openlib' ? detailedBook.id : undefined,
+        
+        // Set source tracking fields
+        sourceId: detailedBook.id,
+        sourceType: detailedBook.sourceType as 'google' | 'openlib' | 'manual',
+        
+        // Set ISBN fields if available
+        isbn10: detailedBook.isbn10 || [],
+        isbn13: detailedBook.isbn13 || [],
+        
         status: defaultStatus as 'reading' | 'completed' | 'want-to-read',
         isPartOfSeries: false, // Initially set to false
         addedDate: new Date().toISOString(),
