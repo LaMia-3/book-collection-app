@@ -425,6 +425,9 @@ export class IndexedDBService {
 
   /**
    * Delete a series and update any associated books
+   * 
+   * IMPORTANT: Since IndexedDB is the primary source of truth, we need to ensure
+   * the series is removed from localStorage as well to prevent resyncing.
    */
   async deleteSeries(seriesId: string): Promise<void> {
     try {
