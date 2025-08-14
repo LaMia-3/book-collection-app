@@ -396,8 +396,8 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
           const uiSeriesList = seriesFromDB.map(s => ({
             ...s,
             // Convert date strings to Date objects for UI
-            createdAt: new Date(s.dateAdded),
-            updatedAt: new Date(s.lastModified)
+            createdAt: new Date(s.dateAdded || s.timestamps?.created || new Date().toISOString()),
+            updatedAt: new Date(s.lastModified || s.timestamps?.updated || new Date().toISOString())
           }));
           
           console.log('Series loaded for UI:', uiSeriesList);

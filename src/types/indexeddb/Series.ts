@@ -2,6 +2,12 @@
  * Enhanced Series model for IndexedDB storage
  */
 
+export interface SeriesTimestamps {
+  created: string;      // When the series was created
+  updated?: string;     // When the series was last updated
+  lastBookAdded?: string; // When a book was last added to the series
+}
+
 export interface Series {
   // Core identifiers
   id: string;
@@ -14,6 +20,13 @@ export interface Series {
   categories?: string[]; // New field: renamed from genre for clarity
   startYear?: number; // New field: start year of the series
   endYear?: number; // New field: end year of the series (if completed)
+  
+  // Timestamps
+  timestamps?: SeriesTimestamps;
+  
+  // Legacy timestamp fields - keeping for backward compatibility
+  dateAdded: string; // When the series was added
+  lastModified: string; // When the series was last updated
   
   // Books relationship (optimized for queries)
   books: string[]; // Array of book IDs in the series
@@ -35,10 +48,6 @@ export interface Series {
   isTracked: boolean; // Whether the user is tracking this series for notifications
   hasUpcoming?: boolean; // Whether the series has upcoming releases
   apiEnriched?: boolean; // Whether the series data has been enriched with API data
-  
-  // Timestamps
-  dateAdded: string; // New field: when the series was added
-  lastModified: string; // New field: when the series was last updated
 }
 
 /**
