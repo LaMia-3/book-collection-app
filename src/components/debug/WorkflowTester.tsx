@@ -490,9 +490,9 @@ export function WorkflowTester() {
 
   return (
     <div className="space-y-6">
-      <div className="bg-white p-6 rounded-lg shadow">
+      <div className="bg-card p-6 rounded-lg shadow">
         <h2 className="text-2xl font-bold mb-4">Workflow Tester</h2>
-        <p className="text-gray-600 mb-4">
+        <p className="text-muted-foreground mb-4">
           This tool will add 50 books (25 from Google Books API and 25 from Open Library API) and create series from them.
           It also assigns reading statuses and completion dates to simulate a realistic collection.
         </p>
@@ -547,7 +547,7 @@ export function WorkflowTester() {
               {allBooks.map(book => (
                 <div 
                   key={book.id} 
-                  className="flex gap-3 border rounded p-3"
+                  className="flex gap-3 border border-border rounded p-3 bg-card"
                 >
                   {book.thumbnail && (
                     <img 
