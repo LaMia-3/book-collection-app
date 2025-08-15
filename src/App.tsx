@@ -15,6 +15,7 @@ import SeriesDetailPage from "./pages/SeriesDetailPage";
 // TestBackendPage has been integrated into AdminPage as a tab
 import AdminPage from "./pages/AdminPage";
 import NotFound from "./pages/NotFound";
+import LocalStorageCheck from "./components/debug/LocalStorageCheck";
 // IndexedDBTester component is now used within AdminPage
 
 const queryClient = new QueryClient();
@@ -38,6 +39,7 @@ const App = () => (
                   <Route path="/test-backend" element={<Navigate to="/admin?tab=backend-test" replace />} />
                   <Route path="/admin" element={<AdminPage />} />
                   <Route path="/test-indexeddb" element={<Navigate to="/admin?tab=indexeddb-test" replace />} />
+                  <Route path="/storage-check" element={<LocalStorageCheck />} />
                   {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                   <Route path="*" element={<NotFound />} />
                 </Routes>

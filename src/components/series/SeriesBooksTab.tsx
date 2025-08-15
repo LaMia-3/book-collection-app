@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Series } from '@/types/series';
 import { Book } from '@/types/book';
 import { Button } from '@/components/ui/button';
@@ -10,6 +10,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { Plus, GripVertical, BookOpen, Bookmark, BookX } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { enhancedStorageService } from '@/services/storage/EnhancedStorageService';
 
 interface SeriesBooksTabProps {
   series: Series;
@@ -41,20 +42,9 @@ export const SeriesBooksTab = ({ series, books, allBooks }: SeriesBooksTabProps)
       return false;
     }
     
-    // Third check: Not in any other series (checking all series in localStorage)
-    const savedSeries = localStorage.getItem("seriesLibrary");
-    if (savedSeries) {
-      try {
-        const allSeries = JSON.parse(savedSeries) as Series[];
-        for (const s of allSeries) {
-          if (s.books && s.books.includes(book.id)) {
-            return false;
-          }
-        }
-      } catch (e) {
-        console.error("Error parsing series data:", e);
-      }
-    }
+    // Third check: Not in any other series
+    // All series data is now checked via the series array passed as props
+    // No need to use localStorage here anymore
     
     // If we reach here, the book isn't in any series
     return true;
@@ -110,7 +100,7 @@ export const SeriesBooksTab = ({ series, books, allBooks }: SeriesBooksTabProps)
   const orderedBooks = getOrderedBooks();
   
   // Handle drag end for custom ordering
-  const handleDragEnd = (result: DropResult) => {
+  const handleDragEnd = async (result: DropResult) => {
     if (!result.destination) return;
     
     const items = Array.from(orderedBooks);
@@ -120,32 +110,36 @@ export const SeriesBooksTab = ({ series, books, allBooks }: SeriesBooksTabProps)
     // Update the custom order
     const newCustomOrder = items.map(book => book.id);
     
-    // In a real app, this would update the backend
-    // For now, we just update localStorage
-    const savedSeries = localStorage.getItem("seriesLibrary");
-    if (savedSeries) {
-      const parsedSeries = JSON.parse(savedSeries) as Series[];
-      const updatedSeries = parsedSeries.map(s => {
-        if (s.id === series.id) {
-          return {
-            ...s,
-            customOrder: newCustomOrder
-          };
-        }
-        return s;
-      });
-      
-      localStorage.setItem("seriesLibrary", JSON.stringify(updatedSeries));
-      
+    try {
+      // Get the current series from the storage service
+      const currentSeries = await enhancedStorageService.getSeriesById(series.id);
+      if (currentSeries) {
+        // Update the series with new custom order
+        const updatedSeries = {
+          ...currentSeries,
+          customOrder: newCustomOrder
+        };
+        
+        // Save the updated series using the storage service
+        await enhancedStorageService.saveSeries(updatedSeries);
+        
+        toast({
+          title: "Series order updated",
+          description: "The reading order has been updated."
+        });
+      }
+    } catch (error) {
+      console.error("Error updating series order:", error);
       toast({
-        title: "Series order updated",
-        description: "The reading order has been updated."
+        title: "Error",
+        description: "Failed to update reading order. Please try again.",
+        variant: "destructive"
       });
     }
   };
   
   // Handle adding books to series
-  const handleAddBooks = () => {
+  const handleAddBooks = async () => {
     // Get selected book IDs
     const booksToAdd = Object.entries(selectedBookIds)
       .filter(([_, isSelected]) => isSelected)
@@ -160,121 +154,86 @@ export const SeriesBooksTab = ({ series, books, allBooks }: SeriesBooksTabProps)
       return;
     }
     
-    // Update series in localStorage
-    const savedSeries = localStorage.getItem("seriesLibrary");
-    const savedBooks = localStorage.getItem("bookLibrary");
-    
-    if (savedSeries && savedBooks) {
-      // 1. Update series data
-      const parsedSeries = JSON.parse(savedSeries) as Series[];
-      let updatedSeries = [...parsedSeries];
+    try {
+      // Get the current series
+      const currentSeries = await enhancedStorageService.getSeriesById(series.id);
       
-      // First, remove the selected books from any other series they might be in
-      updatedSeries = updatedSeries.map(s => {
-        if (s.id !== series.id && s.books) {
-          // Remove any of our selected books from this other series
-          return {
-            ...s,
-            books: s.books.filter(bookId => !booksToAdd.includes(bookId))
-          };
+      if (currentSeries) {
+        // Update the series with new books
+        const updatedSeries = {
+          ...currentSeries,
+          books: [...currentSeries.books, ...booksToAdd]
+        };
+        
+        // Update each book to include series information
+        for (const bookId of booksToAdd) {
+          // Get the book from storage
+          const book = await enhancedStorageService.getBookById(bookId);
+          if (book) {
+            // Update book with series information
+            const updatedBook = {
+              ...book,
+              isPartOfSeries: true,
+              seriesId: series.id
+              // Note: We're not setting volumeNumber here as that would require user input
+            };
+            
+            // Save the updated book
+            await enhancedStorageService.saveBook(updatedBook);
+          }
         }
-        return s;
-      });
-      
-      // Then add the books to our target series
-      updatedSeries = updatedSeries.map(s => {
-        if (s.id === series.id) {
-          return {
-            ...s,
-            books: [...s.books, ...booksToAdd]
-          };
-        }
-        return s;
-      });
-      
-      // 2. Update the books to include series information
-      const parsedBooks = JSON.parse(savedBooks) as Book[];
-      const updatedBooks = parsedBooks.map(book => {
-        if (booksToAdd.includes(book.id)) {
-          return {
-            ...book,
-            isPartOfSeries: true,
-            seriesId: series.id
-            // Note: We're not setting volumeNumber here as that would require user input
-            // In a more advanced implementation, we could detect volume numbers from titles
-          };
-        }
-        return book;
-      });
-      
-      // 3. Save both updates to localStorage
-      localStorage.setItem("seriesLibrary", JSON.stringify(updatedSeries));
-      localStorage.setItem("bookLibrary", JSON.stringify(updatedBooks));
-      
+        
+        // Save the updated series
+        await enhancedStorageService.saveSeries(updatedSeries);
+        
+        toast({
+          title: "Books added",
+          description: `${booksToAdd.length} book${booksToAdd.length > 1 ? 's' : ''} added to the series.`
+        });
+        
+        // Reset state
+        setSelectedBookIds({});
+        setIsAddingBooks(false);
+        
+        // In a real app, we would refetch the data here
+        // For now, just reload the page
+        window.location.reload();
+      }
+    } catch (error) {
+      console.error("Error adding books to series:", error);
       toast({
-        title: "Books added",
-        description: `${booksToAdd.length} book${booksToAdd.length > 1 ? 's' : ''} added to the series.`
+        title: "Error",
+        description: "Failed to add books to the series. Please try again.",
+        variant: "destructive"
       });
-      
-      // Reset state
-      setSelectedBookIds({});
-      setIsAddingBooks(false);
-      
-      // In a real app, we would refetch the data here
-      // For now, just reload the page
-      window.location.reload();
     }
   };
   
   // Handle removing a book from the series
-  const handleRemoveBook = (bookId: string) => {
+  const handleRemoveBook = async (bookId: string) => {
     if (confirm("Remove this book from the series?")) {
-      // Get both series and books data from localStorage
-      const savedSeries = localStorage.getItem("seriesLibrary");
-      const savedBooks = localStorage.getItem("bookLibrary");
-      
-      if (savedSeries && savedBooks) {
-        // 1. Update series to remove the book
-        const parsedSeries = JSON.parse(savedSeries) as Series[];
-        const updatedSeries = parsedSeries.map(s => {
-          if (s.id === series.id) {
-            return {
-              ...s,
-              books: s.books.filter(id => id !== bookId)
-            };
-          }
-          return s;
-        });
-        
-        // 2. Update the book to remove series information
-        const parsedBooks = JSON.parse(savedBooks) as Book[];
-        const updatedBooks = parsedBooks.map(book => {
-          if (book.id === bookId) {
-            return {
-              ...book,
-              isPartOfSeries: false,
-              seriesId: undefined,
-              volumeNumber: undefined
-            };
-          }
-          return book;
-        });
-        
-        // 3. Save both updates to localStorage
-        localStorage.setItem("seriesLibrary", JSON.stringify(updatedSeries));
-        localStorage.setItem("bookLibrary", JSON.stringify(updatedBooks));
+      try {
+        // Use the enhanced storage service to remove the book from series
+        await enhancedStorageService.removeBookFromSeries(bookId, series.id);
         
         toast({
           title: "Book removed",
           description: "The book has been removed from the series."
         });
         
-        // In a real app, we would refetch the data here
-        // For now, just reload the page
+        // Refresh the page to see the updated data
         window.location.reload();
+      } catch (error) {
+        console.error("Error removing book from series:", error);
+        toast({
+          title: "Error",
+          description: "Failed to remove book from the series. Please try again.",
+          variant: "destructive"
+        });
       }
     }
-  };
+  }
+;
   
   return (
     <div className="space-y-6">

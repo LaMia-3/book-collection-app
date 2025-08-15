@@ -9,7 +9,7 @@ export const BirthdayCelebration: React.FC = () => {
   const [showCelebration, setShowCelebration] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   
-  // Store dismissed status in localStorage with the current date to track it persistently
+  // Store dismissed status in IndexedDB with the current date to track it persistently
   // The key includes the date so it will reset each day
   const today = new Date().toISOString().split('T')[0];
   const dismissStorageKey = `birthday-celebration-dismissed-${today}`;
@@ -41,14 +41,14 @@ export const BirthdayCelebration: React.FC = () => {
     }
   };
   
-  // Check for dismissed status on load from IndexedDB, with localStorage fallback
+  // Check for dismissed status on load from IndexedDB
   useEffect(() => {
     const checkDismissed = async () => {
       try {
         // Initialize storage service
         await enhancedStorageService.initialize();
         
-        // Try to get from IndexedDB first
+        // Get from IndexedDB
         const settings = await enhancedStorageService.getSettings();
         const notificationSettings = settings?.notifications || {};
         
@@ -56,28 +56,8 @@ export const BirthdayCelebration: React.FC = () => {
           setDismissed(true);
           return;
         }
-        
-        // Fallback to localStorage for backward compatibility
-        const storedDismissed = localStorage.getItem(dismissStorageKey);
-        if (storedDismissed === 'true') {
-          setDismissed(true);
-          
-          // Migrate setting to IndexedDB
-          await enhancedStorageService.saveSettings({
-            ...settings,
-            notifications: {
-              ...notificationSettings,
-              [dismissStorageKey]: true
-            }
-          });
-        }
       } catch (error) {
         console.error('Error checking birthday celebration dismissed status:', error);
-        // Silent fallback to localStorage
-        const storedDismissed = localStorage.getItem(dismissStorageKey);
-        if (storedDismissed === 'true') {
-          setDismissed(true);
-        }
       }
     };
     checkDismissed();
@@ -129,7 +109,7 @@ export const BirthdayCelebration: React.FC = () => {
         <button 
           onClick={async () => {
             try {
-              // Store the dismissed state in IndexedDB
+              // Store the dismissed state in IndexedDB only
               const settings = await enhancedStorageService.getSettings() || {};
               const notificationSettings = settings.notifications || {};
               
@@ -140,13 +120,8 @@ export const BirthdayCelebration: React.FC = () => {
                   [dismissStorageKey]: true
                 }
               });
-              
-              // Keep localStorage for backwards compatibility
-              localStorage.setItem(dismissStorageKey, 'true');
             } catch (error) {
               console.error('Error saving birthday celebration dismissed status:', error);
-              // Fallback to localStorage
-              localStorage.setItem(dismissStorageKey, 'true');
             }
             
             setDismissed(true);

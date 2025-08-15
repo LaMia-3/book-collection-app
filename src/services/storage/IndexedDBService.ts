@@ -225,7 +225,6 @@ export class IndexedDBService {
       return db.getAll(StoreNames.BOOKS);
     } catch (error) {
       console.error('Failed to get books from IndexedDB:', error);
-      this.silentFallbackToLocalStorage<Book[]>('bookLibrary', []);
       return [];
     }
   }
@@ -239,8 +238,7 @@ export class IndexedDBService {
       return db.get(StoreNames.BOOKS, id);
     } catch (error) {
       console.error(`Failed to get book ${id} from IndexedDB:`, error);
-      const books = this.silentFallbackToLocalStorage<Book[]>('bookLibrary', []);
-      return books.find(book => book.id === id);
+      return undefined;
     }
   }
 
@@ -275,34 +273,17 @@ export class IndexedDBService {
       return db.getAll(StoreNames.SERIES);
     } catch (error) {
       console.error('Failed to get series from IndexedDB:', error);
-      return this.silentFallbackToLocalStorage<Series[]>('seriesLibrary', []);
+      // No longer fallback to localStorage
+      return [];
     }
   }
 
   /**
    * Get a series by its ID with enhanced error handling
    * 
-   * In accordance with the hybrid storage model, this method checks localStorage first
-   * as it is the primary source of truth for series data in the UI.
+   * Uses IndexedDB as the sole source of truth for series data.
    */
   async getSeriesById(id: string): Promise<Series | undefined> {
-    // First check localStorage since it's the primary source of truth for series in the UI
-    try {
-      const seriesLibraryJson = localStorage.getItem('seriesLibrary');
-      if (seriesLibraryJson) {
-        const seriesLibrary = JSON.parse(seriesLibraryJson) as Series[];
-        const localStorageSeries = seriesLibrary.find(s => s.id === id);
-        if (localStorageSeries) {
-          return localStorageSeries;
-        }
-        // If not found in localStorage, continue to check IndexedDB
-      }
-    } catch (localStorageError) {
-      console.warn(`Failed to get series ${id} from localStorage:`, localStorageError);
-      // Continue to IndexedDB as fallback
-    }
-    
-    // If not in localStorage or localStorage access failed, try IndexedDB with retry
     try {
       return await withRetry(
         async () => {
@@ -315,22 +296,6 @@ export class IndexedDBService {
             return undefined;
           }
           
-          // If found in IndexedDB but not in localStorage, update localStorage
-          // to maintain the hybrid storage model consistency
-          try {
-            const seriesLibraryJson = localStorage.getItem('seriesLibrary');
-            if (seriesLibraryJson) {
-              const seriesLibrary = JSON.parse(seriesLibraryJson) as Series[];
-              if (!seriesLibrary.some(s => s.id === id)) {
-                seriesLibrary.push(series);
-                localStorage.setItem('seriesLibrary', JSON.stringify(seriesLibrary));
-              }
-            }
-          } catch (syncError) {
-            console.warn('Failed to sync series to localStorage:', syncError);
-            // Non-critical error, continue with returning the series
-          }
-          
           return series;
         },
         { maxRetries: 2, initialDelay: 100 }
@@ -341,18 +306,15 @@ export class IndexedDBService {
       ErrorTelemetry.logError(classifiedError, true, { operation: 'getSeriesById', seriesId: id });
       
       console.error(`Failed to get series ${id} from IndexedDB:`, classifiedError);
-      
-      // Last resort: try one more time with localStorage recovery
-      const series = RecoveryStrategies.localStorageFallback<Series[]>('seriesLibrary', []);
-      return series.find(s => s.id === id);
+      return undefined;
     }
   }
 
   /**
-   * Save a series (create or update) with enhanced error handling and hybrid storage support
+   * Save a series (create or update) with enhanced error handling
    * 
-   * This method ensures that series data is properly saved to both localStorage (primary for UI)
-   * and IndexedDB (for persistence), with retries and proper error classification.
+   * This method ensures that series data is properly saved to IndexedDB
+   * with retries and proper error classification.
    */
   async saveSeries(series: Series): Promise<string> {
     // Set last modified timestamp
@@ -361,31 +323,7 @@ export class IndexedDBService {
       lastModified: new Date().toISOString()
     };
     
-    // First update localStorage as it's the primary source of truth for series in UI
-    try {
-      const seriesLibraryJson = localStorage.getItem('seriesLibrary');
-      let seriesLibrary: Series[] = [];
-      
-      if (seriesLibraryJson) {
-        seriesLibrary = JSON.parse(seriesLibraryJson);
-      }
-      
-      // Find and update or add the series
-      const existingIndex = seriesLibrary.findIndex(s => s.id === series.id);
-      if (existingIndex >= 0) {
-        seriesLibrary[existingIndex] = seriesToSave;
-      } else {
-        seriesLibrary.push(seriesToSave);
-      }
-      
-      localStorage.setItem('seriesLibrary', JSON.stringify(seriesLibrary));
-    } catch (localStorageError) {
-      console.warn(`Failed to save series ${series.id} to localStorage:`, localStorageError);
-      // Continue to IndexedDB even if localStorage fails
-      // This is non-critical since we're about to attempt saving to IndexedDB
-    }
-    
-    // Now save to IndexedDB with retry logic
+    // Save to IndexedDB with retry logic
     try {
       await withRetry(
         async () => {
@@ -411,7 +349,7 @@ export class IndexedDBService {
       let errorMessage = 'Failed to save series.';
       
       if (classifiedError instanceof DatabaseConnectionError) {
-        errorMessage = 'Cannot connect to database. Series saved locally but may not persist if you clear browser data.';
+        errorMessage = 'Cannot connect to database. Unable to save series.';
       } else if (classifiedError instanceof TransactionError) {
         errorMessage = 'Database transaction failed. Please try again.';
       } else if (classifiedError instanceof StorageQuotaError) {
@@ -426,29 +364,11 @@ export class IndexedDBService {
   /**
    * Delete a series and update any associated books
    * 
-   * IMPORTANT: Since IndexedDB is the primary source of truth, we need to ensure
-   * the series is removed from localStorage as well to prevent resyncing.
+   * Uses IndexedDB as the sole source of truth for series data.
    */
   async deleteSeries(seriesId: string): Promise<void> {
     try {
-      // First remove from localStorage to prevent resyncing
-      try {
-        const seriesLibraryJson = localStorage.getItem('seriesLibrary');
-        if (seriesLibraryJson) {
-          const seriesLibrary = JSON.parse(seriesLibraryJson);
-          const filteredSeries = seriesLibrary.filter((s: any) => s.id !== seriesId);
-          localStorage.setItem('seriesLibrary', JSON.stringify(filteredSeries));
-        }
-        
-        // Also clear any other series-related localStorage items for this series
-        localStorage.removeItem(`seriesCache_${seriesId}`);
-        localStorage.removeItem(`seriesMetadata_${seriesId}`);
-      } catch (localStorageError) {
-        console.warn(`Error removing series ${seriesId} from localStorage:`, localStorageError);
-        // Continue with IndexedDB deletion even if localStorage fails
-      }
-      
-      // Now handle IndexedDB deletion with retry mechanism
+      // Handle IndexedDB deletion with retry mechanism
       await withRetry(async () => {
         const db = await this.initDb();
         
@@ -490,18 +410,7 @@ export class IndexedDBService {
     }
   }
 
-  /**
-   * Silent fallback to localStorage for read operations
-   * Used when IndexedDB operations fail
-   */
-  private silentFallbackToLocalStorage<T>(key: string, defaultValue: T): T {
-    try {
-      const data = localStorage.getItem(key);
-      return data ? JSON.parse(data) : defaultValue;
-    } catch (e) {
-      return defaultValue;
-    }
-  }
+  // This method was removed as part of migration away from localStorage
 
   /**
    * Close the database connection
