@@ -79,41 +79,13 @@ const OPEN_LIBRARY_BOOK_SEARCHES = [
 const getRandomCompletionDate = (): string => {
   const now = new Date();
   // Random date between now and 3 months ago
-  const threeMonthsAgo = new Date();
+  const threeMonthsAgo = new Date(now);
   threeMonthsAgo.setMonth(now.getMonth() - 3);
   
   const randomTimestamp = threeMonthsAgo.getTime() + 
     Math.random() * (now.getTime() - threeMonthsAgo.getTime());
   
-  const dateString = new Date(randomTimestamp).toISOString();
-  console.log('Generated completion date:', dateString);
-  return dateString;
-};
-
-// Helper to ensure we use the same date for both completedDate and dateCompleted fields
-const getCompletionDateForStatus = (status: string): string | undefined => {
-  if (status === 'completed') {
-    return getRandomCompletionDate();
-  }
-  return undefined;
-};
-
-// Generate a random rating between 1-5 stars
-// For completed books, always generate a rating
-// For reading books, 50% chance of having a rating
-// For want-to-read books, no rating
-const getRandomRatingForStatus = (status: string): number | undefined => {
-  if (status === 'completed') {
-    // Completed books always get a rating between 1-5
-    return Math.floor(Math.random() * 5) + 1;
-  } else if (status === 'reading') {
-    // Reading books have 50% chance of having a rating
-    if (Math.random() > 0.5) {
-      return Math.floor(Math.random() * 5) + 1;
-    }
-  }
-  // Want-to-read books don't get ratings
-  return undefined;
+  return new Date(randomTimestamp).toISOString();
 };
 
 // Series definitions to create
@@ -124,7 +96,7 @@ const SERIES_DEFINITIONS = [
     description: 'Epic high-fantasy novels set in the world of Middle-earth',
     genre: ['fantasy'],
     status: 'completed',
-    searchTerms: ['Fellowship of the Ring', 'Two Towers', 'Return of the King']
+    searchTerms: ['Fellowship of the Ring', 'Two Towers', 'Return of the King', 'Hobbit', 'Silmarillion']
   },
   {
     name: 'Mistborn',
@@ -135,7 +107,7 @@ const SERIES_DEFINITIONS = [
     searchTerms: ['Final Empire', 'Well of Ascension', 'Hero of Ages']
   },
   {
-    name: 'The Stormlight Archive',
+    name: 'Stormlight Archive',
     author: 'Brandon Sanderson',
     description: 'Epic fantasy series set on the world of Roshar',
     genre: ['fantasy'],
@@ -145,7 +117,7 @@ const SERIES_DEFINITIONS = [
   {
     name: 'Foundation',
     author: 'Isaac Asimov',
-    description: 'Science fiction series about the decline and fall of a galactic empire',
+    description: 'Science fiction series chronicling the decline and rebirth of a galactic empire',
     genre: ['science fiction'],
     status: 'completed',
     searchTerms: ['Foundation']
@@ -169,18 +141,18 @@ const SERIES_DEFINITIONS = [
   {
     name: 'The Wheel of Time',
     author: 'Robert Jordan',
-    description: 'Epic fantasy series set in a world where magic exists but can only be used by women',
+    description: 'Epic fantasy series spanning fourteen books',
     genre: ['fantasy'],
     status: 'completed',
-    searchTerms: ['Eye of the World', 'Great Hunt', 'Dragon Reborn']
+    searchTerms: ['Eye of the World', 'Great Hunt', 'Dragon Reborn', 'Shadow Rising', 'Fires of Heaven']
   },
   {
     name: 'The Chronicles of Narnia',
     author: 'C.S. Lewis',
-    description: 'Fantasy series set in the magical land of Narnia',
+    description: 'Fantasy series following the adventures of children in the magical world of Narnia',
     genre: ['fantasy'],
     status: 'completed',
-    searchTerms: ['Lion, the Witch', 'Prince Caspian', 'Dawn Treader']
+    searchTerms: ['Narnia', 'Lion, the Witch and the Wardrobe', 'Prince Caspian', 'Dawn Treader']
   },
   {
     name: 'A Song of Ice and Fire',
@@ -202,58 +174,56 @@ interface TestResult {
  * Workflow Tester Component
  * Tests multiple workflows by adding books from different API providers and creating series
  */
-export function WorkflowTester() {
+export default function WorkflowTester() {
   const [running, setRunning] = useState(false);
-  const [progress, setProgress] = useState(0);
   const [results, setResults] = useState<TestResult[]>([]);
+  const [progress, setProgress] = useState(0);
   const [allBooks, setAllBooks] = useState<Book[]>([]);
   const [seriesMap, setSeriesMap] = useState<Record<string, string[]>>({});
-  
+
   // Helper to add test result
   const addResult = (step: string, success: boolean, message: string) => {
     setResults(prev => [...prev, { step, success, message }]);
   };
-  
+
   // Run the complete workflow test
   const runWorkflowTest = async () => {
-    // Reset previous state
     setRunning(true);
-    setProgress(0);
     setResults([]);
-    setAllBooks([]);
-    setSeriesMap({});
+    setProgress(0);
     
     try {
-      addResult("Test Started", true, "Starting workflow test");
+      // Initialize storage
+      addResult("Initialization", true, "Starting workflow test...");
+      await enhancedStorageService.initialize();
       
-      // Step 1: Add books from Google Books API
-      addResult("Step 1", true, "Adding books from Google Books API");
-      const googleBooks = await addBooksFromGoogleAPI();
+      // Step 1: Add 25 books from Google Books API
+      setProgress(5);
+      await addBooksFromGoogleAPI();
       
-      // Step 2: Add books from Open Library API
-      addResult("Step 2", true, "Adding books from Open Library API");
-      const openLibraryBooks = await addBooksFromOpenLibrary();
+      // Step 2: Add 25 books from Open Library API
+      setProgress(50);
+      await addBooksFromOpenLibrary();
       
       // Step 3: Create series and assign books
-      addResult("Step 3", true, "Creating series and assigning books");
+      setProgress(90);
       await createAndAssignSeries();
       
-      // Step 4: Verify data consistency
-      addResult("Step 4", true, "Verifying data consistency");
+      // Final step: Verify data
+      setProgress(95);
       await verifyData();
       
-      // Test completed
-      addResult("Test Completed", true, `Successfully added ${googleBooks.length + openLibraryBooks.length} books and ${Object.keys(seriesMap).length} series`);
+      setProgress(100);
+      addResult("Complete", true, "Workflow test completed successfully!");
       
     } catch (error) {
-      console.error("Test failed:", error);
-      addResult("Test Failed", false, `${error instanceof Error ? error.message : String(error)}`);
+      console.error("Workflow test failed:", error);
+      addResult("Error", false, `Test failed: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setRunning(false);
-      setProgress(100);
     }
   };
-  
+
   // Add 25 books from Google Books API
   const addBooksFromGoogleAPI = async () => {
     addResult("Google Books", true, "Adding books from Google Books API...");
@@ -296,7 +266,6 @@ export function WorkflowTester() {
         // Books 5-14 as "completed"
         else if (i >= 5 && i < 15) {
           status = 'completed';
-          console.log(`Google book ${i+1} (${query}) will be marked as completed`);
         }
 
         // Ensure required fields are set with correct types
@@ -305,13 +274,7 @@ export function WorkflowTester() {
           status,
           isPartOfSeries: bookDetails.isPartOfSeries || false,
           spineColor: bookDetails.spineColor || Math.floor(Math.random() * 8) + 1,
-          addedDate: bookDetails.addedDate || new Date().toISOString(),
-          // Add completion date for completed books
-          completedDate: getCompletionDateForStatus(status),
-          // Also set dateCompleted for the adapter layer
-          dateCompleted: getCompletionDateForStatus(status),
-          // Add rating based on reading status
-          rating: getRandomRatingForStatus(status)
+          addedDate: bookDetails.addedDate || new Date().toISOString()
         };
         
         // Save to IndexedDB
@@ -376,7 +339,6 @@ export function WorkflowTester() {
         // Books 5-14 as "completed"
         else if (i >= 5 && i < 15) {
           status = 'completed';
-          console.log(`Open Library book ${i+1} (${query}) will be marked as completed`);
         }
 
         // Ensure required fields are set with correct types
@@ -385,13 +347,7 @@ export function WorkflowTester() {
           status,
           isPartOfSeries: bookDetails.isPartOfSeries || false,
           spineColor: bookDetails.spineColor || Math.floor(Math.random() * 8) + 1,
-          addedDate: bookDetails.addedDate || new Date().toISOString(),
-          // Add completion date for completed books
-          completedDate: getCompletionDateForStatus(status),
-          // Also set dateCompleted for the adapter layer
-          dateCompleted: getCompletionDateForStatus(status),
-          // Add rating based on reading status
-          rating: getRandomRatingForStatus(status)
+          addedDate: bookDetails.addedDate || new Date().toISOString()
         };
         
         // Save to IndexedDB
@@ -416,24 +372,21 @@ export function WorkflowTester() {
 
   // Create series and assign books to them
   const createAndAssignSeries = async () => {
-    addResult("Series Creation", true, "Creating series from books...");
+    addResult("Series Creation", true, "Creating series and assigning books...");
+    const allBooks = await enhancedStorageService.getBooks();
     const newSeriesMap: Record<string, string[]> = {};
     
-    // Get all books
-    const allStoredBooks = await enhancedStorageService.getBooks();
-    
-    // Create each series
     for (const seriesDef of SERIES_DEFINITIONS) {
       try {
-        // Find books that match this series
-        const seriesBooks = allStoredBooks.filter(book => 
+        // Find books that belong to this series
+        const seriesBooks = allBooks.filter(book => 
           seriesDef.searchTerms.some(term => 
             book.title.toLowerCase().includes(term.toLowerCase())
           )
         );
         
         if (seriesBooks.length === 0) {
-          addResult(`Series: ${seriesDef.name}`, false, "No books found for this series");
+          addResult(`Series: ${seriesDef.name}`, false, `No books found for series "${seriesDef.name}"`);
           continue;
         }
         
@@ -480,27 +433,150 @@ export function WorkflowTester() {
       const books = await enhancedStorageService.getBooks();
       const series = await seriesService.getAllSeries();
       
-      addResult("Data Verification", true, `Found ${books.length} books and ${series.length} series in the database`);
+      addResult("Data Verification", true, 
+        `Successfully verified data: ${books.length} books and ${series.length} series in the database`);
     } catch (error) {
-      console.error("Data verification error:", error);
       addResult("Data Verification", false, 
         `Data verification failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   };
 
-  return (
-    <div className="space-y-6">
-      <div className="bg-white p-6 rounded-lg shadow">
-        <h2 className="text-2xl font-bold mb-4">Workflow Tester</h2>
-        <p className="text-gray-600 mb-4">
-          This tool will add 50 books (25 from Google Books API and 25 from Open Library API) and create series from them.
-          It also assigns reading statuses and completion dates to simulate a realistic collection.
-        </p>
-        
-        <div className="flex items-center">
-          <Button 
-            onClick={runWorkflowTest} 
-            disabled={running}
+} catch (error) {
+  console.error(`Error adding Google book ${i + 1}:`, error);
+  addResult(`Google Book ${i + 1}`, false, `Failed: ${error instanceof Error ? error.message : String(error)}`);
+}
+
+setAllBooks(prev => [...prev, ...books]);
+return books;
+};
+
+// Add 25 books from Open Library API
+const addBooksFromOpenLibrary = async () => {
+addResult("Open Library", true, "Adding books from Open Library API...");
+const books: Book[] = [];
+
+for (let i = 0; i < OPEN_LIBRARY_BOOK_SEARCHES.length; i++) {
+  try {
+    const { query, type } = OPEN_LIBRARY_BOOK_SEARCHES[i];
+            
+    // Search for the book
+    const searchResult = await openLibraryProvider.searchBooks({
+      query, 
+      type: type as any,
+      limit: 1
+    });
+            
+    if (searchResult.books.length === 0) {
+      addResult(`Open Library Book ${i + 1}`, false, `No results found for "${query}"`);
+      continue;
+    }
+            
+    // Get the first book's details
+    const bookItem = searchResult.books[0];
+    const bookDetails = await openLibraryProvider.getBookDetails(bookItem.id);
+            
+    // Mark as part of series if applicable
+    bookDetails.isPartOfSeries = SERIES_DEFINITIONS.some(series => 
+      series.searchTerms.some(term => 
+        bookDetails.title.toLowerCase().includes(term.toLowerCase())
+      )
+
+      // Search for the book
+      const searchResult = await openLibraryProvider.searchBooks({
+        query,
+        type: type as any,
+        limit: 1
+    // Ensure required fields are set with correct types
+    const bookToSave = {
+      ...bookDetails,
+      status,
+      isPartOfSeries: bookDetails.isPartOfSeries || false,
+      spineColor: bookDetails.spineColor || Math.floor(Math.random() * 8) + 1,
+      addedDate: bookDetails.addedDate || new Date().toISOString()
+    };
+            
+    // Save to IndexedDB
+    const bookId = await enhancedStorageService.saveBook(bookToSave);
+    const addedBook = { ...bookToSave, id: bookId };
+    books.push(addedBook);
+            
+    addResult(`Open Library Book ${i + 1}`, true, `Added "${addedBook.title}" by ${addedBook.author}`);
+            
+    // Update progress
+    setProgress(50 + (i + 1) * 1.6); // Adjusted for 25 books
+            
+  } catch (error) {
+    console.error(`Error adding Open Library book ${i + 1}:`, error);
+    addResult(`Open Library Book ${i + 1}`, false, `Failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+setAllBooks(prev => [...prev, ...books]);
+return books;
+};
+
+// Create series and assign books to them
+const createAndAssignSeries = async () => {
+addResult("Series Creation", true, "Creating series and assigning books...");
+const allBooks = await enhancedStorageService.getBooks();
+const newSeriesMap: Record<string, string[]> = {};
+            
+for (const seriesDef of SERIES_DEFINITIONS) {
+  try {
+    // Find books that belong to this series
+    const seriesBooks = allBooks.filter(book => 
+      seriesDef.searchTerms.some(term => 
+        book.title.toLowerCase().includes(term.toLowerCase())
+      )
+    );
+            
+    if (seriesBooks.length === 0) {
+      addResult(`Series: ${seriesDef.name}`, false, `No books found for series "${seriesDef.name}"`);
+      continue;
+    }
+            
+    // Create the series
+    const newSeries = await seriesService.createSeries({
+      name: seriesDef.name,
+      author: seriesDef.author,
+      description: seriesDef.description,
+      books: seriesBooks.map(book => book.id),
+      genre: seriesDef.genre,
+      status: seriesDef.status as any,
+      readingOrder: 'publication',
+      totalBooks: seriesBooks.length,
+      coverImage: seriesBooks[0].thumbnail,
+      isTracked: true,
+      hasUpcoming: false
+    });
+            
+    newSeriesMap[newSeries.id] = seriesBooks.map(book => book.id);
+            
+    // Update the books to reference the series
+    for (const book of seriesBooks) {
+      await enhancedStorageService.saveBook({
+        ...book,
+        isPartOfSeries: true
+      });
+    }
+            
+    addResult(`Series: ${seriesDef.name}`, true, `Created series "${seriesDef.name}" with ${seriesBooks.length} books`);
+            
+  } catch (error) {
+    console.error(`Error creating series ${seriesDef.name}:`, error);
+    addResult(`Series: ${seriesDef.name}`, false, `Failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+setSeriesMap(newSeriesMap);
+};
+
+// Verify data consistency
+const verifyData = async () => {
+try {
+  // Check that all books are in the database
+  const books = await enhancedStorageService.getBooks();
+  const series = await seriesService.getAllSeries();
             size="lg"
           >
             {running ? 'Running Test...' : 'Run Complete Workflow Test'}
@@ -569,21 +645,6 @@ export function WorkflowTester() {
                         {book.status === 'reading' ? 'Reading' : 
                          book.status === 'completed' ? 'Completed' : 'Want to Read'}
                       </Badge>
-                      {book.completedDate && (
-                        <Badge variant="outline" className="ml-1">
-                          Completed: {new Date(book.completedDate).toLocaleDateString()}
-                        </Badge>
-                      )}
-                      {!book.completedDate && book.status === 'completed' && (
-                        <Badge variant="outline" className="ml-1 bg-yellow-100">
-                          Missing completion date
-                        </Badge>
-                      )}
-                      {book.rating && (
-                        <Badge variant="secondary" className="ml-1">
-                          Rating: {book.rating}★
-                        </Badge>
-                      )}
                     </div>
                   </div>
                 </div>
@@ -595,5 +656,3 @@ export function WorkflowTester() {
     </div>
   );
 }
-
-export default WorkflowTester;

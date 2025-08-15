@@ -23,6 +23,7 @@ export interface Book {
   completedDate?: string;
   rating?: number; // 1-5 stars
   notes?: string;
+  progress?: number; // Reading progress as a number between 0 and 1
   
   // Series fields - enhanced for new series feature
   isPartOfSeries: boolean;

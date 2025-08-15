@@ -17,10 +17,11 @@ A modern web application for tracking and managing your personal book collection
 - **Customization**: Personalize your bookshelf with different color palettes
 - **Enhanced Search**: Advanced search capabilities with fuzzy matching and field-specific filtering
 - **Import/Export**: Import and export your collection in CSV or JSON format with series relationship preservation
-- **Data Persistence**: All data is stored in IndexedDB for reliable offline access
+- **Data Persistence**: All data is stored exclusively in IndexedDB for reliable offline access
   - Full offline support after initial load
   - Efficient indexed queries for large collections
   - Robust error handling and recovery
+  - Complete migration from localStorage (legacy) to IndexedDB
 
 ### Customization
 - **Personalization**: Customize your bookshelf with different color palettes
@@ -36,6 +37,7 @@ A modern web application for tracking and managing your personal book collection
   - Optimized schema with appropriate indexes
   - Transaction-based operations for data integrity
   - Efficient caching strategies
+  - No localStorage dependencies for core functionality
 - **External APIs**: Google Books API and Open Library API integration
 - **Build Tools**: Vite
 
@@ -109,8 +111,8 @@ The application is fully compatible with Windows. If you're using Windows, follo
 ### Admin and Debug Pages
 - **/admin** - Admin dashboard with comprehensive debug tools:
   - Database Viewer - View and manage IndexedDB data stores
-  - Data Migration - Tools for migrating between storage systems
-  - Database Reset - Reset database to a clean state
+  - Data Migration - Tools for migrating legacy localStorage data to IndexedDB
+  - Database Reset - Reset database components (IndexedDB primary, localStorage legacy)
   - Workflow Tester - Comprehensive test that adds 50 books from multiple APIs, creates series relationships, and sets various reading statuses
 
 ## Customization
@@ -187,9 +189,10 @@ The application is currently undergoing these major improvements:
    - Intelligent data merging with conflict resolution
 
 3. **IndexedDB Optimization**:
-   - Fully migrated from localStorage to IndexedDB for all data
+   - ✅ Completed migration from localStorage to IndexedDB as exclusive source of truth
    - Enhanced query performance with strategic indexes
-   - Better error handling and recovery mechanisms
+   - Improved error handling and recovery mechanisms
+   - Clear UI indicators showing IndexedDB as primary storage
 
 4. **Improved Testing Infrastructure**:
    - New WorkflowTester component for comprehensive integration testing

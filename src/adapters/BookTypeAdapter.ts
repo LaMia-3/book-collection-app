@@ -67,7 +67,9 @@ export function convertDbBookToUiBook(dbBook: DBBook): UIBook {
     // Ensure isPartOfSeries is defined (required in UIBook)
     isPartOfSeries: dbBook.isPartOfSeries || false,
     // Use addedDate if present, otherwise use dateAdded
-    addedDate: dbBook.addedDate || dbBook.dateAdded
+    addedDate: dbBook.addedDate || dbBook.dateAdded,
+    // Map dateCompleted to completedDate
+    completedDate: dbBook.dateCompleted || dbBook.completedDate
   };
 }
 

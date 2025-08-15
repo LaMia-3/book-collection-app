@@ -101,6 +101,26 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
   const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
   const [showMetadataInfo, setShowMetadataInfo] = useState(false);
   const [seriesDetectionResult, setSeriesDetectionResult] = useState<any>(null);
+  // Format date for HTML date input (YYYY-MM-DD)
+  const formatDateForInput = (dateString?: string): string => {
+    if (!dateString) return "";
+    
+    try {
+      // Parse the date string
+      const date = new Date(dateString);
+      if (!isValid(date)) return "";
+      
+      // Format as YYYY-MM-DD
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    } catch (error) {
+      console.error("Error formatting date for input:", error);
+      return "";
+    }
+  };
+
   // Parse date from string
   const parseDate = (dateString?: string): Date | undefined => {
     if (!dateString) return undefined;
@@ -1302,7 +1322,7 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
               <Input
                 id="completedDate"
                 type="date"
-                value={editedBook.completedDate || ""}
+                value={formatDateForInput(editedBook.completedDate) || ""}
                 disabled={editedBook.status === 'want-to-read'}
                 onChange={(e) =>
                   setEditedBook({ ...editedBook, completedDate: e.target.value })

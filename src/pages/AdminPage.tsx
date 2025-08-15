@@ -3,6 +3,8 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ArrowLeft, Database, AlertCircle, Trash2, RefreshCw, Settings, Server, CheckCircle2, Wrench, Zap } from "lucide-react";
 import { useToast } from '@/hooks/use-toast';
 
@@ -12,16 +14,12 @@ import WorkflowTester from '@/components/debug/WorkflowTester';
 import { resetIndexedDB, resetLocalStorage, resetAllStorage } from '@/utils/ResetDatabaseUtil';
 import { migrateDataToIndexedDB, isMigrationNeeded } from '@/utils/DataMigrationUtil';
 
-// Import UI components
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-
 // Import services
 import { databaseService } from '@/services/DatabaseService';
 import { seriesService } from '@/services/SeriesService';
 import { upcomingReleasesService } from '@/services/UpcomingReleasesService';
 import { notificationService } from '@/services/NotificationService';
 import { readingOrderService } from '@/services/ReadingOrderService';
-import { Badge } from '@/components/ui/badge';
 
 // Interface for migration report
 interface MigrationReport {
@@ -53,9 +51,12 @@ export default function AdminPage() {
   const [resetType, setResetType] = useState<'indexeddb' | 'localstorage' | 'all' | null>(null);
   
   // Data migration state
+  // Migration state
   const [isMigrating, setIsMigrating] = useState(false);
   const [migrationNeeded, setMigrationNeeded] = useState<boolean | null>(null);
   const [report, setReport] = useState<MigrationReport | null>(null);
+  
+  // Storage statistics state
   const [localStorageStats, setLocalStorageStats] = useState<{ books: number; series: number }>({ books: 0, series: 0 });
   const [indexedDBStats, setIndexedDBStats] = useState<{ books: number; series: number }>({ books: 0, series: 0 });
   
