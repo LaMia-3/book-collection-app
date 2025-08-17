@@ -14,6 +14,7 @@ import SeriesPage from "./pages/SeriesPage";
 import SeriesDetailPage from "./pages/SeriesDetailPage";
 // TestBackendPage has been integrated into AdminPage as a tab
 import AdminPage from "./pages/AdminPage";
+// StatisticsPage removed - functionality moved to Reading Insights tab
 import NotFound from "./pages/NotFound";
 import LocalStorageCheck from "./components/debug/LocalStorageCheck";
 // IndexedDBTester component is now used within AdminPage
@@ -36,6 +37,7 @@ const App = () => (
                   <Route path="/" element={<Index />} />
                   <Route path="/series" element={<SeriesPage />} />
                   <Route path="/series/:seriesId" element={<SeriesDetailPage />} />
+                  {/* Statistics page route removed - functionality moved to Reading Insights tab */}
                   <Route path="/test-backend" element={<Navigate to="/admin?tab=backend-test" replace />} />
                   <Route path="/admin" element={<AdminPage />} />
                   <Route path="/test-indexeddb" element={<Navigate to="/admin?tab=indexeddb-test" replace />} />

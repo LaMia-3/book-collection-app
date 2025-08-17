@@ -88,14 +88,24 @@ describe('Genre Utils', () => {
   });
 
   describe('genresToDisplayString', () => {
-    test('should join array with commas', () => {
+    test('should join array with forward slashes', () => {
       const result = genresToDisplayString(['Fiction', 'Mystery', 'Thriller']);
-      expect(result).toBe('Fiction, Mystery, Thriller');
+      expect(result).toBe('Fiction / Mystery / Thriller');
     });
 
     test('should handle empty array', () => {
       const result = genresToDisplayString([]);
-      expect(result).toBe('No genres specified');
+      expect(result).toBe('Uncategorized');
+    });
+    
+    test('should handle null input', () => {
+      const result = genresToDisplayString(null as any);
+      expect(result).toBe('Uncategorized');
+    });
+    
+    test('should handle undefined input', () => {
+      const result = genresToDisplayString(undefined as any);
+      expect(result).toBe('Uncategorized');
     });
     
     test('should log the conversion process', () => {

@@ -64,12 +64,16 @@ describe('GenreDisplay Component', () => {
     expect(badges[2].textContent).toBe('Thriller');
     
     // Verify logging
-    expect(mockDebug).toHaveBeenCalledWith('Rendering genre display', { genreType: 'object' });
+    expect(mockDebug).toHaveBeenCalledWith('Rendering genre display', expect.objectContaining({ 
+      genreType: 'object'
+    }));
     expect(mockTrace).toHaveBeenCalledWith('Standardized genres', { 
       genreCount: 3, 
       genres: ['Fiction', 'Mystery', 'Thriller']
     });
-    expect(mockDebug).toHaveBeenCalledWith('Rendering genres', { count: 3 });
+    expect(mockDebug).toHaveBeenCalledWith('Rendering genres', expect.objectContaining({ 
+      total: 3
+    }));
   });
   
   test('handles string input with comma separator', () => {
@@ -79,7 +83,9 @@ describe('GenreDisplay Component', () => {
     expect(badges).toHaveLength(3);
     
     // Verify logging for string input
-    expect(mockDebug).toHaveBeenCalledWith('Rendering genre display', { genreType: 'string' });
+    expect(mockDebug).toHaveBeenCalledWith('Rendering genre display', expect.objectContaining({ 
+      genreType: 'string' 
+    }));
   });
   
   test('handles string input with slash separator', () => {
@@ -89,21 +95,21 @@ describe('GenreDisplay Component', () => {
     expect(badges).toHaveLength(3);
   });
   
-  test('displays message when no genres are provided', () => {
+  test('displays "Uncategorized" when no genres are provided', () => {
     render(<GenreDisplay genres={[]} />);
     
     expect(screen.queryByTestId('badge')).not.toBeInTheDocument();
-    expect(screen.getByText('No genres specified')).toBeInTheDocument();
+    expect(screen.getByText('Uncategorized')).toBeInTheDocument();
     
     // Verify logging for empty input
     expect(mockDebug).toHaveBeenCalledWith('No genres to display');
   });
   
-  test('displays message when empty string is provided', () => {
+  test('displays "Uncategorized" when empty string is provided', () => {
     render(<GenreDisplay genres="" />);
     
     expect(screen.queryByTestId('badge')).not.toBeInTheDocument();
-    expect(screen.getByText('No genres specified')).toBeInTheDocument();
+    expect(screen.getByText('Uncategorized')).toBeInTheDocument();
   });
   
   test('applies custom className when provided', () => {
@@ -113,15 +119,58 @@ describe('GenreDisplay Component', () => {
     expect(container).toHaveClass('custom-class');
   });
   
-  test('logs the appropriate messages during rendering', () => {
+    test('logs the appropriate messages during rendering', () => {
     render(<GenreDisplay genres={['Fiction', 'Mystery']} />);
     
     // Check for all expected log calls
     expect(mockDebug).toHaveBeenCalledWith('Rendering genre display', expect.any(Object));
     expect(mockTrace).toHaveBeenCalledWith('Standardized genres', expect.any(Object));
     expect(mockDebug).toHaveBeenCalledWith('Rendering genres', expect.any(Object));
+  });
+
+  test('truncates genres when maxDisplay is set', () => {
+    render(<GenreDisplay 
+      genres={['Fiction', 'Mystery', 'Thriller', 'Adventure', 'Horror']} 
+      maxDisplay={2} 
+    />);
     
-    // Verify log message with genre count
-    expect(mockDebug).toHaveBeenCalledWith('Rendering genres', { count: 2 });
+    const badges = screen.getAllByTestId('badge');
+    expect(badges).toHaveLength(3); // 2 genres + 1 "+ more" badge
+    expect(badges[0].textContent).toBe('Fiction');
+    expect(badges[1].textContent).toBe('Mystery');
+    expect(badges[2].textContent).toBe('+3 more');
+  });
+  
+  test('renders text-only display when showBadges is false', () => {
+    render(<GenreDisplay 
+      genres={['Fiction', 'Mystery', 'Thriller']} 
+      showBadges={false} 
+    />);
+    
+    expect(screen.queryByTestId('badge')).not.toBeInTheDocument();
+    expect(screen.getByText('Fiction / Mystery / Thriller')).toBeInTheDocument();
+  });
+  
+  test('displays truncated text with "+more" when maxDisplay is set and showBadges is false', () => {
+    render(<GenreDisplay 
+      genres={['Fiction', 'Mystery', 'Thriller', 'Adventure']} 
+      maxDisplay={2} 
+      showBadges={false} 
+    />);
+    
+    expect(screen.getByText('Fiction / Mystery')).toBeInTheDocument();
+    expect(screen.getByText('(+2 more)')).toBeInTheDocument();
+  });
+  
+  test('adds appropriate accessibility attributes', () => {
+    render(<GenreDisplay genres={['Fiction', 'Mystery']} />);
+    
+    const container = screen.getAllByTestId('badge')[0].parentElement;
+    expect(container).toHaveAttribute('role', 'list');
+    expect(container).toHaveAttribute('aria-label', 'Book genres: Fiction / Mystery');
+    
+    const badges = screen.getAllByTestId('badge');
+    expect(badges[0]).toHaveAttribute('role', 'listitem');
+    expect(badges[1]).toHaveAttribute('role', 'listitem');
   });
 });

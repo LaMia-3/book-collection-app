@@ -76,13 +76,13 @@ export const normalizeGenreData = (genres: GenreData): string[] => {
 /**
  * Converts genre data to a display string
  * @param genres - The genre data to convert
- * @returns A comma-separated string of genres or "No genres" message
+ * @returns A forward slash-separated string of genres or "Uncategorized" message
  */
 export const genresToDisplayString = (genres: GenreData): string => {
   log.trace('Converting genres to display string');
   const genreArray = normalizeGenreData(genres);
   
-  const result = genreArray.length > 0 ? genreArray.join(', ') : 'No genres specified';
+  const result = genreArray.length > 0 ? genreArray.join(' / ') : 'Uncategorized';
   log.debug('Generated display string', { count: genreArray.length, result });
   
   return result;

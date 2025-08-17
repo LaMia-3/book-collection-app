@@ -1,14 +1,18 @@
 import React, { useState, useMemo } from 'react';
+import { usePalette } from '@/contexts/PaletteContext';
+import { InfoTooltip } from '@/components/InfoTooltip';
 import { 
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer 
 } from 'recharts';
 import { Book } from '@/types/book';
+import { Book as ModelBook, ReadingStatus } from '@/types/models/Book';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Select } from '@/components/ui/select';
 import { BarChart2, Calendar, BookOpen, LayoutGrid, FileText, Filter, Library } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { SeriesInsights } from '@/components/insights/SeriesInsights';
+import { GenreChart } from '@/components/GenreChart';
 import { createLogger } from '@/utils/loggingUtils';
 
 // Create a logger for the InsightsView component
@@ -17,11 +21,26 @@ const log = createLogger('InsightsView');
 const COLORS = ['#ff9f7f', '#7fd4ff', '#a992ff', '#ffcd7f', '#7fffb7', '#ff7fb4', '#7f7fff'];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
+/**
+ * Maps a Book from the app type to the ModelBook type expected by GenreChart
+ */
+const mapToModelBook = (book: Book): ModelBook => {
+  return {
+    ...book,
+    // Map status values to ReadingStatus enum
+    status: book.status === 'reading' ? ReadingStatus.READING :
+            book.status === 'completed' ? ReadingStatus.COMPLETED :
+            book.status === 'want-to-read' ? ReadingStatus.TO_READ : undefined,
+  } as ModelBook;
+};
+
 interface InsightsViewProps {
   books: Book[];
 }
 
 export const InsightsView: React.FC<InsightsViewProps> = ({ books }) => {
+  // Get the selected palette for theme colors
+  const { selectedPalette } = usePalette();
   // Tabs for switching between different insight sections
   const [activeTab, setActiveTab] = useState<'reading' | 'series'>('reading');
   // Get all available years from book completion dates
@@ -384,43 +403,41 @@ export const InsightsView: React.FC<InsightsViewProps> = ({ books }) => {
               </CardContent>
             </Card>
 
-            {/* Most read genres */}
+            {/* Most read genres - using GenreChart component */}
             <Card className="bg-card shadow-elegant">
-              <CardHeader>
-                <CardTitle className="text-lg font-serif">Most Read Genres</CardTitle>
-                <CardDescription>Top genres read in {selectedYear}</CardDescription>
+              <CardHeader className="flex flex-row items-start justify-between space-y-0">
+                <div>
+                  <CardTitle className="text-lg font-serif">Most Read Genres</CardTitle>
+                  <CardDescription>Top genres read in {selectedYear}</CardDescription>
+                </div>
+                <InfoTooltip 
+                  content={
+                    <div>
+                      <p>Books are counted once for each genre they belong to.</p>
+                      <p className="mt-1">For example, a book categorized as both "Fiction" and "Fantasy" will count as 1 book in each category.</p>
+                    </div>
+                  } 
+                />
               </CardHeader>
               <CardContent>
                 <div className="h-80 flex items-center justify-center">
-                  {genreData.length > 0 ? (
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={genreData}
-                          cx="50%"
-                          cy="50%"
-                          outerRadius={80}
-                          fill="#8884d8"
-                          dataKey="value"
-                          nameKey="name"
-                          label={({ name, value }) => `${name}: ${value}`}
-                          labelLine={false}
-                        >
-                          {genreData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                          ))}
-                        </Pie>
-                        <Tooltip
-                          formatter={(value) => [`${value} books`, 'Read']}
-                          contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.8)', borderRadius: '6px' }}
-                        />
-                        <Legend />
-                      </PieChart>
-                    </ResponsiveContainer>
+                  {completedBooksInYear.length > 0 ? (
+                    <GenreChart 
+                      books={completedBooksInYear.map(mapToModelBook)}
+                      title=""
+                      height={260}
+                      topGenres={8}
+                    />
                   ) : (
                     <p className="text-muted-foreground text-center">No genre data available for {selectedYear}</p>
                   )}
                 </div>
+                {completedBooksInYear.length > 0 && (
+                  <p className="text-xs text-muted-foreground text-center mt-2 pb-2">
+                    {completedBooksInYear.length === 1 ? "1 book" : `${completedBooksInYear.length} books`} with genre data.
+                    {completedBooksInYear.length > 8 && " Only top 8 genres shown individually."}
+                  </p>
+                )}
               </CardContent>
             </Card>
 
@@ -573,8 +590,11 @@ export const InsightsView: React.FC<InsightsViewProps> = ({ books }) => {
                               className="w-full h-full object-cover rounded"
                             />
                           ) : (
-                            <div className={`w-full h-full flex items-center justify-center bg-spine-${book.spineColor} rounded`}>
-                              <span className="text-xs text-white text-center px-2">{book.title}</span>
+                            <div 
+                              className="w-full h-full flex items-center justify-center rounded" 
+                              style={{ backgroundColor: selectedPalette?.colors?.[0] || '#6366f1' }}
+                            >
+                              <span className="text-xs text-white text-center px-2"></span>
                             </div>
                           )}
                         </div>

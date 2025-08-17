@@ -5,13 +5,12 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { ArrowLeft, Database, AlertCircle, Trash2, RefreshCw, Settings, Server, CheckCircle2, Wrench, Zap, Bug } from "lucide-react";
+import { ArrowLeft, Database, AlertCircle, Trash2, RefreshCw, Settings, Server, CheckCircle2, Wrench, Zap } from "lucide-react";
 import { useToast } from '@/hooks/use-toast';
 
 // Import components and utilities
 import { IndexedDBViewer } from '@/components/debug/IndexedDBViewer';
 import WorkflowTester from '@/components/debug/WorkflowTester';
-import LoggingTester from '@/components/debug/LoggingTester';
 import { resetIndexedDB, resetLocalStorage, resetAllStorage } from '@/utils/ResetDatabaseUtil';
 import { migrateDataToIndexedDB, isMigrationNeeded } from '@/utils/DataMigrationUtil';
 
@@ -240,10 +239,6 @@ export default function AdminPage() {
           <TabsTrigger value="workflow-test" className="flex items-center gap-2">
             <Zap className="h-4 w-4" />
             <span>Workflow Test</span>
-          </TabsTrigger>
-          <TabsTrigger value="logging-test" className="flex items-center gap-2">
-            <Bug className="h-4 w-4" />
-            <span>Logging Test</span>
           </TabsTrigger>
         </TabsList>
 
@@ -597,20 +592,7 @@ export default function AdminPage() {
           </Card>
         </TabsContent>
 
-        {/* Logging Test Tab */}
-        <TabsContent value="logging-test">
-          <Card>
-            <CardHeader>
-              <CardTitle>Logging Configuration Tester</CardTitle>
-              <CardDescription>
-                Test the logging utility with different configurations to verify genre-related logs
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <LoggingTester />
-            </CardContent>
-          </Card>
-        </TabsContent>
+        {/* Workflow Test is now the last tab */}
       </Tabs>
     </div>
   );
