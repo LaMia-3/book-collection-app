@@ -9,6 +9,28 @@ const log = createLogger('GenreUtils');
 // Type definition for genre data (could be string or array)
 export type GenreData = string | string[] | undefined;
 
+// Acronyms that should remain all uppercase
+export const GENRE_ACRONYMS = [
+  'LGBT', 'LGBTQ', 'LGBTQ+', 'SF', 'YA', 'NA', 'DIY', '3D'
+];
+
+// Acronyms that should be expanded
+export const ACRONYM_EXPANSIONS: Record<string, string> = {
+  'YA': 'Young Adult',
+  'NA': 'New Adult',
+  'SF': 'Science Fiction',
+  'SFF': 'Science Fiction And Fantasy'
+};
+
+// Special case genres with custom formatting
+export const SPECIAL_CASE_GENRES: Record<string, string> = {
+  '19th century': '19th Century',
+  "children's": "Children's",
+  "children's books": "Children's Books",
+  "kid's": "Kid's",
+  "kid's books": "Kid's Books"
+};
+
 /**
  * Normalizes genre data to array format regardless of input format
  * @param genres - The genre data to normalize
@@ -125,3 +147,106 @@ export const editStringToGenreArray = (input: string): string[] => {
   return result;
 };
 
+/**
+ * Helper function to standardize a single word
+ * @param word - The word to standardize
+ * @returns Capitalized word
+ */
+export function standardizeSingleWord(word: string): string {
+  if (!word) return '';
+  return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+}
+
+/**
+ * Standardizes genre capitalization following the rules:
+ * - First letter of each word capitalized
+ * - Rest of word lowercase
+ * - Preserves acronyms from the exception list
+ * - Expands acronyms from the expansion list
+ * - Handles special cases with custom formatting
+ * 
+ * @param genre - The genre string to standardize
+ * @returns Standardized genre string
+ */
+export function standardizeGenre(genre: string): string {
+  const log = createLogger('standardizeGenre');
+  
+  // Handle null, undefined or empty string
+  if (!genre) {
+    log.trace('Empty genre, returning empty string');
+    return '';
+  }
+  
+  // Trim input
+  const trimmedGenre = genre.trim();
+  if (!trimmedGenre) return '';
+  
+  // Convert to uppercase for case-insensitive matching
+  const upperGenre = trimmedGenre.toUpperCase();
+  
+  // Check if genre should be expanded (highest priority)
+  if (Object.keys(ACRONYM_EXPANSIONS).includes(upperGenre)) {
+    log.debug(`Expanding acronym: ${genre} -> ${ACRONYM_EXPANSIONS[upperGenre]}`);
+    return ACRONYM_EXPANSIONS[upperGenre];
+  }
+  
+  // Check if genre is a known acronym that should be preserved
+  if (GENRE_ACRONYMS.includes(upperGenre)) {
+    log.debug(`Preserving acronym: ${genre} -> ${upperGenre}`);
+    return upperGenre;
+  }
+  
+  // Check if genre is a special case
+  const lowerGenre = trimmedGenre.toLowerCase();
+  if (Object.keys(SPECIAL_CASE_GENRES).includes(lowerGenre)) {
+    log.debug(`Applying special case format: ${genre} -> ${SPECIAL_CASE_GENRES[lowerGenre]}`);
+    return SPECIAL_CASE_GENRES[lowerGenre];
+  }
+  
+  // Handle hyphenated words
+  if (trimmedGenre.includes('-')) {
+    log.debug(`Processing hyphenated genre: ${genre}`);
+    return trimmedGenre.split('-')
+      .map(part => standardizeSingleWord(part))
+      .join('-');
+  }
+  
+  // Standard title case conversion
+  log.debug(`Standardizing genre: ${genre}`);
+  return trimmedGenre.split(' ')
+    .map(word => standardizeSingleWord(word))
+    .join(' ');
+}
+
+/**
+ * Standardizes all genres in an array
+ * @param genres - Array of genre strings to standardize
+ * @returns Array of standardized genre strings
+ */
+export function standardizeGenres(genres: string[]): string[] {
+  const log = createLogger('standardizeGenres');
+  
+  if (!genres || !Array.isArray(genres)) {
+    log.debug('No genres to standardize or invalid input');
+    return [];
+  }
+  
+  log.debug(`Standardizing ${genres.length} genres`);
+  return genres.map(genre => standardizeGenre(genre));
+}
+
+/**
+ * Standardizes genre data regardless of input format (string or array)
+ * @param genreData - The genre data to standardize
+ * @returns Standardized genre array
+ */
+export function standardizeGenreData(genreData: GenreData): string[] {
+  const log = createLogger('standardizeGenreData');
+  log.debug('Standardizing genre data', { input: genreData });
+  
+  // First normalize to array format
+  const normalizedGenres = normalizeGenreData(genreData);
+  
+  // Then standardize each genre
+  return standardizeGenres(normalizedGenres);
+}

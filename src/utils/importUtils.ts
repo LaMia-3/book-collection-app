@@ -2,7 +2,7 @@ import { Book } from '@/types/book';
 import { Book as ModelBook } from '@/types/models/Book';
 import { bookApiClient } from '@/services/api';
 import { createLogger } from './loggingUtils';
-import { normalizeGenreData } from './genreUtils';
+import { normalizeGenreData, standardizeGenreData } from './genreUtils';
 
 // Create a logger for import functionality
 const log = createLogger('ImportUtils');
@@ -203,7 +203,7 @@ function convertRawToBook(rawBook: RawBookImport): Partial<Book> {
     title: rawBook.title,
     author: rawBook.author || '',
     googleBooksId: rawBook.googleBooksId || rawBook.isbn, // Use ISBN as googleBooksId if available
-    genre: rawBook.genre ? normalizeGenreData(rawBook.genre) : undefined,
+    genre: rawBook.genre ? standardizeGenreData(rawBook.genre) : undefined,
     notes: rawBook.notes,
   };
   
@@ -468,7 +468,7 @@ async function processImportedBooks(rawBooks: RawBookImport[]): Promise<ImportRe
             pageCount: apiBookDetails.pageCount,
             thumbnail: apiBookDetails.thumbnail,
             publishedDate: apiBookDetails.publishedDate,
-            genre: apiBookDetails.genre ? normalizeGenreData(apiBookDetails.genre) : baseBook.genre,
+            genre: apiBookDetails.genre ? standardizeGenreData(apiBookDetails.genre) : baseBook.genre,
             googleBooksId: rawBook.googleBooksId // Keep the ID for future reference
           };
         } 
@@ -493,7 +493,7 @@ async function processImportedBooks(rawBooks: RawBookImport[]): Promise<ImportRe
               pageCount: apiBookDetails.pageCount,
               thumbnail: apiBookDetails.thumbnail,
               publishedDate: apiBookDetails.publishedDate,
-              genre: apiBookDetails.genre ? normalizeGenreData(apiBookDetails.genre) : baseBook.genre,
+              genre: apiBookDetails.genre ? standardizeGenreData(apiBookDetails.genre) : baseBook.genre,
               googleBooksId: searchResult.books[0].id // Store the Google Books ID
             };
           }
@@ -534,7 +534,7 @@ async function processImportedBooks(rawBooks: RawBookImport[]): Promise<ImportRe
               pageCount: apiBookDetails.pageCount,
               thumbnail: apiBookDetails.thumbnail,
               publishedDate: apiBookDetails.publishedDate,
-              genre: apiBookDetails.genre ? normalizeGenreData(apiBookDetails.genre) : baseBook.genre,
+              genre: apiBookDetails.genre ? standardizeGenreData(apiBookDetails.genre) : baseBook.genre,
               googleBooksId: bestMatch.id, // Store the Google Books ID
               // Add any series information if available
               isPartOfSeries: apiBookDetails.isPartOfSeries || baseBook.isPartOfSeries,

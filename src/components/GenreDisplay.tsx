@@ -1,6 +1,6 @@
 import React from "react";
 import { Badge } from "@/components/ui/badge";
-import { normalizeGenreData, type GenreData } from "@/utils/genreUtils";
+import { standardizeGenreData, type GenreData } from "@/utils/genreUtils";
 import { createLogger } from "@/utils/loggingUtils";
 
 const log = createLogger("GenreDisplay");
@@ -18,9 +18,9 @@ export const GenreDisplay: React.FC<GenreDisplayProps> = ({
   className = "" 
 }) => {
   log.debug("Rendering genre display", { genreType: typeof genres });
-  const genreArray = normalizeGenreData(genres);
+  const genreArray = standardizeGenreData(genres);
   
-  log.trace("Normalized genres", { genreCount: genreArray.length, genres: genreArray });
+  log.trace("Standardized genres", { genreCount: genreArray.length, genres: genreArray });
   
   if (genreArray.length === 0) {
     log.debug("No genres to display");

@@ -65,7 +65,7 @@ describe('GenreDisplay Component', () => {
     
     // Verify logging
     expect(mockDebug).toHaveBeenCalledWith('Rendering genre display', { genreType: 'object' });
-    expect(mockTrace).toHaveBeenCalledWith('Normalized genres', { 
+    expect(mockTrace).toHaveBeenCalledWith('Standardized genres', { 
       genreCount: 3, 
       genres: ['Fiction', 'Mystery', 'Thriller']
     });
@@ -118,7 +118,7 @@ describe('GenreDisplay Component', () => {
     
     // Check for all expected log calls
     expect(mockDebug).toHaveBeenCalledWith('Rendering genre display', expect.any(Object));
-    expect(mockTrace).toHaveBeenCalledWith('Normalized genres', expect.any(Object));
+    expect(mockTrace).toHaveBeenCalledWith('Standardized genres', expect.any(Object));
     expect(mockDebug).toHaveBeenCalledWith('Rendering genres', expect.any(Object));
     
     // Verify log message with genre count
