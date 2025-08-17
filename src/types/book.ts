@@ -2,7 +2,7 @@ export interface Book {
   id: string;
   title: string;
   author: string;
-  genre?: string;
+  genre?: string | string[];
   description?: string;
   publishedDate?: string;
   pageCount?: number;
@@ -26,7 +26,7 @@ export interface Book {
   progress?: number; // Reading progress as a number between 0 and 1
   
   // Series fields - enhanced for new series feature
-  isPartOfSeries: boolean;
+  isPartOfSeries?: boolean;
   seriesId?: string; // Link to Series object
   volumeNumber?: number; // Position in the series (legacy)
   seriesPosition?: number; // Position in the series (used by enhanced storage)

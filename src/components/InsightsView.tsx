@@ -69,7 +69,12 @@ export const InsightsView: React.FC<InsightsViewProps> = ({ books }) => {
     const genres = new Set<string>();
     completedBooksInYear.forEach(book => {
       if (book.genre) {
-        genres.add(book.genre);
+        if (Array.isArray(book.genre)) {
+          // Add each genre in the array to the set
+          book.genre.forEach(g => genres.add(g));
+        } else {
+          genres.add(book.genre);
+        }
       }
     });
     const result = Array.from(genres).sort();
@@ -92,8 +97,14 @@ export const InsightsView: React.FC<InsightsViewProps> = ({ books }) => {
     
     const result = completedBooksInYear.filter(book => {
       // Genre filter
-      if (genreFilter !== 'all' && book.genre !== genreFilter) {
-        return false;
+      if (genreFilter !== 'all') {
+        if (Array.isArray(book.genre)) {
+          if (!book.genre.includes(genreFilter)) {
+            return false;
+          }
+        } else if (book.genre !== genreFilter) {
+          return false;
+        }
       }
       
       // Month filter
@@ -150,8 +161,16 @@ export const InsightsView: React.FC<InsightsViewProps> = ({ books }) => {
     const genreCounts: Record<string, number> = {};
     
     completedBooksInYear.forEach(book => {
-      const genre = book.genre || 'Uncategorized';
-      genreCounts[genre] = (genreCounts[genre] || 0) + 1;
+      if (!book.genre) {
+        genreCounts['Uncategorized'] = (genreCounts['Uncategorized'] || 0) + 1;
+      } else if (Array.isArray(book.genre)) {
+        // Count each genre in the array
+        book.genre.forEach(g => {
+          genreCounts[g] = (genreCounts[g] || 0) + 1;
+        });
+      } else {
+        genreCounts[book.genre] = (genreCounts[book.genre] || 0) + 1;
+      }
     });
     
     log.trace('Raw genre counts', { genreCounts });
@@ -582,7 +601,8 @@ export const InsightsView: React.FC<InsightsViewProps> = ({ books }) => {
                             
                             {book.genre && (
                               <div className="text-xs">
-                                <span className="text-muted-foreground">Genre:</span> {book.genre}
+                                <span className="text-muted-foreground">Genre:</span>{' '}
+                                {Array.isArray(book.genre) ? book.genre.join(' / ') : book.genre}
                               </div>
                             )}
                             

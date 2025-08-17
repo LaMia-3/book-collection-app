@@ -5,8 +5,11 @@
  */
 import { 
   convertDbBookToUiBook, 
-  convertUiBookToDbBook 
+  convertUiBookToDbBook,
+  isGenreArray 
 } from '../BookTypeAdapter';
+
+import { normalizeGenreData } from '@/utils/genreUtils';
 
 import { 
   convertDbSeriesToUiSeries,
@@ -164,6 +167,52 @@ describe('BookTypeAdapter', () => {
       expect(convertDbBookToUiBook({ status: ReadingStatus.ON_HOLD } as any).status).toEqual('want-to-read');
       // It seems DNF also maps to 'want-to-read' in the implementation
       expect(convertDbBookToUiBook({ status: ReadingStatus.DNF } as any).status).toEqual('want-to-read');
+    });
+
+    it('should handle genre as a string', () => {
+      // Arrange
+      const dbBook = {
+        id: 'book-123',
+        title: 'Test Book',
+        author: 'Test Author',
+        genre: 'Fiction / Fantasy / Young Adult',
+        spineColor: 4,
+        addedDate: '2025-01-01T00:00:00.000Z',
+        syncStatus: 'synced',
+        progress: 0,
+        dateAdded: '2025-01-01T00:00:00.000Z',
+        lastModified: '2025-01-01T00:00:00.000Z'
+      };
+
+      // Act
+      const uiBook = convertDbBookToUiBook(dbBook);
+
+      // Assert
+      expect(Array.isArray(uiBook.genre)).toBe(true);
+      expect(uiBook.genre).toEqual(['Fiction', 'Fantasy', 'Young Adult']);
+    });
+
+    it('should handle genre as an array', () => {
+      // Arrange
+      const dbBook = {
+        id: 'book-123',
+        title: 'Test Book',
+        author: 'Test Author',
+        genre: ['Science Fiction', 'Dystopian'],
+        spineColor: 4,
+        addedDate: '2025-01-01T00:00:00.000Z',
+        syncStatus: 'synced',
+        progress: 0,
+        dateAdded: '2025-01-01T00:00:00.000Z',
+        lastModified: '2025-01-01T00:00:00.000Z'
+      };
+
+      // Act
+      const uiBook = convertDbBookToUiBook(dbBook);
+
+      // Assert
+      expect(Array.isArray(uiBook.genre)).toBe(true);
+      expect(uiBook.genre).toEqual(['Science Fiction', 'Dystopian']);
     });
   });
 });

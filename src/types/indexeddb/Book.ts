@@ -10,7 +10,7 @@ export interface Book {
   author: string;
   
   // Basic book information
-  genre?: string;
+  genre?: string | string[];
   description?: string;
   publishedDate?: string;
   pageCount?: number;
@@ -68,7 +68,7 @@ export interface BookSummary {
   id: string;
   title: string;
   author: string;
-  genre?: string;
+  genre?: string | string[];
   thumbnail?: string;
   rating?: number;
   status?: ReadingStatus;
