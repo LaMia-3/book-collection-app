@@ -23,6 +23,10 @@ import {
   BookOpen,
   CircleDot
 } from 'lucide-react';
+import { createLogger } from '@/utils/loggingUtils';
+
+// Create a logger for the SeriesFilterPanel component
+const log = createLogger('SeriesFilterPanel');
 
 export interface SeriesFilter {
   search?: string;
@@ -49,6 +53,14 @@ export const SeriesFilterPanel = ({
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState(filter.search || '');
 
+  // Log component initialization with available genre options
+  log.debug('SeriesFilterPanel initialized', { 
+    availableGenres: genres.length,
+    initialGenreFilters: filter.genres?.length || 0
+  });
+  
+  log.trace('Available genres for filtering', { genres });
+
   // Count active filters
   const activeFilterCount = 
     (filter.search ? 1 : 0) + 
@@ -58,20 +70,43 @@ export const SeriesFilterPanel = ({
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
+    log.debug('Search query submitted', { query: searchQuery });
     onFilterChange({ ...filter, search: searchQuery });
   };
 
   const toggleGenre = (genre: string) => {
     const currentGenres = filter.genres || [];
-    if (currentGenres.includes(genre)) {
+    const isRemoving = currentGenres.includes(genre);
+    
+    log.debug('Toggling genre filter', {
+      genre,
+      action: isRemoving ? 'remove' : 'add',
+      currentGenresCount: currentGenres.length
+    });
+    
+    if (isRemoving) {
+      const newGenres = currentGenres.filter(g => g !== genre);
+      log.trace('Removing genre from filter', { 
+        genre, 
+        remainingGenres: newGenres,
+        count: newGenres.length 
+      });
+      
       onFilterChange({
         ...filter,
-        genres: currentGenres.filter(g => g !== genre)
+        genres: newGenres
       });
     } else {
+      const newGenres = [...currentGenres, genre];
+      log.trace('Adding genre to filter', { 
+        genre, 
+        updatedGenres: newGenres,
+        count: newGenres.length 
+      });
+      
       onFilterChange({
         ...filter,
-        genres: [...currentGenres, genre]
+        genres: newGenres
       });
     }
   };
@@ -184,7 +219,15 @@ export const SeriesFilterPanel = ({
             <Button
               variant="ghost"
               size="sm"
-              onClick={onClearFilters}
+              onClick={() => {
+                log.info('Clearing all filters', {
+                  searchFilter: filter.search,
+                  genreFilters: filter.genres,
+                  statusFilters: filter.statuses,
+                  authorFilters: filter.authors
+                });
+                onClearFilters();
+              }}
               className="ml-2 text-xs h-8"
             >
               <CircleSlash className="h-3.5 w-3.5 mr-1" />

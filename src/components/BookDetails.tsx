@@ -27,6 +27,10 @@ import {
   Star,
   Database
 } from "lucide-react";
+import { createLogger } from "@/utils/loggingUtils";
+
+// Create a logger for the BookDetails component
+const log = createLogger('BookDetails');
 import {
   Select,
   SelectContent,
@@ -169,7 +173,9 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
   useEffect(() => {
     if (isEditingGenre) {
       // Convert existing genre data to comma-separated string for editing
+      log.debug('Initializing genre edit field', { bookId: book.id });
       const initialValue = genreToEditString(editedBook.genre);
+      log.trace('Genre converted to edit string', { originalGenre: editedBook.genre, editString: initialValue });
       setGenreInput(initialValue);
       
       // Focus the input field
@@ -179,7 +185,7 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
         }
       }, 10);
     }
-  }, [isEditingGenre, editedBook.genre]);
+  }, [isEditingGenre, editedBook.genre, book.id]);
   
   const titleInputRef = useRef<HTMLInputElement>(null);
   const authorInputRef = useRef<HTMLInputElement>(null);
@@ -732,39 +738,57 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
   // Validate genre input
   const validateGenreInput = (input: string): boolean => {
     // Genre is optional, so empty is valid
+    log.debug('Validating genre input', { input });
     setGenreError(null);
     return true;
   };
   
   // Save genre changes
   const validateAndSaveGenre = useCallback(() => {
+    log.debug('Saving genre changes', { bookId: book.id });
     if (!validateGenreInput(genreInput)) {
+      log.warn('Genre validation failed', { bookId: book.id });
       return false;
     }
     
     // Convert input to array format
     const genreArray = editStringToGenreArray(genreInput);
+    log.trace('Converted genre edit string to array', { 
+      genreInput,
+      genreArray,
+      count: genreArray.length 
+    });
     
     // Update edited book with new genre value (join as string or undefined if empty)
-    setEditedBook(prev => ({
-      ...prev,
-      // Convert array to string or leave as undefined if empty
-      genre: genreArray.length > 0 ? genreArray.join(', ') : undefined
-    }));
+    setEditedBook(prev => {
+      const newGenre = genreArray.length > 0 ? genreArray.join(', ') : undefined;
+      log.info('Updating book genres', { 
+        bookId: book.id,
+        oldGenre: prev.genre, 
+        newGenre,
+        genreCount: genreArray.length 
+      });
+      return {
+        ...prev,
+        // Convert array to string or leave as undefined if empty
+        genre: newGenre
+      };
+    });
     
     // Exit editing mode
     setIsEditingGenre(false);
     setGenreError(null);
     return true;
-  }, [genreInput]);
+  }, [genreInput, book.id]);
   
   // Cancel genre editing
   const cancelGenreEdit = useCallback(() => {
     // Reset to the original genre
+    log.debug('Cancelling genre edit', { bookId: book.id });
     setGenreInput(genreToEditString(editedBook.genre));
     setGenreError(null);
     setIsEditingGenre(false);
-  }, [editedBook.genre]);
+  }, [editedBook.genre, book.id]);
   
 
   

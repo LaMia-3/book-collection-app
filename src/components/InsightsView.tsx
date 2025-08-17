@@ -9,6 +9,10 @@ import { Select } from '@/components/ui/select';
 import { BarChart2, Calendar, BookOpen, LayoutGrid, FileText, Filter, Library } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { SeriesInsights } from '@/components/insights/SeriesInsights';
+import { createLogger } from '@/utils/loggingUtils';
+
+// Create a logger for the InsightsView component
+const log = createLogger('InsightsView');
 
 const COLORS = ['#ff9f7f', '#7fd4ff', '#a992ff', '#ffcd7f', '#7fffb7', '#ff7fb4', '#7f7fff'];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -61,18 +65,32 @@ export const InsightsView: React.FC<InsightsViewProps> = ({ books }) => {
   
   // Get available genres from the books completed in the selected year
   const availableGenres = useMemo(() => {
+    log.debug('Calculating available genres for year', { year: selectedYear });
     const genres = new Set<string>();
     completedBooksInYear.forEach(book => {
       if (book.genre) {
         genres.add(book.genre);
       }
     });
-    return Array.from(genres).sort();
-  }, [completedBooksInYear]);
+    const result = Array.from(genres).sort();
+    log.debug('Found genres for selected year', { 
+      year: selectedYear, 
+      count: result.length, 
+      genres: result 
+    });
+    return result;
+  }, [completedBooksInYear, selectedYear]);
   
   // Apply filters to the books
   const filteredBooks = useMemo(() => {
-    return completedBooksInYear.filter(book => {
+    log.debug('Applying filters to books', { 
+      genreFilter, 
+      monthFilter, 
+      ratingFilter, 
+      totalBooks: completedBooksInYear.length 
+    });
+    
+    const result = completedBooksInYear.filter(book => {
       // Genre filter
       if (genreFilter !== 'all' && book.genre !== genreFilter) {
         return false;
@@ -90,6 +108,13 @@ export const InsightsView: React.FC<InsightsViewProps> = ({ books }) => {
       
       return true;
     });
+    
+    log.debug('Books after filtering', { 
+      originalCount: completedBooksInYear.length, 
+      filteredCount: result.length 
+    });
+    
+    return result;
   }, [completedBooksInYear, genreFilter, monthFilter, ratingFilter]);
 
   // Books read per month chart data
@@ -120,6 +145,8 @@ export const InsightsView: React.FC<InsightsViewProps> = ({ books }) => {
 
   // Most read genres chart data
   const genreData = useMemo(() => {
+    log.debug('Calculating most read genres chart data', { year: selectedYear });
+    
     const genreCounts: Record<string, number> = {};
     
     completedBooksInYear.forEach(book => {
@@ -127,12 +154,22 @@ export const InsightsView: React.FC<InsightsViewProps> = ({ books }) => {
       genreCounts[genre] = (genreCounts[genre] || 0) + 1;
     });
     
+    log.trace('Raw genre counts', { genreCounts });
+    
     // Convert to array and sort by count
-    return Object.entries(genreCounts)
+    const result = Object.entries(genreCounts)
       .map(([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 5); // Top 5 genres
-  }, [completedBooksInYear]);
+      
+    log.debug('Top genres calculated', { 
+      year: selectedYear, 
+      topGenres: result.map(g => g.name),
+      counts: result.map(g => g.value)
+    });
+    
+    return result;
+  }, [completedBooksInYear, selectedYear]);
 
   // Ratings distribution chart data
   const ratingsData = useMemo(() => {
@@ -424,7 +461,11 @@ export const InsightsView: React.FC<InsightsViewProps> = ({ books }) => {
                   <select
                     className="h-8 w-[140px] rounded-md border border-input bg-background px-2 text-xs"
                     value={genreFilter}
-                    onChange={(e) => setGenreFilter(e.target.value)}
+                    onChange={(e) => {
+                      const newFilter = e.target.value;
+                      log.info('Genre filter changed', { from: genreFilter, to: newFilter });
+                      setGenreFilter(newFilter);
+                    }}
                   >
                     <option value="all">All Genres</option>
                     {availableGenres.map((genre) => (

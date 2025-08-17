@@ -4,6 +4,10 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Star, BookOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { createLogger } from '@/utils/loggingUtils';
+
+// Create a logger for the BookCard component
+const log = createLogger('BookCard');
 
 interface BookCardProps {
   book: Book;
@@ -41,9 +45,15 @@ export const BookCard = ({
   
   // Format the genre as a badge
   const renderGenre = (genre?: string | string[]) => {
-    if (!genre) return null;
+    log.debug('Rendering genre in BookCard', { bookId: book.id, genre });
+    
+    if (!genre) {
+      log.trace('No genre to render');
+      return null;
+    }
     
     if (Array.isArray(genre)) {
+      log.trace('Rendering genre array', { count: genre.length });
       return (
         <div className="flex flex-wrap gap-1 mt-1">
           {genre.slice(0, 2).map(g => (
@@ -60,6 +70,7 @@ export const BookCard = ({
       );
     }
     
+    log.trace('Rendering single genre string');
     return (
       <Badge variant="outline" className="text-xs mt-1">
         {genre}

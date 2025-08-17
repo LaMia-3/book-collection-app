@@ -1,6 +1,9 @@
 import React from "react";
 import { Badge } from "@/components/ui/badge";
 import { normalizeGenreData, type GenreData } from "@/utils/genreUtils";
+import { createLogger } from "@/utils/loggingUtils";
+
+const log = createLogger("GenreDisplay");
 
 interface GenreDisplayProps {
   genres: GenreData;
@@ -14,11 +17,17 @@ export const GenreDisplay: React.FC<GenreDisplayProps> = ({
   genres, 
   className = "" 
 }) => {
+  log.debug("Rendering genre display", { genreType: typeof genres });
   const genreArray = normalizeGenreData(genres);
   
+  log.trace("Normalized genres", { genreCount: genreArray.length, genres: genreArray });
+  
   if (genreArray.length === 0) {
+    log.debug("No genres to display");
     return <div className="text-muted-foreground text-sm">No genres specified</div>;
   }
+  
+  log.debug("Rendering genres", { count: genreArray.length });
   
   return (
     <div className={`flex flex-wrap gap-2 ${className}`}>
