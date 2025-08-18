@@ -1,3 +1,4 @@
+import React from "react";
 import { Book } from "@/types/book";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -112,6 +113,11 @@ export const BookCoverView = ({ books, onBookClick }: BookCoverViewProps) => {
               {book.status === 'dnf' && (
                 <Badge className="absolute top-2 right-2 bg-gradient-to-r from-red-500 to-red-700 text-white">
                   Did Not Finish
+                </Badge>
+              )}
+              {book.status === 'on-hold' && (
+                <Badge className="absolute top-2 right-2 bg-gradient-amber text-white">
+                  On Hold
                 </Badge>
               )}
               {(book.status === 'reading' || (!book.status && !book.completedDate && book.status !== 'want-to-read')) && (

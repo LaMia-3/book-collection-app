@@ -39,7 +39,7 @@ const formSchema = z.object({
   publisher: z.string().optional().default(''),
   description: z.string().optional().default(''),
   genre: z.string().optional().default(''),
-  status: z.enum(['want-to-read', 'reading', 'completed', 'dnf']).default('want-to-read'),
+  status: z.enum(['want-to-read', 'reading', 'on-hold', 'completed', 'dnf']).default('want-to-read'),
   notes: z.string().optional().default(''),
   completedDate: z.date().optional().nullable(),
 });
@@ -270,7 +270,7 @@ export const ManualAddBookForm: React.FC<ManualAddBookFormProps> = ({ onSave, on
                     onValueChange={(value) => {
                       field.onChange(value);
                       // Reset completedDate if status is not completed
-                      if (value !== 'completed') {
+                      if (value !== 'completed' && value !== 'on-hold') {
                         form.setValue('completedDate', null);
                       } else if (!form.getValues('completedDate')) {
                         // Set default completedDate to today if status becomes completed
@@ -287,6 +287,7 @@ export const ManualAddBookForm: React.FC<ManualAddBookFormProps> = ({ onSave, on
                     <SelectContent>
                       <SelectItem value="want-to-read">Want to Read</SelectItem>
                       <SelectItem value="reading">Reading</SelectItem>
+                      <SelectItem value="on-hold">On Hold</SelectItem>
                       <SelectItem value="completed">Completed</SelectItem>
                       <SelectItem value="dnf">Did Not Finish</SelectItem>
                     </SelectContent>

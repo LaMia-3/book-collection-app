@@ -1472,6 +1472,7 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
                   {editedBook.status === 'completed' && 'Completed'}
                   {editedBook.status === 'want-to-read' && 'Want to Read'}
                   {editedBook.status === 'dnf' && 'Did Not Finish'}
+                  {editedBook.status === 'on-hold' && 'On Hold'}
                   {!editedBook.status && (editedBook.completedDate ? 'Completed' : 'Currently Reading')}
                 </div>
               ) : (
@@ -1495,9 +1496,10 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
                     className="w-full p-2 border rounded-md bg-background text-foreground"
                     aria-describedby="status-description"
                   >
-                    <option value="reading">Currently Reading</option>
-                    <option value="completed">Completed</option>
                     <option value="want-to-read">Want to Read</option>
+                    <option value="reading">Currently Reading</option>
+                    <option value="on-hold">On Hold</option>
+                    <option value="completed">Completed</option>
                     <option value="dnf">Did Not Finish</option>
                   </select>
                 </>

@@ -1,5 +1,6 @@
-import { calculateGenreStatistics, getTopGenresWithOthers, GenreCount } from './statisticsUtils';
+import { calculateGenreStatistics, getTopGenresWithOthers, calculateReadingStatusStatistics, getReadingStatusChartData, GenreCount } from './statisticsUtils';
 import type { Book } from '@/types/models/Book';
+import { ReadingStatus } from '@/types/models/Book';
 
 // Mock the logging utility
 jest.mock('./loggingUtils', () => ({
@@ -289,6 +290,166 @@ describe('statisticsUtils', () => {
       expect(result).toHaveLength(11); // Top 10 + "Other"
       expect(result[10].name).toBe('Other');
       expect(result[10].value).toBe(5 + 6 + 7 + 8 + 9); // Sum of values for genres 11-15
+    });
+  });
+
+  describe('calculateReadingStatusStatistics', () => {
+    it('should count books by reading status correctly', () => {
+      // Arrange
+      const books: Book[] = [
+        { 
+          id: '1', 
+          title: 'Book 1', 
+          author: 'Author 1',
+          status: ReadingStatus.READING,
+          spineColor: 1,
+          addedDate: '2023-01-01'
+        },
+        { 
+          id: '2', 
+          title: 'Book 2', 
+          author: 'Author 2',
+          status: ReadingStatus.COMPLETED,
+          spineColor: 2,
+          addedDate: '2023-01-02'
+        },
+        { 
+          id: '3', 
+          title: 'Book 3', 
+          author: 'Author 3',
+          status: ReadingStatus.TO_READ,
+          spineColor: 3,
+          addedDate: '2023-01-03'
+        },
+        { 
+          id: '4', 
+          title: 'Book 4', 
+          author: 'Author 4',
+          status: ReadingStatus.DNF,
+          spineColor: 4,
+          addedDate: '2023-01-04'
+        },
+        { 
+          id: '5', 
+          title: 'Book 5', 
+          author: 'Author 5',
+          status: ReadingStatus.ON_HOLD,
+          spineColor: 5,
+          addedDate: '2023-01-05'
+        },
+      ];
+
+      // Act
+      const result = calculateReadingStatusStatistics(books);
+
+      // Assert
+      expect(result).toEqual({
+        reading: 1,
+        completed: 1,
+        wantToRead: 1,
+        dnf: 1,
+        onHold: 1,
+        total: 5
+      });
+    });
+
+    it('should handle enum values for reading status', () => {
+      // Arrange
+      const books: Book[] = [
+        { 
+          id: '1', 
+          title: 'Book 1', 
+          author: 'Author 1',
+          status: ReadingStatus.READING,
+          spineColor: 1,
+          addedDate: '2023-01-01'
+        },
+        { 
+          id: '2', 
+          title: 'Book 2', 
+          author: 'Author 2',
+          status: ReadingStatus.ON_HOLD,
+          spineColor: 2,
+          addedDate: '2023-01-02'
+        },
+      ];
+
+      // Act
+      const result = calculateReadingStatusStatistics(books);
+
+      // Assert
+      expect(result.reading).toBe(1);
+      expect(result.onHold).toBe(1);
+      expect(result.total).toBe(2);
+    });
+
+    it('should handle DB format reading statuses', () => {
+      // Arrange
+      const books: Book[] = [
+        { 
+          id: '1', 
+          title: 'Book 1', 
+          author: 'Author 1',
+          status: ReadingStatus.ON_HOLD,
+          spineColor: 1,
+          addedDate: '2023-01-01'
+        },
+      ];
+
+      // Act
+      const result = calculateReadingStatusStatistics(books);
+
+      // Assert
+      expect(result.onHold).toBe(1);
+      expect(result.total).toBe(1);
+    });
+  });
+
+  describe('getReadingStatusChartData', () => {
+    it('should convert reading status statistics to chart data format', () => {
+      // Arrange
+      const stats = {
+        reading: 5,
+        completed: 10,
+        wantToRead: 3,
+        dnf: 2,
+        onHold: 4,
+        total: 24
+      };
+
+      // Act
+      const result = getReadingStatusChartData(stats);
+
+      // Assert
+      expect(result).toEqual([
+        { name: 'Currently Reading', value: 5 },
+        { name: 'Completed', value: 10 },
+        { name: 'Want to Read', value: 3 },
+        { name: 'Did Not Finish', value: 2 },
+        { name: 'On Hold', value: 4 }
+      ]);
+    });
+
+    it('should filter out statuses with no books', () => {
+      // Arrange
+      const stats = {
+        reading: 0,
+        completed: 10,
+        wantToRead: 0,
+        dnf: 2,
+        onHold: 4,
+        total: 16
+      };
+
+      // Act
+      const result = getReadingStatusChartData(stats);
+
+      // Assert
+      expect(result).toEqual([
+        { name: 'Completed', value: 10 },
+        { name: 'Did Not Finish', value: 2 },
+        { name: 'On Hold', value: 4 }
+      ]);
     });
   });
 });

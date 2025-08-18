@@ -136,7 +136,9 @@ export const BookListView = ({ books, onBookClick }: BookListViewProps) => {
                         ? "bg-gradient-success text-white" 
                         : book.status === 'dnf'
                           ? "bg-gradient-danger text-white"
-                          : "bg-gradient-warm text-white"
+                          : book.status === 'on-hold'
+                            ? "bg-gradient-amber text-white"
+                            : "bg-gradient-warm text-white"
                   }
                 >
                   {book.status === 'want-to-read'
@@ -145,7 +147,9 @@ export const BookListView = ({ books, onBookClick }: BookListViewProps) => {
                       ? "Read" 
                       : book.status === 'dnf'
                         ? "Do Not Finish"
-                        : "Reading"
+                        : book.status === 'on-hold'
+                          ? "On Hold"
+                          : "Reading"
                   }
                 </Badge>
               </TableCell>

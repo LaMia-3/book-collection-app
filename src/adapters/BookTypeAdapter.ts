@@ -143,8 +143,8 @@ function mapDbStatusToUiStatus(status?: string): UIBook['status'] {
     case 'dnf':
       return 'dnf';
     case 'on_hold':
-      // Map to 'want-to-read' as 'on-hold' isn't a valid UI status
-      return 'want-to-read';
+    case 'on-hold':
+      return 'on-hold';
     default:
       return 'want-to-read'; // Default status
   }
@@ -157,7 +157,12 @@ function mapUiStatusToDbStatus(status?: UIBook['status']): string {
   if (!status) return 'want-to-read';
   
   // Convert UI status to DB status
-  return status;
+  switch (status) {
+    case 'on-hold':
+      return 'on_hold';
+    default:
+      return status;
+  }
 }
 
 /**

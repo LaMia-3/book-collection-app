@@ -1,3 +1,4 @@
+import React from "react";
 import { Book } from "@/types/book";
 import { BookSpine } from "./BookSpine";
 
@@ -21,6 +22,9 @@ export const BookShelf = ({ books, onBookClick }: BookShelfProps) => {
   const currentlyReading = books.filter(book => 
     book.status === 'reading' || (!book.status && !book.completedDate)
   );
+  
+  // On Hold books
+  const onHoldBooks = books.filter(book => book.status === 'on-hold');
   
   const completedBooks = books.filter(book => 
     book.status === 'completed' || (!book.status && book.completedDate)
@@ -119,6 +123,10 @@ export const BookShelf = ({ books, onBookClick }: BookShelfProps) => {
   const dnfShelves = dnfBooks.length > 0
     ? groupBooksByShelves(dnfBooks)
     : [];
+    
+  const onHoldShelves = onHoldBooks.length > 0
+    ? groupBooksByShelves(onHoldBooks)
+    : [];
 
   const renderShelf = (shelfBooks: Book[], isFirst?: boolean, isLast?: boolean, shelfIndex?: number) => {
     // Determine border radius based on position in bookshelf group
@@ -207,6 +215,29 @@ export const BookShelf = ({ books, onBookClick }: BookShelfProps) => {
         </div>
       )}
 
+      {/* On Hold Books Section */}
+      {onHoldShelves.length > 0 && (
+        <div>
+          <h3 className="text-lg font-serif text-foreground mb-3 px-2">On Hold</h3>
+          <div className="flex flex-col">
+            {onHoldShelves.map((shelfBooks, shelfIndex) => {
+              const isFirst = shelfIndex === 0;
+              const isLast = shelfIndex === onHoldShelves.length - 1;
+              return (
+                <div key={`on-hold-${shelfIndex}`}>
+                  {renderShelf(
+                    shelfBooks, 
+                    isFirst, 
+                    isLast, 
+                    shelfIndex + currentlyReadingShelves.length
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Completed Books Section */}
       {completedShelves.length > 0 && (
         <div>
@@ -239,7 +270,7 @@ export const BookShelf = ({ books, onBookClick }: BookShelfProps) => {
                     shelfBooks, 
                     isFirst, 
                     isLast, 
-                    shelfIndex + currentlyReadingShelves.length + completedShelves.length
+                    shelfIndex + currentlyReadingShelves.length + onHoldShelves.length + completedShelves.length
                   )}
                 </div>
               );
@@ -262,7 +293,7 @@ export const BookShelf = ({ books, onBookClick }: BookShelfProps) => {
                     shelfBooks,
                     isFirst,
                     isLast,
-                    shelfIndex + currentlyReadingShelves.length + completedShelves.length + wantToReadShelves.length
+                    shelfIndex + currentlyReadingShelves.length + onHoldShelves.length + completedShelves.length + wantToReadShelves.length
                   )}
                 </div>
               );
