@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { ReadOnlyField } from "@/components/ui/read-only-field";
 import { 
   BookmarkIcon, 
   BookOpen, 
@@ -25,7 +26,9 @@ import {
   Trash2, 
   AlertTriangle,
   Star,
-  Database
+  Database,
+  Eye,
+  EyeOff
 } from "lucide-react";
 import { createLogger } from "@/utils/loggingUtils";
 
@@ -88,6 +91,9 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
     author: book.author,
     isInSeries: !!book.seriesId
   });
+  
+  // View/Edit mode toggle state
+  const [isViewMode, setIsViewMode] = useState(true);
   
   // States for improved UI from main branch
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -977,7 +983,11 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
         <CardHeader className="bg-gradient-warm text-primary-foreground">
           <div className="flex items-start justify-between">
             <div className="flex-1">
-              {isEditingTitle ? (
+              {isViewMode ? (
+                <CardTitle className="text-2xl font-serif text-wrap">
+                  {editedBook.title}
+                </CardTitle>
+              ) : isEditingTitle ? (
                 <div className="relative mb-2">
                   <div className="sr-only" id="title-instructions">
                     Edit book title. Press Enter to save or Escape to cancel.
@@ -1051,9 +1061,18 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
                   <Edit2 className="h-4 w-4 ml-2 opacity-50" />
                 </CardTitle>
               )}
-              {isEditingAuthor ? (
-                <div className="relative mb-2 mt-1">
+              {isViewMode ? (
+                <div className="font-serif text-base">
+                  by {editedBook.author}
+                </div>
+              ) : isEditingAuthor ? (
+                <div className="relative mb-2">
+                  <div className="sr-only" id="author-instructions">
+                    Edit book author. Press Enter to save or Escape to cancel.
+                  </div>
+                  <label htmlFor="book-author-input" className="sr-only">Book author</label>
                   <Input
+                    id="book-author-input"
                     ref={authorInputRef}
                     defaultValue={editedBook.author}
                     className={cn(
@@ -1103,7 +1122,13 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
                 </p>
               )}
               <div className="mt-2 relative">
-                {isEditingGenre ? (
+                {isViewMode ? (
+                  <ReadOnlyField 
+                    label="Genre"
+                    value={editedBook.genre ? <GenreDisplay genres={editedBook.genre} /> : "No genre specified"}
+                    icon={<BookmarkIcon className="h-4 w-4 mr-2" />}
+                  />
+                ) : isEditingGenre ? (
                   <div className="relative flex-grow">
                     <div className="sr-only" id="genre-instructions">
                       Enter book genres separated by commas. Press Enter to save or Escape to cancel.
@@ -1196,14 +1221,31 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
                 )}
               </div>
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onClose}
-              className="text-primary-foreground hover:bg-white/20"
-            >
-              <X className="h-4 w-4" />
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsViewMode(!isViewMode)}
+                className="text-primary-foreground hover:bg-white/20"
+                aria-label={isViewMode ? "Switch to edit mode" : "Switch to view mode"}
+                title={isViewMode ? "Switch to edit mode" : "Switch to view mode"}
+              >
+                {isViewMode ? (
+                  <Pencil className="h-4 w-4" aria-hidden="true" />
+                ) : (
+                  <Eye className="h-4 w-4" aria-hidden="true" />
+                )}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onClose}
+                className="text-primary-foreground hover:bg-white/20"
+                aria-label="Close book details"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         </CardHeader>
 
@@ -1220,7 +1262,13 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
             <div className="flex-1 space-y-2 text-sm">
               <div className="flex items-center gap-2">
                 <CalendarIcon className="h-4 w-4 text-muted-foreground" />
-                {isEditingPublishedDate ? (
+                {isViewMode ? (
+                  <span className="text-sm">
+                    {editedBook.publishedDate ? 
+                      `Published: ${formatPublishedDate(editedBook.publishedDate)}` : 
+                      "Publication date not set"}
+                  </span>
+                ) : isEditingPublishedDate ? (
                   <div className="relative flex-grow">
                     <div className="sr-only" id="publisheddate-instructions">
                       Edit book publication date. Use the calendar to select a date or press Escape to cancel.
@@ -1330,7 +1378,11 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
               </div>
               <div className="flex items-center gap-2">
                 <BookOpen className="h-4 w-4 text-muted-foreground" />
-                {isEditingPageCount ? (
+                {isViewMode ? (
+                  <span className="text-sm">
+                    {editedBook.pageCount ? `${editedBook.pageCount} pages` : 'No page count'}
+                  </span>
+                ) : isEditingPageCount ? (
                   <div className="relative flex-grow">
                     <div className="sr-only" id="pagecount-instructions">
                       Edit book page count. Enter a positive whole number. Press Enter to save or Escape to cancel.
@@ -1414,57 +1466,79 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <Label htmlFor="readingStatus">Reading Status</Label>
-              <div className="sr-only" id="status-description">
-                Select the current reading status for this book. Selecting 'Completed' will automatically set today's date as completion date if none exists.
-              </div>
-              <select
-                id="readingStatus"
-                value={editedBook.status || (editedBook.completedDate ? 'completed' : 'reading')}
-                onChange={(e) => {
-                  const status = e.target.value as 'reading' | 'completed' | 'want-to-read';
-                  // If changing to completed, set today as completion date if none exists
-                  // If changing away from completed, clear completion date
-                  const completedDate = status === 'completed' 
-                    ? (editedBook.completedDate || new Date().toISOString().split('T')[0])
-                    : (status === 'reading' ? editedBook.completedDate : undefined);
-                  
-                  setEditedBook({ ...editedBook, status, completedDate });
-                }}
-                className="w-full p-2 border rounded-md bg-background text-foreground"
-                aria-describedby="status-description"
-              >
-                <option value="reading">Currently Reading</option>
-                <option value="completed">Completed</option>
-                <option value="want-to-read">Want to Read</option>
-              </select>
+              {isViewMode ? (
+                <div className="p-2 border rounded-md bg-muted text-foreground">
+                  {editedBook.status === 'reading' && 'Currently Reading'}
+                  {editedBook.status === 'completed' && 'Completed'}
+                  {editedBook.status === 'want-to-read' && 'Want to Read'}
+                  {!editedBook.status && (editedBook.completedDate ? 'Completed' : 'Currently Reading')}
+                </div>
+              ) : (
+                <>
+                  <div className="sr-only" id="status-description">
+                    Select the current reading status for this book. Selecting 'Completed' will automatically set today's date as completion date if none exists.
+                  </div>
+                  <select
+                    id="readingStatus"
+                    value={editedBook.status || (editedBook.completedDate ? 'completed' : 'reading')}
+                    onChange={(e) => {
+                      const status = e.target.value as 'reading' | 'completed' | 'want-to-read';
+                      // If changing to completed, set today as completion date if none exists
+                      // If changing away from completed, clear completion date
+                      const completedDate = status === 'completed' 
+                        ? (editedBook.completedDate || new Date().toISOString().split('T')[0])
+                        : (status === 'reading' ? editedBook.completedDate : undefined);
+                      
+                      setEditedBook({ ...editedBook, status, completedDate });
+                    }}
+                    className="w-full p-2 border rounded-md bg-background text-foreground"
+                    aria-describedby="status-description"
+                  >
+                    <option value="reading">Currently Reading</option>
+                    <option value="completed">Completed</option>
+                    <option value="want-to-read">Want to Read</option>
+                  </select>
+                </>
+              )}  
             </div>
             
             <div>
               <Label htmlFor="completedDate">Completed Date</Label>
-              <div className="sr-only" id="completeddate-description">
-                Select the date when you finished reading this book. Only available for books marked as completed or currently reading.
-              </div>
-              <Input
-                id="completedDate"
-                type="date"
-                value={formatDateForInput(editedBook.completedDate) || ""}
-                disabled={editedBook.status === 'want-to-read'}
-                onChange={(e) =>
-                  setEditedBook({ ...editedBook, completedDate: e.target.value })
-                }
-                aria-describedby="completeddate-description"
-                aria-disabled={editedBook.status === 'want-to-read'}
-                aria-labelledby="completedDateLabel"
-              />
+              {isViewMode ? (
+                <div className="p-2 border rounded-md bg-muted text-foreground">
+                  {editedBook.completedDate ? formatDateForInput(editedBook.completedDate) : 'Not completed yet'}
+                </div>
+              ) : (
+                <>
+                  <div className="sr-only" id="completeddate-description">
+                    Select the date when you finished reading this book. Only available for books marked as completed or currently reading.
+                  </div>
+                  <Input
+                    id="completedDate"
+                    type="date"
+                    value={formatDateForInput(editedBook.completedDate) || ""}
+                    disabled={editedBook.status === 'want-to-read'}
+                    onChange={(e) =>
+                      setEditedBook({ ...editedBook, completedDate: e.target.value })
+                    }
+                    aria-describedby="completeddate-description"
+                    aria-disabled={editedBook.status === 'want-to-read'}
+                    aria-labelledby="completedDateLabel"
+                  />
+                </>
+              )}
             </div>
 
             <div>
               <Label id="rating-label">Rating</Label>
               <div className="sr-only" id="rating-description">
-                Rate this book from 1 to 5 stars. Click on a star to set your rating.
+                {isViewMode ? 'Book rating on a scale of 1 to 5 stars.' : 'Rate this book from 1 to 5 stars. Click on a star to set your rating.'}
               </div>
               <div 
-                className="flex gap-1 mt-1"
+                className={cn(
+                  "flex gap-1 mt-1",
+                  isViewMode ? "pointer-events-none" : ""
+                )}
                 role="radiogroup"
                 aria-labelledby="rating-label"
                 aria-describedby="rating-description"
@@ -1473,22 +1547,23 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
                   <Star
                     key={star}
                     className={cn(
-                      "h-6 w-6 cursor-pointer transition-colors",
+                      "h-6 w-6 transition-colors",
+                      !isViewMode && "cursor-pointer",
                       star <= (editedBook.rating || 0)
                         ? "fill-accent-warm text-accent-warm"
                         : "text-muted-foreground"
                     )}
-                    onClick={() => setEditedBook({ ...editedBook, rating: star })}
+                    onClick={() => !isViewMode && setEditedBook({ ...editedBook, rating: star })}
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
+                      if (!isViewMode && (e.key === 'Enter' || e.key === ' ')) {
                         e.preventDefault();
                         setEditedBook({ ...editedBook, rating: star });
                       }
                     }}
-                    role="radio"
-                    aria-checked={star === editedBook.rating}
+                    role={isViewMode ? "img" : "radio"}
+                    aria-checked={!isViewMode && star === editedBook.rating}
                     aria-label={`${star} star${star !== 1 ? 's' : ''}`}
-                    tabIndex={0}
+                    tabIndex={isViewMode ? -1 : 0}
                   />
                 ))}
               </div>
@@ -1512,7 +1587,15 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
           {/* Description */}
           <div>
             <Label htmlFor="book-description">Description</Label>
-            {isEditingDescription ? (
+            {isViewMode ? (
+              <div className="text-sm mt-1 p-3 bg-muted rounded leading-relaxed max-h-[200px] overflow-y-auto scrollbar-thin scrollbar-thumb-rounded scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent">
+                {editedBook.description ? (
+                  <div className="whitespace-pre-line">{cleanHtml(editedBook.description)}</div>
+                ) : (
+                  <div className="text-muted-foreground italic">No description available.</div>
+                )}
+              </div>
+            ) : isEditingDescription ? (
               <div className="mt-1">
                 <div className="sr-only" id="description-instructions">
                   Edit book description. You can add rich text or basic formatting. Press Enter to create paragraphs.
@@ -1612,40 +1695,60 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
             
             {showSeriesInfo && (
               <div className="bg-muted/30 p-4 rounded-md border">
-                <div className="mb-4">
-                  <Label htmlFor="seriesSelect">Add to Series</Label>
-                  {loadingSeries ? (
-                    <Skeleton className="h-10 w-full mt-1" />
-                  ) : (
-                    <div className="relative">
-                      {/* Fallback to using a standard select as a temporary solution */}
-                      <select
-                        id="seriesSelect"
-                        className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring appearance-none"
-                        value={selectedSeriesId}
-                        onChange={(e) => {
-                          if (e.target.value === "advanced") {
-                            // Open SeriesAssignmentDialog with series detection
-                            detectAndOpenSeriesDialog();
-                          } else {
-                            setSelectedSeriesId(e.target.value);
-                          }
-                        }}
-                      >
-                        <option value="">None</option>
-                        {availableSeries.map(series => (
-                          <option key={series.id} value={series.id}>
-                            {series.name} {series.author && `(${series.author})`}
-                          </option>
-                        ))}
-                        {/* Advanced series selection disabled pending improved implementation */}
-                      </select>
-                      <ChevronDown className="pointer-events-none absolute right-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                {isViewMode ? (
+                  <div className="space-y-4">
+                    <div>
+                      <h4 className="font-medium mb-2 text-sm">Series</h4>
+                      <div className="p-2 border rounded-md bg-muted text-foreground">
+                        {selectedSeriesId ? (
+                          <div>
+                            {availableSeries.find(s => s.id === selectedSeriesId)?.name || 'Loading series...'}
+                            {availableSeries.find(s => s.id === selectedSeriesId)?.author && 
+                              ` (${availableSeries.find(s => s.id === selectedSeriesId)?.author})`}
+                            {volumeNumber && ` - Volume ${volumeNumber}`}
+                          </div>
+                        ) : (
+                          <div className="text-muted-foreground">Not part of a series</div>
+                        )}
+                      </div>
                     </div>
-                  )}
-                </div>
+                  </div>
+                ) : (
+                  <div className="mb-4">
+                    <Label htmlFor="seriesSelect">Add to Series</Label>
+                    {loadingSeries ? (
+                      <Skeleton className="h-10 w-full mt-1" />
+                    ) : (
+                      <div className="relative">
+                        {/* Fallback to using a standard select as a temporary solution */}
+                        <select
+                          id="seriesSelect"
+                          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring appearance-none"
+                          value={selectedSeriesId}
+                          onChange={(e) => {
+                            if (e.target.value === "advanced") {
+                              // Open SeriesAssignmentDialog with series detection
+                              detectAndOpenSeriesDialog();
+                            } else {
+                              setSelectedSeriesId(e.target.value);
+                            }
+                          }}
+                        >
+                          <option value="">None</option>
+                          {availableSeries.map(series => (
+                            <option key={series.id} value={series.id}>
+                              {series.name} {series.author && `(${series.author})`}
+                            </option>
+                          ))}
+                          {/* Advanced series selection disabled pending improved implementation */}
+                        </select>
+                        <ChevronDown className="pointer-events-none absolute right-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                      </div>
+                    )}
+                  </div>
+                )}
                 
-                {selectedSeriesId && (
+                {selectedSeriesId && !isViewMode && (
                   <div className="space-y-4">
                     <div>
                       <Label htmlFor="volumeNumber">Volume in Series</Label>
@@ -1817,38 +1920,55 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
             )}
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex flex-wrap gap-2 pt-4">
-            {onDelete && (
+          {/* Action Buttons - Only visible in edit mode */}
+          {!isViewMode && (
+            <div className="flex flex-wrap gap-2 pt-4">
+              {onDelete && (
+                <Button 
+                  variant="destructive" 
+                  onClick={handleDeleteConfirmation}
+                  className="bg-gradient-danger hover:bg-destructive/90 mr-auto"
+                  title="Delete Book"
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete Book
+                </Button>
+              )}
+              <div className="flex-grow"></div>
               <Button 
-                variant="destructive" 
-                onClick={handleDeleteConfirmation}
-                className="bg-gradient-danger hover:bg-destructive/90 mr-auto"
-                title="Delete Book"
+                variant="outline" 
+                onClick={onClose}
+                type="button"
+                title="Cancel Changes"
               >
-                <Trash2 className="h-4 w-4 mr-2" />
-                Delete Book
+                Cancel
               </Button>
-            )}
-            <div className="flex-grow"></div>
-            <Button 
-              variant="outline" 
-              onClick={onClose}
-              type="button"
-              title="Cancel Changes"
-            >
-              Cancel
-            </Button>
-            <Button 
-              onClick={handleSave} 
-              className="bg-gradient-warm hover:bg-primary-glow"
-              disabled={isSaving}
-              type="button"
-              title="Save Changes (Ctrl+S)"
-            >
-              {isSaving ? 'Saving...' : 'Save Changes'}
-            </Button>
-          </div>
+              <Button 
+                onClick={handleSave} 
+                className="bg-gradient-warm hover:bg-primary-glow"
+                disabled={isSaving}
+                type="button"
+                title="Save Changes (Ctrl+S)"
+              >
+                {isSaving ? 'Saving...' : 'Save Changes'}
+              </Button>
+            </div>
+          )}
+          
+          {/* Floating Edit Button - Only visible in view mode */}
+          {isViewMode && (
+            <div className="fixed bottom-4 right-4 z-50">
+              <Button
+                size="lg"
+                onClick={() => setIsViewMode(false)}
+                className="rounded-full h-12 w-12 shadow-lg bg-gradient-warm hover:bg-primary-glow flex items-center justify-center"
+                aria-label="Switch to edit mode"
+                title="Edit Book Details"
+              >
+                <Pencil className="h-5 w-5" />
+              </Button>
+            </div>
+          )}
           
           {/* Delete Confirmation Dialog */}
           <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
