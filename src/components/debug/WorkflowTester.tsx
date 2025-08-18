@@ -435,7 +435,7 @@ export function WorkflowTester() {
             // Search for the book
             searchResult = await googleBooksProvider.searchBooks({
               query: currentQuery, 
-              type: type as any,
+              type: type as 'title' | 'author' | 'isbn',
               limit: 1
             });
             
@@ -557,7 +557,7 @@ export function WorkflowTester() {
             // Search for the book
             searchResult = await openLibraryProvider.searchBooks({
               query: currentQuery,
-              type: type as any,
+              type: type as 'title' | 'author' | 'isbn',
               limit: 1
             });
             
@@ -680,7 +680,7 @@ export function WorkflowTester() {
           description: seriesDef.description,
           books: seriesBooks.map(book => book.id),
           genre: seriesDef.genre,
-          status: seriesDef.status as any,
+          status: seriesDef.status as 'ongoing' | 'completed' | 'cancelled',
           readingOrder: 'publication',
           totalBooks: seriesBooks.length,
           coverImage: seriesBooks[0].thumbnail,
