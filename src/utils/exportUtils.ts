@@ -11,7 +11,7 @@ interface ExportableBook {
   completedDate?: string;
   rating?: number;
   notes?: string;
-  genre?: string;
+  genre?: string | string[];
   isPartOfSeries?: boolean;
   seriesName?: string;
   pageCount?: number;
@@ -104,7 +104,7 @@ export function booksToJSON(books: Book[]): string {
       notes: book.notes || undefined,
       genre: book.genre || undefined,
       isPartOfSeries: book.isPartOfSeries || false,
-      seriesName: book.seriesName || undefined,
+      seriesName: book._legacySeriesName || undefined,
       pageCount: book.pageCount || undefined,
       publishedDate: book.publishedDate || undefined,
       addedDate: book.addedDate
