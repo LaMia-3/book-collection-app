@@ -1,23 +1,46 @@
 import React, { useState, useMemo } from 'react';
+import { usePalette } from '@/contexts/PaletteContext';
+import { InfoTooltip } from '@/components/InfoTooltip';
 import { 
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer 
 } from 'recharts';
 import { Book } from '@/types/book';
+import { Book as ModelBook, ReadingStatus } from '@/types/models/Book';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Select } from '@/components/ui/select';
 import { BarChart2, Calendar, BookOpen, LayoutGrid, FileText, Filter, Library } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { SeriesInsights } from '@/components/insights/SeriesInsights';
+import { GenreChart } from '@/components/GenreChart';
+import { createLogger } from '@/utils/loggingUtils';
+
+// Create a logger for the InsightsView component
+const log = createLogger('InsightsView');
 
 const COLORS = ['#ff9f7f', '#7fd4ff', '#a992ff', '#ffcd7f', '#7fffb7', '#ff7fb4', '#7f7fff'];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/**
+ * Maps a Book from the app type to the ModelBook type expected by GenreChart
+ */
+const mapToModelBook = (book: Book): ModelBook => {
+  return {
+    ...book,
+    // Map status values to ReadingStatus enum
+    status: book.status === 'reading' ? ReadingStatus.READING :
+            book.status === 'completed' ? ReadingStatus.COMPLETED :
+            book.status === 'want-to-read' ? ReadingStatus.TO_READ : undefined,
+  } as ModelBook;
+};
 
 interface InsightsViewProps {
   books: Book[];
 }
 
 export const InsightsView: React.FC<InsightsViewProps> = ({ books }) => {
+  // Get the selected palette for theme colors
+  const { selectedPalette } = usePalette();
   // Tabs for switching between different insight sections
   const [activeTab, setActiveTab] = useState<'reading' | 'series'>('reading');
   // Get all available years from book completion dates
@@ -61,21 +84,46 @@ export const InsightsView: React.FC<InsightsViewProps> = ({ books }) => {
   
   // Get available genres from the books completed in the selected year
   const availableGenres = useMemo(() => {
+    log.debug('Calculating available genres for year', { year: selectedYear });
     const genres = new Set<string>();
     completedBooksInYear.forEach(book => {
       if (book.genre) {
-        genres.add(book.genre);
+        if (Array.isArray(book.genre)) {
+          // Add each genre in the array to the set
+          book.genre.forEach(g => genres.add(g));
+        } else {
+          genres.add(book.genre);
+        }
       }
     });
-    return Array.from(genres).sort();
-  }, [completedBooksInYear]);
+    const result = Array.from(genres).sort();
+    log.debug('Found genres for selected year', { 
+      year: selectedYear, 
+      count: result.length, 
+      genres: result 
+    });
+    return result;
+  }, [completedBooksInYear, selectedYear]);
   
   // Apply filters to the books
   const filteredBooks = useMemo(() => {
-    return completedBooksInYear.filter(book => {
+    log.debug('Applying filters to books', { 
+      genreFilter, 
+      monthFilter, 
+      ratingFilter, 
+      totalBooks: completedBooksInYear.length 
+    });
+    
+    const result = completedBooksInYear.filter(book => {
       // Genre filter
-      if (genreFilter !== 'all' && book.genre !== genreFilter) {
-        return false;
+      if (genreFilter !== 'all') {
+        if (Array.isArray(book.genre)) {
+          if (!book.genre.includes(genreFilter)) {
+            return false;
+          }
+        } else if (book.genre !== genreFilter) {
+          return false;
+        }
       }
       
       // Month filter
@@ -90,6 +138,13 @@ export const InsightsView: React.FC<InsightsViewProps> = ({ books }) => {
       
       return true;
     });
+    
+    log.debug('Books after filtering', { 
+      originalCount: completedBooksInYear.length, 
+      filteredCount: result.length 
+    });
+    
+    return result;
   }, [completedBooksInYear, genreFilter, monthFilter, ratingFilter]);
 
   // Books read per month chart data
@@ -120,19 +175,39 @@ export const InsightsView: React.FC<InsightsViewProps> = ({ books }) => {
 
   // Most read genres chart data
   const genreData = useMemo(() => {
+    log.debug('Calculating most read genres chart data', { year: selectedYear });
+    
     const genreCounts: Record<string, number> = {};
     
     completedBooksInYear.forEach(book => {
-      const genre = book.genre || 'Uncategorized';
-      genreCounts[genre] = (genreCounts[genre] || 0) + 1;
+      if (!book.genre) {
+        genreCounts['Uncategorized'] = (genreCounts['Uncategorized'] || 0) + 1;
+      } else if (Array.isArray(book.genre)) {
+        // Count each genre in the array
+        book.genre.forEach(g => {
+          genreCounts[g] = (genreCounts[g] || 0) + 1;
+        });
+      } else {
+        genreCounts[book.genre] = (genreCounts[book.genre] || 0) + 1;
+      }
     });
     
+    log.trace('Raw genre counts', { genreCounts });
+    
     // Convert to array and sort by count
-    return Object.entries(genreCounts)
+    const result = Object.entries(genreCounts)
       .map(([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 5); // Top 5 genres
-  }, [completedBooksInYear]);
+      
+    log.debug('Top genres calculated', { 
+      year: selectedYear, 
+      topGenres: result.map(g => g.name),
+      counts: result.map(g => g.value)
+    });
+    
+    return result;
+  }, [completedBooksInYear, selectedYear]);
 
   // Ratings distribution chart data
   const ratingsData = useMemo(() => {
@@ -328,43 +403,41 @@ export const InsightsView: React.FC<InsightsViewProps> = ({ books }) => {
               </CardContent>
             </Card>
 
-            {/* Most read genres */}
+            {/* Most read genres - using GenreChart component */}
             <Card className="bg-card shadow-elegant">
-              <CardHeader>
-                <CardTitle className="text-lg font-serif">Most Read Genres</CardTitle>
-                <CardDescription>Top genres read in {selectedYear}</CardDescription>
+              <CardHeader className="flex flex-row items-start justify-between space-y-0">
+                <div>
+                  <CardTitle className="text-lg font-serif">Most Read Genres</CardTitle>
+                  <CardDescription>Top genres read in {selectedYear}</CardDescription>
+                </div>
+                <InfoTooltip 
+                  content={
+                    <div>
+                      <p>Books are counted once for each genre they belong to.</p>
+                      <p className="mt-1">For example, a book categorized as both "Fiction" and "Fantasy" will count as 1 book in each category.</p>
+                    </div>
+                  } 
+                />
               </CardHeader>
               <CardContent>
                 <div className="h-80 flex items-center justify-center">
-                  {genreData.length > 0 ? (
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={genreData}
-                          cx="50%"
-                          cy="50%"
-                          outerRadius={80}
-                          fill="#8884d8"
-                          dataKey="value"
-                          nameKey="name"
-                          label={({ name, value }) => `${name}: ${value}`}
-                          labelLine={false}
-                        >
-                          {genreData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                          ))}
-                        </Pie>
-                        <Tooltip
-                          formatter={(value) => [`${value} books`, 'Read']}
-                          contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.8)', borderRadius: '6px' }}
-                        />
-                        <Legend />
-                      </PieChart>
-                    </ResponsiveContainer>
+                  {completedBooksInYear.length > 0 ? (
+                    <GenreChart 
+                      books={completedBooksInYear.map(mapToModelBook)}
+                      title=""
+                      height={260}
+                      topGenres={8}
+                    />
                   ) : (
                     <p className="text-muted-foreground text-center">No genre data available for {selectedYear}</p>
                   )}
                 </div>
+                {completedBooksInYear.length > 0 && (
+                  <p className="text-xs text-muted-foreground text-center mt-2 pb-2">
+                    {completedBooksInYear.length === 1 ? "1 book" : `${completedBooksInYear.length} books`} with genre data.
+                    {completedBooksInYear.length > 8 && " Only top 8 genres shown individually."}
+                  </p>
+                )}
               </CardContent>
             </Card>
 
@@ -424,7 +497,11 @@ export const InsightsView: React.FC<InsightsViewProps> = ({ books }) => {
                   <select
                     className="h-8 w-[140px] rounded-md border border-input bg-background px-2 text-xs"
                     value={genreFilter}
-                    onChange={(e) => setGenreFilter(e.target.value)}
+                    onChange={(e) => {
+                      const newFilter = e.target.value;
+                      log.info('Genre filter changed', { from: genreFilter, to: newFilter });
+                      setGenreFilter(newFilter);
+                    }}
                   >
                     <option value="all">All Genres</option>
                     {availableGenres.map((genre) => (
@@ -513,8 +590,11 @@ export const InsightsView: React.FC<InsightsViewProps> = ({ books }) => {
                               className="w-full h-full object-cover rounded"
                             />
                           ) : (
-                            <div className={`w-full h-full flex items-center justify-center bg-spine-${book.spineColor} rounded`}>
-                              <span className="text-xs text-white text-center px-2">{book.title}</span>
+                            <div 
+                              className="w-full h-full flex items-center justify-center rounded" 
+                              style={{ backgroundColor: selectedPalette?.colors?.[0] || '#6366f1' }}
+                            >
+                              <span className="text-xs text-white text-center px-2"></span>
                             </div>
                           )}
                         </div>
@@ -541,7 +621,8 @@ export const InsightsView: React.FC<InsightsViewProps> = ({ books }) => {
                             
                             {book.genre && (
                               <div className="text-xs">
-                                <span className="text-muted-foreground">Genre:</span> {book.genre}
+                                <span className="text-muted-foreground">Genre:</span>{' '}
+                                {Array.isArray(book.genre) ? book.genre.join(' / ') : book.genre}
                               </div>
                             )}
                             

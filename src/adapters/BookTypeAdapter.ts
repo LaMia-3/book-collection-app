@@ -7,18 +7,27 @@
 
 import { Book as UIBook } from '@/types/book';
 import { Book as ModelBook, ReadingStatus } from '@/types/models/Book';
+import { normalizeGenreData } from '@/utils/genreUtils';
 
 export interface DBBook {
   id: string;
   title: string;
   author: string;
-  genre?: string;
+  genre?: string | string[];
   description?: string;
   publishedDate?: string;
   pageCount?: number;
   thumbnail?: string;
   googleBooksId?: string;
   openLibraryId?: string;
+  
+  // API source tracking fields
+  sourceId?: string;
+  sourceType?: 'google' | 'openlib' | 'manual';
+  
+  // ISBN fields - stored as arrays
+  isbn10?: string[];
+  isbn13?: string[];
   
   // Status is a string in DB, not an enum
   status?: string;
@@ -48,10 +57,27 @@ export interface DBBook {
 }
 
 /**
+ * Type guard to check if a genre value is an array
+ * @param genre The genre value to check
+ * @returns true if the genre is an array, false otherwise
+ */
+export function isGenreArray(genre: string | string[] | null | undefined): genre is string[] {
+  return Array.isArray(genre);
+}
+
+/**
  * Converts a Book from IndexedDB format to UI format
  * Resolves status string to enum values and handles date conversions
  */
 export function convertDbBookToUiBook(dbBook: DBBook): UIBook {
+  // Process genre to ensure it's in array format
+  let genreArray: string[] = [];
+  if (typeof dbBook.genre === 'string') {
+    genreArray = normalizeGenreData(dbBook.genre);
+  } else if (Array.isArray(dbBook.genre)) {
+    genreArray = dbBook.genre;
+  }
+  
   return {
     ...dbBook,
     // Convert string status to appropriate format for UI
@@ -59,7 +85,11 @@ export function convertDbBookToUiBook(dbBook: DBBook): UIBook {
     // Ensure isPartOfSeries is defined (required in UIBook)
     isPartOfSeries: dbBook.isPartOfSeries || false,
     // Use addedDate if present, otherwise use dateAdded
-    addedDate: dbBook.addedDate || dbBook.dateAdded
+    addedDate: dbBook.addedDate || dbBook.dateAdded,
+    // Map dateCompleted to completedDate
+    completedDate: dbBook.dateCompleted || dbBook.completedDate,
+    // Ensure genre is always in array format
+    genre: genreArray
   };
 }
 
@@ -69,6 +99,16 @@ export function convertDbBookToUiBook(dbBook: DBBook): UIBook {
  */
 export function convertUiBookToDbBook(uiBook: UIBook): DBBook {
   const now = new Date().toISOString();
+  
+  // Process genre to ensure it's in array format for DB storage
+  let genre: string[] = [];
+  if (typeof uiBook.genre === 'string') {
+    genre = normalizeGenreData(uiBook.genre);
+  } else if (Array.isArray(uiBook.genre)) {
+    genre = uiBook.genre;
+  } else if (uiBook.genre === undefined || uiBook.genre === null) {
+    genre = [];
+  }
   
   return {
     ...uiBook,
@@ -80,6 +120,8 @@ export function convertUiBookToDbBook(uiBook: UIBook): DBBook {
     lastModified: now,
     syncStatus: 'local',
     progress: 0, // Default progress value
+    // Store genre as array
+    genre
   };
 }
 
@@ -120,11 +162,20 @@ function mapUiStatusToDbStatus(status?: UIBook['status']): string {
  * Used for components that expect the Model Book type with ReadingStatus enum
  */
 export function convertDbBookToModelBook(dbBook: DBBook): ModelBook {
+  // Process genre to ensure it's in array format
+  let genreArray: string[] = [];
+  if (typeof dbBook.genre === 'string') {
+    genreArray = normalizeGenreData(dbBook.genre);
+  } else if (Array.isArray(dbBook.genre)) {
+    genreArray = dbBook.genre;
+  }
+  
   return {
     ...dbBook,
     // Convert string status to ReadingStatus enum
     status: mapDbStatusToEnumStatus(dbBook.status),
-    // Handle other conversions if needed
+    // Ensure genre is always in array format
+    genre: genreArray,
   } as ModelBook;
 }
 
@@ -133,6 +184,14 @@ export function convertDbBookToModelBook(dbBook: DBBook): ModelBook {
  */
 export function convertModelBookToDbBook(modelBook: ModelBook): DBBook {
   const now = new Date().toISOString();
+  
+  // Process genre to ensure it's in array format
+  let genre: string[] = [];
+  if (typeof modelBook.genre === 'string') {
+    genre = normalizeGenreData(modelBook.genre);
+  } else if (Array.isArray(modelBook.genre)) {
+    genre = modelBook.genre;
+  }
   
   return {
     ...modelBook,
@@ -144,6 +203,8 @@ export function convertModelBookToDbBook(modelBook: ModelBook): DBBook {
     lastModified: now,
     syncStatus: 'local',
     progress: 0,
+    // Store genre as array
+    genre,
   };
 }
 

@@ -2,6 +2,15 @@
  * Series data type definitions
  */
 
+/**
+ * Timestamps for tracking various series-related dates
+ */
+export interface SeriesTimestamps {
+  created: string;       // When the series was created
+  updated?: string;      // Last time the series data was modified
+  lastBookAdded?: string; // When a book was last added to the series
+}
+
 export interface Series {
   id: string;
   name: string;
@@ -17,8 +26,17 @@ export interface Series {
   isTracked: boolean; // Whether the user is tracking this series for notifications
   hasUpcoming?: boolean; // Whether the series has upcoming releases
   apiEnriched?: boolean; // Whether the series data has been enriched with API data
+  
+  // UI display dates
   createdAt: Date;
   updatedAt: Date;
+  
+  // Consolidated timestamps
+  timestamps?: SeriesTimestamps;
+  
+  // Legacy timestamp fields - keeping for backward compatibility
+  dateAdded?: string;
+  lastModified?: string;
 }
 
 export interface SeriesWithBooks extends Series {

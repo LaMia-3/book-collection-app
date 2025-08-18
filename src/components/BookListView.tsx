@@ -64,7 +64,10 @@ export const BookListView = ({ books, onBookClick }: BookListViewProps) => {
         case 'author':
           return book.author.toLowerCase();
         case 'genre':
-          return (book.genre || '').toLowerCase();
+          if (!book.genre) return '';
+          return Array.isArray(book.genre) 
+            ? book.genre.join(' / ').toLowerCase() 
+            : book.genre.toLowerCase();
         case 'status':
           return book.status || (book.completedDate ? 'completed' : 'reading');
         case 'rating':
@@ -119,7 +122,11 @@ export const BookListView = ({ books, onBookClick }: BookListViewProps) => {
                 )}
               </TableCell>
               <TableCell>{book.author}</TableCell>
-              <TableCell>{book.genre || '-'}</TableCell>
+              <TableCell>
+                {book.genre 
+                  ? (Array.isArray(book.genre) ? book.genre.join(' / ') : book.genre) 
+                  : '-'}
+              </TableCell>
               <TableCell>
                 <Badge 
                   className={

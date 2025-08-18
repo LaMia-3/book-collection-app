@@ -8,21 +8,29 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { 
-  Calendar, 
-  Star, 
+  BookmarkIcon, 
   BookOpen, 
+  Calendar as CalendarIcon, 
+  Check, 
+  Edit2, 
+  Pencil, 
   X, 
+  AlertCircle, 
   Library, 
   Plus, 
   ChevronRight,
+  ChevronLeft, 
   ChevronDown, 
   ChevronUp,
   Trash2, 
-  AlertTriangle, 
-  Check, 
-  Edit2, 
-  AlertCircle 
+  AlertTriangle,
+  Star,
+  Database
 } from "lucide-react";
+import { createLogger } from "@/utils/loggingUtils";
+
+// Create a logger for the BookDetails component
+const log = createLogger('BookDetails');
 import {
   Select,
   SelectContent,
@@ -36,6 +44,11 @@ import { SeriesInfoPanel } from "@/components/series/SeriesInfoPanel";
 import { SeriesAssignmentDialog } from "@/components/dialogs/SeriesAssignmentDialog";
 import { cn } from "@/lib/utils";
 import { cleanHtml } from "@/utils/textUtils";
+import { format, parse, isValid } from "date-fns";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { GenreDisplay } from "@/components/GenreDisplay";
+import { genreToEditString, editStringToGenreArray } from "@/utils/genreUtils";
 import { seriesService } from "@/services/SeriesService";
 import { seriesApiService } from "@/services/api/SeriesApiService";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -71,13 +84,114 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
   // States for improved UI from main branch
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [titleError, setTitleError] = useState<string | null>(null);
+  const [isEditingAuthor, setIsEditingAuthor] = useState(false);
+  const [authorError, setAuthorError] = useState<string | null>(null);
+  const [isEditingPageCount, setIsEditingPageCount] = useState(false);
+  const [pageCountError, setPageCountError] = useState<string | null>(null);
+  const [isEditingDescription, setIsEditingDescription] = useState(false);
+  const [descriptionInput, setDescriptionInput] = useState<string>(book.description || "");
+  const [descriptionError, setDescriptionError] = useState<string | null>(null);
+  const [isEditingPublishedDate, setIsEditingPublishedDate] = useState(false);
+  const [publishedDateInput, setPublishedDateInput] = useState<Date | undefined>(undefined);
+  const [publishedDateError, setPublishedDateError] = useState<string | null>(null);
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const [isEditingGenre, setIsEditingGenre] = useState(false);
+  const [genreInput, setGenreInput] = useState<string>('');
+  const [genreError, setGenreError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showSeriesAssignmentDialog, setShowSeriesAssignmentDialog] = useState(false);
   const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
+  const [showMetadataInfo, setShowMetadataInfo] = useState(false);
   const [seriesDetectionResult, setSeriesDetectionResult] = useState<any>(null);
+  // Format date for HTML date input (YYYY-MM-DD)
+  const formatDateForInput = (dateString?: string): string => {
+    if (!dateString) return "";
+    
+    try {
+      // Parse the date string
+      const date = new Date(dateString);
+      if (!isValid(date)) return "";
+      
+      // Format as YYYY-MM-DD
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    } catch (error) {
+      console.error("Error formatting date for input:", error);
+      return "";
+    }
+  };
+
+  // Parse date from string
+  const parseDate = (dateString?: string): Date | undefined => {
+    if (!dateString) return undefined;
+    
+    try {
+      // Try parsing in different formats
+      const formats = ['yyyy-MM-dd', 'yyyy-MM', 'yyyy', 'MMMM d, yyyy'];
+      let parsedDate: Date | undefined;
+      
+      // Try different formats
+      for (const fmt of formats) {
+        try {
+          const date = parse(dateString, fmt, new Date());
+          if (isValid(date)) {
+            parsedDate = date;
+            break;
+          }
+        } catch {
+          // Continue to next format
+        }
+      }
+      
+      // Try direct Date parsing as fallback
+      if (!parsedDate) {
+        const date = new Date(dateString);
+        if (isValid(date)) {
+          parsedDate = date;
+        }
+      }
+      
+      return parsedDate;
+    } catch (error) {
+      console.error("Error parsing date:", error);
+      return undefined;
+    }
+  };
+
+  // Initialize the date input after parseDate is defined
+  useEffect(() => {
+    if (book.publishedDate) {
+      setPublishedDateInput(parseDate(book.publishedDate));
+    }
+  }, [book.publishedDate]);
+  
+  // Focus and initialize genre input when editing starts
+  useEffect(() => {
+    if (isEditingGenre) {
+      // Convert existing genre data to comma-separated string for editing
+      log.debug('Initializing genre edit field', { bookId: book.id });
+      const initialValue = genreToEditString(editedBook.genre);
+      log.trace('Genre converted to edit string', { originalGenre: editedBook.genre, editString: initialValue });
+      setGenreInput(initialValue);
+      
+      // Focus the input field
+      setTimeout(() => {
+        if (genreInputRef.current) {
+          genreInputRef.current.focus();
+        }
+      }, 10);
+    }
+  }, [isEditingGenre, editedBook.genre, book.id]);
+  
   const titleInputRef = useRef<HTMLInputElement>(null);
+  const authorInputRef = useRef<HTMLInputElement>(null);
+  const pageCountInputRef = useRef<HTMLInputElement>(null);
+  const descriptionInputRef = useRef<HTMLTextAreaElement>(null);
+  const genreInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
   // Function to detect series and open the advanced dialog
@@ -310,8 +424,8 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
           const uiSeriesList = seriesFromDB.map(s => ({
             ...s,
             // Convert date strings to Date objects for UI
-            createdAt: new Date(s.dateAdded),
-            updatedAt: new Date(s.lastModified)
+            createdAt: new Date(s.dateAdded || s.timestamps?.created || new Date().toISOString()),
+            updatedAt: new Date(s.lastModified || s.timestamps?.updated || new Date().toISOString())
           }));
           
           console.log('Series loaded for UI:', uiSeriesList);
@@ -335,12 +449,22 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
     setIsSaving(true);
     
     try {
-      // Update book with series information and title
+      // Update book with series information, title, author, and page count
       const titleToUse = titleInputRef.current?.value.trim() || editedBook.title;
+      const authorToUse = authorInputRef.current?.value.trim() || editedBook.author;
+      
+      // Process page count (preserve undefined if empty)
+      let pageCountToUse = editedBook.pageCount;
+      if (pageCountInputRef.current) {
+        const pageCountValue = pageCountInputRef.current.value.trim();
+        pageCountToUse = pageCountValue ? parseInt(pageCountValue, 10) : undefined;
+      }
       
       const updatedBook: Book = {
         ...editedBook,
         title: titleToUse,
+        author: authorToUse,
+        pageCount: pageCountToUse,
         isPartOfSeries: !!selectedSeriesId,
         seriesId: selectedSeriesId || undefined,
         volumeNumber: volumeNumber,
@@ -464,6 +588,19 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
     }, 10);
   }, []);
   
+  // Author editing functions
+  const startAuthorEdit = useCallback(() => {
+    setIsEditingAuthor(true);
+    setAuthorError(null);
+    // Focus the input after state update
+    setTimeout(() => {
+      if (authorInputRef.current) {
+        authorInputRef.current.focus();
+        authorInputRef.current.select();
+      }
+    }, 10);
+  }, []);
+  
   const validateAndSaveTitle = useCallback(() => {
     const newTitle = titleInputRef.current?.value.trim();
     
@@ -478,6 +615,47 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
     return true;
   }, []);
   
+  const validateAndSaveAuthor = useCallback(() => {
+    const newAuthor = authorInputRef.current?.value.trim();
+    
+    if (!newAuthor) {
+      setAuthorError("Author cannot be empty");
+      return false;
+    }
+    
+    setEditedBook(prev => ({ ...prev, author: newAuthor }));
+    setIsEditingAuthor(false);
+    setAuthorError(null);
+    return true;
+  }, []);
+  
+  // Page count validation and saving
+  const validateAndSavePageCount = useCallback(() => {
+    const newPageCount = pageCountInputRef.current?.value.trim();
+    
+    // Allow empty string (optional field)
+    if (!newPageCount) {
+      setEditedBook(prev => ({ ...prev, pageCount: undefined }));
+      setIsEditingPageCount(false);
+      setPageCountError(null);
+      return true;
+    }
+    
+    // Parse input to number
+    const numValue = parseInt(newPageCount, 10);
+    
+    // Check if it's a valid positive integer
+    if (isNaN(numValue) || numValue <= 0 || !Number.isInteger(numValue)) {
+      setPageCountError("Page count must be a positive whole number");
+      return false;
+    }
+    
+    setEditedBook(prev => ({ ...prev, pageCount: numValue }));
+    setIsEditingPageCount(false);
+    setPageCountError(null);
+    return true;
+  }, []);
+  
   const cancelTitleEdit = useCallback(() => {
     if (titleInputRef.current) {
       titleInputRef.current.value = editedBook.title;
@@ -485,6 +663,22 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
     setIsEditingTitle(false);
     setTitleError(null);
   }, [editedBook.title]);
+  
+  const cancelAuthorEdit = useCallback(() => {
+    if (authorInputRef.current) {
+      authorInputRef.current.value = editedBook.author;
+    }
+    setIsEditingAuthor(false);
+    setAuthorError(null);
+  }, [editedBook.author]);
+  
+  const cancelPageCountEdit = useCallback(() => {
+    if (pageCountInputRef.current) {
+      pageCountInputRef.current.value = editedBook.pageCount?.toString() || '';
+    }
+    setIsEditingPageCount(false);
+    setPageCountError(null);
+  }, [editedBook.pageCount]);
   
   const handleTitleKeyDown = useCallback((e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
@@ -496,6 +690,160 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
     }
   }, [validateAndSaveTitle, cancelTitleEdit]);
   
+  const handleAuthorKeyDown = useCallback((e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      validateAndSaveAuthor();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      cancelAuthorEdit();
+    }
+  }, [validateAndSaveAuthor, cancelAuthorEdit]);
+  
+  const handlePageCountKeyDown = useCallback((e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      validateAndSavePageCount();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      cancelPageCountEdit();
+    }
+  }, [validateAndSavePageCount, cancelPageCountEdit]);
+  
+  // Validate and save description
+  const validateAndSaveDescription = useCallback(() => {
+    // Description is optional, so empty is fine
+    const newDescription = descriptionInput.trim();
+    
+    // Update the book with sanitized description (or undefined if empty)
+    setEditedBook(prev => ({
+      ...prev,
+      description: newDescription || undefined
+    }));
+    
+    // Exit editing mode
+    setIsEditingDescription(false);
+    setDescriptionError(null);
+    return true;
+  }, [descriptionInput]);
+  
+  // Cancel description edit
+  const cancelDescriptionEdit = useCallback(() => {
+    // Reset to the original description
+    setDescriptionInput(editedBook.description || "");
+    setDescriptionError(null);
+    setIsEditingDescription(false);
+  }, [editedBook.description]);
+  
+  // Validate genre input
+  const validateGenreInput = (input: string): boolean => {
+    // Genre is optional, so empty is valid
+    log.debug('Validating genre input', { input });
+    setGenreError(null);
+    return true;
+  };
+  
+  // Save genre changes
+  const validateAndSaveGenre = useCallback(() => {
+    log.debug('Saving genre changes', { bookId: book.id });
+    if (!validateGenreInput(genreInput)) {
+      log.warn('Genre validation failed', { bookId: book.id });
+      return false;
+    }
+    
+    // Convert input to array format
+    const genreArray = editStringToGenreArray(genreInput);
+    log.trace('Converted genre edit string to array', { 
+      genreInput,
+      genreArray,
+      count: genreArray.length 
+    });
+    
+    // Update edited book with new genre value (join as string or undefined if empty)
+    setEditedBook(prev => {
+      const newGenre = genreArray.length > 0 ? genreArray.join(', ') : undefined;
+      log.info('Updating book genres', { 
+        bookId: book.id,
+        oldGenre: prev.genre, 
+        newGenre,
+        genreCount: genreArray.length 
+      });
+      return {
+        ...prev,
+        // Convert array to string or leave as undefined if empty
+        genre: newGenre
+      };
+    });
+    
+    // Exit editing mode
+    setIsEditingGenre(false);
+    setGenreError(null);
+    return true;
+  }, [genreInput, book.id]);
+  
+  // Cancel genre editing
+  const cancelGenreEdit = useCallback(() => {
+    // Reset to the original genre
+    log.debug('Cancelling genre edit', { bookId: book.id });
+    setGenreInput(genreToEditString(editedBook.genre));
+    setGenreError(null);
+    setIsEditingGenre(false);
+  }, [editedBook.genre, book.id]);
+  
+
+  
+  // Format date for display
+  const formatPublishedDate = (date?: Date | string): string => {
+    if (!date) return "Unknown";
+    
+    try {
+      const dateObj = typeof date === 'string' ? parseDate(date) : date;
+      if (!dateObj || !isValid(dateObj)) return "Invalid date";
+      
+      return format(dateObj, 'MMMM d, yyyy');
+    } catch {
+      return String(date);
+    }
+  };
+  
+  // Validate and save published date
+  const validateAndSavePublishedDate = useCallback(() => {
+    // Date is optional, so undefined is valid
+    if (!publishedDateInput) {
+      setEditedBook(prev => ({ ...prev, publishedDate: undefined }));
+      setIsEditingPublishedDate(false);
+      setPublishedDateError(null);
+      return true;
+    }
+    
+    // Check if it's a valid date
+    if (!isValid(publishedDateInput)) {
+      setPublishedDateError("Invalid date format");
+      return false;
+    }
+    
+    // Format the date for storage
+    const formattedDate = format(publishedDateInput, 'yyyy-MM-dd');
+    setEditedBook(prev => ({ ...prev, publishedDate: formattedDate }));
+    
+    // Exit editing mode
+    setIsEditingPublishedDate(false);
+    setCalendarOpen(false);
+    setPublishedDateError(null);
+    return true;
+  }, [publishedDateInput]);
+  
+  // Cancel published date edit
+  const cancelPublishedDateEdit = useCallback(() => {
+    // Reset to the original date
+    setPublishedDateInput(
+      editedBook.publishedDate ? parseDate(editedBook.publishedDate) : undefined
+    );
+    setPublishedDateError(null);
+    setIsEditingPublishedDate(false);
+    setCalendarOpen(false);
+  }, [editedBook.publishedDate]);
+  
   // Rating click handler
   const handleRatingClick = (rating: number) => {
     setEditedBook({ ...editedBook, rating });
@@ -504,27 +852,23 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: globalThis.KeyboardEvent) => {
-      // Skip if we're inside an input or textarea
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
-        return;
-      }
+      // If in edit mode or delete confirmation is open, don't trigger global shortcuts
+      if (isEditingTitle || isEditingAuthor || isEditingPageCount || isEditingDescription || isEditingPublishedDate || isEditingGenre || showDeleteConfirm) return;
       
-      // Ctrl/Cmd + S for save
+      // Ctrl/Cmd + S to save
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault();
         handleSave();
       }
       
       // Escape to close
-      if (e.key === 'Escape' && !isEditingTitle && !showDeleteConfirm) {
+      if (e.key === 'Escape') {
         e.preventDefault();
         onClose();
       }
     };
     
-    window.addEventListener('keydown', handleKeyDown as EventListener);
-    return () => window.removeEventListener('keydown', handleKeyDown as EventListener);
-  }, [handleSave, onClose, isEditingTitle, showDeleteConfirm]);
+  }, [handleSave, onClose, isEditingTitle, isEditingAuthor, showDeleteConfirm]);
 
   return (
     <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -534,7 +878,12 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
             <div className="flex-1">
               {isEditingTitle ? (
                 <div className="relative mb-2">
+                  <div className="sr-only" id="title-instructions">
+                    Edit book title. Press Enter to save or Escape to cancel.
+                  </div>
+                  <label htmlFor="book-title-input" className="sr-only">Book title</label>
                   <Input
+                    id="book-title-input"
                     ref={titleInputRef}
                     defaultValue={editedBook.title}
                     className={cn(
@@ -544,10 +893,79 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
                     autoFocus
                     onKeyDown={handleTitleKeyDown}
                     aria-invalid={!!titleError}
+                    aria-describedby="title-instructions"
+                    aria-errormessage={titleError ? "title-error" : undefined}
                   />
                   {titleError && (
+                    <div 
+                      id="title-error"
+                      className="text-destructive text-sm flex items-center gap-1 mt-1"
+                      role="alert"
+                    >
+                      <AlertCircle className="h-3 w-3" aria-hidden="true" /> {titleError}
+                    </div>
+                  )}
+                  <div className="absolute right-1 top-1 flex gap-1" aria-hidden="true">
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={(e) => {
+                        e.preventDefault();
+                        cancelTitleEdit();
+                      }}
+                      className="h-7 w-7 p-0"
+                      aria-label="Cancel title edit"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={(e) => {
+                        e.preventDefault();
+                        validateAndSaveTitle();
+                      }}
+                      className="h-7 w-7 p-0"
+                      aria-label="Save title"
+                    >
+                      <Check className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <CardTitle 
+                  className="text-2xl font-serif text-wrap cursor-pointer" 
+                  onClick={() => setIsEditingTitle(true)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setIsEditingTitle(true);
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
+                  aria-label="Edit book title"
+                >
+                  {editedBook.title}
+                  <Edit2 className="h-4 w-4 ml-2 opacity-50" />
+                </CardTitle>
+              )}
+              {isEditingAuthor ? (
+                <div className="relative mb-2 mt-1">
+                  <Input
+                    ref={authorInputRef}
+                    defaultValue={editedBook.author}
+                    className={cn(
+                      "font-medium bg-white/20 text-primary-foreground border-white/30",
+                      authorError && "border-destructive focus-visible:ring-destructive"
+                    )}
+                    autoFocus
+                    onKeyDown={handleAuthorKeyDown}
+                    aria-invalid={!!authorError}
+                  />
+                  {authorError && (
                     <div className="text-destructive text-sm flex items-center gap-1 mt-1">
-                      <AlertCircle className="h-3 w-3" /> {titleError}
+                      <AlertCircle className="h-3 w-3" /> {authorError}
                     </div>
                   )}
                   <div className="absolute right-1 top-1 flex gap-1">
@@ -555,7 +973,7 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
                       size="sm"
                       onClick={(e) => {
                         e.preventDefault();
-                        validateAndSaveTitle();
+                        validateAndSaveAuthor();
                       }}
                       className="h-7 w-7 p-0 text-primary-foreground hover:bg-white/20"
                     >
@@ -566,7 +984,7 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
                       size="sm"
                       onClick={(e) => {
                         e.preventDefault();
-                        cancelTitleEdit();
+                        cancelAuthorEdit();
                       }}
                       className="h-7 w-7 p-0 text-primary-foreground hover:bg-white/20"
                     >
@@ -575,22 +993,107 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
                   </div>
                 </div>
               ) : (
-                <CardTitle 
-                  className="font-serif text-xl mb-2 cursor-pointer hover:underline hover:underline-offset-4 flex items-center" 
-                  onClick={startTitleEdit}
+                <p 
+                  className="text-primary-foreground/90 font-medium cursor-pointer hover:underline hover:underline-offset-4 flex items-center" 
+                  onClick={startAuthorEdit}
                 >
-                  {editedBook.title}
+                  by {editedBook.author}
                   <Edit2 className="h-4 w-4 ml-2 opacity-50" />
-                </CardTitle>
+                </p>
               )}
-              <p className="text-primary-foreground/90 font-medium">
-                by {editedBook.author}
-              </p>
-              {editedBook.genre && (
-                <Badge variant="secondary" className="mt-2 bg-white/20 text-primary-foreground border-white/30">
-                  {editedBook.genre}
-                </Badge>
-              )}
+              <div className="mt-2 relative">
+                {isEditingGenre ? (
+                  <div className="relative flex-grow">
+                    <div className="sr-only" id="genre-instructions">
+                      Enter book genres separated by commas. Press Enter to save or Escape to cancel.
+                    </div>
+                    <label htmlFor="genre-input" className="sr-only">Book genres</label>
+                    <Input
+                      id="genre-input"
+                      ref={genreInputRef}
+                      value={genreInput}
+                      onChange={(e) => {
+                        setGenreInput(e.target.value);
+                        validateGenreInput(e.target.value);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          validateAndSaveGenre();
+                        } else if (e.key === 'Escape') {
+                          e.preventDefault();
+                          cancelGenreEdit();
+                        }
+                      }}
+                      placeholder="Fiction, Fantasy, Mystery..."
+                      aria-describedby="genre-instructions genre-helper-text"
+                      aria-invalid={!!genreError}
+                      aria-errormessage={genreError ? "genre-error" : undefined}
+                      className={cn(
+                        "text-foreground dark:text-foreground",
+                        genreError ? "border-destructive focus-visible:ring-destructive" : ""
+                      )}
+                    />
+                    {genreError && (
+                      <div 
+                        id="genre-error"
+                        className="text-destructive text-sm flex items-center gap-1 mt-1"
+                        role="alert"
+                      >
+                        <AlertCircle className="h-3 w-3" aria-hidden="true" /> {genreError}
+                      </div>
+                    )}
+                    <div id="genre-helper-text" className="text-xs text-muted-foreground mt-1">
+                      Enter genres separated by commas
+                    </div>
+                    <div className="absolute right-1 top-1 flex gap-1" aria-hidden="true">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          cancelGenreEdit();
+                        }}
+                        className="h-7 w-7 p-0"
+                        aria-label="Cancel editing genres"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          validateAndSaveGenre();
+                        }}
+                        className="h-7 w-7 p-0"
+                        aria-label="Save genres"
+                      >
+                        <Check className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div 
+                    className="cursor-pointer hover:underline hover:underline-offset-4"
+                    onClick={() => setIsEditingGenre(true)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        setIsEditingGenre(true);
+                      }
+                    }}
+                    role="button"
+                    tabIndex={0}
+                    aria-label="Edit book genres"
+                  >
+                    <div className="flex items-center">
+                      <GenreDisplay genres={editedBook.genre} />
+                      <Edit2 className="h-4 w-4 ml-2 opacity-50" aria-hidden="true" />
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
             <Button
               variant="ghost"
@@ -614,18 +1117,195 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
               />
             )}
             <div className="flex-1 space-y-2 text-sm">
-              {book.publishedDate && (
-                <div className="flex items-center gap-2">
-                  <Calendar className="h-4 w-4 text-muted-foreground" />
-                  <span>Published: {book.publishedDate}</span>
-                </div>
-              )}
-              {book.pageCount && (
-                <div className="flex items-center gap-2">
-                  <BookOpen className="h-4 w-4 text-muted-foreground" />
-                  <span>{book.pageCount} pages</span>
-                </div>
-              )}
+              <div className="flex items-center gap-2">
+                <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+                {isEditingPublishedDate ? (
+                  <div className="relative flex-grow">
+                    <div className="sr-only" id="publisheddate-instructions">
+                      Edit book publication date. Use the calendar to select a date or press Escape to cancel.
+                    </div>
+                    <label id="published-date-label" className="sr-only">Book publication date</label>
+                    <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className={cn(
+                            "w-[240px] justify-start text-left font-normal",
+                            !publishedDateInput && "text-muted-foreground",
+                            publishedDateError && "border-destructive focus-visible:ring-destructive"
+                          )}
+                          aria-labelledby="published-date-label"
+                          aria-describedby="publisheddate-instructions"
+                          aria-invalid={!!publishedDateError}
+                          aria-errormessage={publishedDateError ? "publisheddate-error" : undefined}
+                        >
+                          <CalendarIcon className="mr-2 h-4 w-4" aria-hidden="true" />
+                          {publishedDateInput ? formatPublishedDate(publishedDateInput) : "Select date"}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={publishedDateInput}
+                          onSelect={(date: Date | undefined) => {
+                            setPublishedDateInput(date);
+                            if (date) {
+                              // Auto-close calendar on selection
+                              setTimeout(() => setCalendarOpen(false), 300);
+                            }
+                          }}
+                          initialFocus
+                          aria-label="Select publication date"
+                        />
+                        <div className="flex justify-end gap-2 p-3 border-t">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setPublishedDateInput(undefined);
+                              setCalendarOpen(false);
+                            }}
+                            aria-label="Clear publication date"
+                          >
+                            Clear
+                          </Button>
+                          <Button
+                            variant="default"
+                            size="sm"
+                            onClick={() => {
+                              validateAndSavePublishedDate();
+                            }}
+                            aria-label="Save publication date"
+                          >
+                            Done
+                          </Button>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                    {publishedDateError && (
+                      <div 
+                        id="publisheddate-error"
+                        className="text-destructive text-sm flex items-center gap-1 mt-1"
+                        role="alert"
+                      >
+                        <AlertCircle className="h-3 w-3" aria-hidden="true" /> {publishedDateError}
+                      </div>
+                    )}
+                    <div className="absolute right-1 top-1 flex gap-1" aria-hidden="true">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          cancelPublishedDateEdit();
+                        }}
+                        className="h-7 w-7 p-0"
+                        aria-label="Cancel date edit"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <span 
+                    className="cursor-pointer hover:underline hover:underline-offset-4 flex items-center"
+                    onClick={() => setIsEditingPublishedDate(true)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        setIsEditingPublishedDate(true);
+                      }
+                    }}
+                    role="button"
+                    tabIndex={0}
+                    aria-label="Edit publication date"
+                  >
+                    {editedBook.publishedDate ? 
+                      `Published: ${formatPublishedDate(editedBook.publishedDate)}` : 
+                      "Add publication date"}
+                    <Edit2 className="h-4 w-4 ml-2 opacity-50" aria-hidden="true" />
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <BookOpen className="h-4 w-4 text-muted-foreground" />
+                {isEditingPageCount ? (
+                  <div className="relative flex-grow">
+                    <div className="sr-only" id="pagecount-instructions">
+                      Edit book page count. Enter a positive whole number. Press Enter to save or Escape to cancel.
+                    </div>
+                    <label htmlFor="book-pagecount-input" className="sr-only">Book page count</label>
+                    <Input
+                      id="book-pagecount-input"
+                      ref={pageCountInputRef}
+                      type="number"
+                      min="1"
+                      step="1"
+                      defaultValue={editedBook.pageCount?.toString() || ''}
+                      className={cn(
+                        "max-w-[150px] bg-background",
+                        pageCountError && "border-destructive focus-visible:ring-destructive"
+                      )}
+                      autoFocus
+                      onKeyDown={handlePageCountKeyDown}
+                      aria-describedby="pagecount-instructions"
+                      aria-invalid={!!pageCountError}
+                      aria-errormessage={pageCountError ? "pagecount-error" : undefined}
+                    />
+                    {pageCountError && (
+                      <div 
+                        id="pagecount-error"
+                        className="text-destructive text-sm flex items-center gap-1 mt-1"
+                        role="alert"
+                      >
+                        <AlertCircle className="h-3 w-3" aria-hidden="true" /> {pageCountError}
+                      </div>
+                    )}
+                    <div className="absolute right-1 top-1 flex gap-1" aria-hidden="true">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          cancelPageCountEdit();
+                        }}
+                        className="h-7 w-7 p-0"
+                        aria-label="Cancel page count edit"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          validateAndSavePageCount();
+                        }}
+                        className="h-7 w-7 p-0"
+                        aria-label="Save page count"
+                      >
+                        <Check className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <p 
+                    className="cursor-pointer hover:underline hover:underline-offset-4 flex gap-2 items-center" 
+                    onClick={() => setIsEditingPageCount(true)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        setIsEditingPageCount(true);
+                      }
+                    }}
+                    role="button"
+                    tabIndex={0}
+                    aria-label="Edit book page count"
+                  >
+                    {editedBook.pageCount ? `${editedBook.pageCount} pages` : 'No page count'} <Edit2 className="h-4 w-4 opacity-50" aria-hidden="true" />
+                  </p>
+                )}
+              </div>
             </div>
           </div>
 
@@ -633,6 +1313,9 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <Label htmlFor="readingStatus">Reading Status</Label>
+              <div className="sr-only" id="status-description">
+                Select the current reading status for this book. Selecting 'Completed' will automatically set today's date as completion date if none exists.
+              </div>
               <select
                 id="readingStatus"
                 value={editedBook.status || (editedBook.completedDate ? 'completed' : 'reading')}
@@ -647,6 +1330,7 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
                   setEditedBook({ ...editedBook, status, completedDate });
                 }}
                 className="w-full p-2 border rounded-md bg-background text-foreground"
+                aria-describedby="status-description"
               >
                 <option value="reading">Currently Reading</option>
                 <option value="completed">Completed</option>
@@ -656,20 +1340,34 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
             
             <div>
               <Label htmlFor="completedDate">Completed Date</Label>
+              <div className="sr-only" id="completeddate-description">
+                Select the date when you finished reading this book. Only available for books marked as completed or currently reading.
+              </div>
               <Input
                 id="completedDate"
                 type="date"
-                value={editedBook.completedDate || ""}
+                value={formatDateForInput(editedBook.completedDate) || ""}
                 disabled={editedBook.status === 'want-to-read'}
                 onChange={(e) =>
                   setEditedBook({ ...editedBook, completedDate: e.target.value })
                 }
+                aria-describedby="completeddate-description"
+                aria-disabled={editedBook.status === 'want-to-read'}
+                aria-labelledby="completedDateLabel"
               />
             </div>
 
             <div>
-              <Label>Rating</Label>
-              <div className="flex gap-1 mt-1">
+              <Label id="rating-label">Rating</Label>
+              <div className="sr-only" id="rating-description">
+                Rate this book from 1 to 5 stars. Click on a star to set your rating.
+              </div>
+              <div 
+                className="flex gap-1 mt-1"
+                role="radiogroup"
+                aria-labelledby="rating-label"
+                aria-describedby="rating-description"
+              >
                 {[1, 2, 3, 4, 5].map((star) => (
                   <Star
                     key={star}
@@ -677,9 +1375,19 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
                       "h-6 w-6 cursor-pointer transition-colors",
                       star <= (editedBook.rating || 0)
                         ? "fill-accent-warm text-accent-warm"
-                        : "text-muted-foreground hover:text-accent-warm"
+                        : "text-muted-foreground"
                     )}
-                    onClick={() => handleRatingClick(star)}
+                    onClick={() => setEditedBook({ ...editedBook, rating: star })}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        setEditedBook({ ...editedBook, rating: star });
+                      }
+                    }}
+                    role="radio"
+                    aria-checked={star === editedBook.rating}
+                    aria-label={`${star} star${star !== 1 ? 's' : ''}`}
+                    tabIndex={0}
                   />
                 ))}
               </div>
@@ -701,18 +1409,90 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
           </div>
 
           {/* Description */}
-          {book.description && (
-            <div>
-              <Label>Description</Label>
+          <div>
+            <Label htmlFor="book-description">Description</Label>
+            {isEditingDescription ? (
+              <div className="mt-1">
+                <div className="sr-only" id="description-instructions">
+                  Edit book description. You can add rich text or basic formatting. Press Enter to create paragraphs.
+                </div>
+                <Textarea
+                  id="book-description"
+                  ref={descriptionInputRef}
+                  value={descriptionInput}
+                  onChange={(e) => setDescriptionInput(e.target.value)}
+                  className={cn(
+                    "min-h-[120px] bg-background",
+                    descriptionError && "border-destructive focus-visible:ring-destructive"
+                  )}
+                  placeholder="Add a description..."
+                  rows={6}
+                  autoFocus
+                  aria-describedby="description-instructions"
+                  aria-invalid={!!descriptionError}
+                  aria-errormessage={descriptionError ? "description-error" : undefined}
+                />
+                {descriptionError && (
+                  <div 
+                    id="description-error"
+                    className="text-destructive text-sm flex items-center gap-1 mt-1"
+                    role="alert"
+                  >
+                    <AlertCircle className="h-3 w-3" aria-hidden="true" /> {descriptionError}
+                  </div>
+                )}
+                <div className="flex justify-end gap-2 mt-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      cancelDescriptionEdit();
+                    }}
+                    aria-label="Cancel description edit"
+                  >
+                    Cancel
+                  </Button>
+                  <Button 
+                    variant="default" 
+                    size="sm"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      validateAndSaveDescription();
+                    }}
+                    aria-label="Save book description"
+                  >
+                    Save
+                  </Button>
+                </div>
+              </div>
+            ) : (
               <div 
-                className="text-sm text-muted-foreground mt-1 p-3 bg-muted rounded leading-relaxed max-h-[200px] overflow-y-auto scrollbar-thin scrollbar-thumb-rounded scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent"
+                className="text-sm mt-1 p-3 bg-muted rounded leading-relaxed max-h-[200px] overflow-y-auto scrollbar-thin scrollbar-thumb-rounded scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent relative cursor-pointer hover:bg-muted/80 group"
+                onClick={() => setIsEditingDescription(true)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setIsEditingDescription(true);
+                  }
+                }}
+                role="button"
+                tabIndex={0}
+                aria-label="Edit book description"
               >
-                {cleanHtml(book.description)}
+                {editedBook.description ? (
+                  <div className="whitespace-pre-line">{cleanHtml(editedBook.description)}</div>
+                ) : (
+                  <div className="text-muted-foreground italic">No description available. Click to add one.</div>
+                )}
+                <div className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity" aria-hidden="true">
+                  <Edit2 className="h-4 w-4 text-muted-foreground" />
+                </div>
                 {/* Fade effect at the bottom to indicate scrollable content */}
                 <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-muted to-transparent pointer-events-none"></div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
           
           {/* Series Information */}
           <div className="space-y-3">
@@ -840,6 +1620,106 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
                   type="hidden" 
                   value={editedBook._legacyNextBookExpectedYear || ''}
                 />
+              </div>
+            )}
+          </div>
+
+          {/* Book Metadata Section */}
+          <div className="space-y-3 mt-6">
+            <div 
+              className="flex items-center justify-between cursor-pointer"
+              onClick={() => setShowMetadataInfo(!showMetadataInfo)}
+            >
+              <div className="flex items-center gap-2">
+                <Database className="h-5 w-5 text-primary" />
+                <h3 className="text-base font-medium">Book Metadata</h3>
+              </div>
+              <Button variant="ghost" size="sm" className="p-1 h-8 w-8">
+                {showMetadataInfo ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </Button>
+            </div>
+            
+            {showMetadataInfo && (
+              <div className="bg-muted/30 p-4 rounded-md border">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <h4 className="text-sm font-medium mb-2">ISBN Information</h4>
+                    <div className="space-y-2 text-sm">
+                      {/* Display ISBN-10 */}
+                      <div>
+                        <span className="font-medium">ISBN-10:</span> 
+                        <div className="pl-4">
+                          {editedBook.isbn10 && editedBook.isbn10.length > 0 ? 
+                            editedBook.isbn10.map((isbn, index) => (
+                              <div key={`isbn10-${index}`}>{isbn}</div>
+                            )) : 
+                            <span className="text-muted-foreground italic">None</span>
+                          }
+                        </div>
+                      </div>
+                      
+                      {/* Display ISBN-13 */}
+                      <div>
+                        <span className="font-medium">ISBN-13:</span>
+                        <div className="pl-4">
+                          {editedBook.isbn13 && editedBook.isbn13.length > 0 ? 
+                            editedBook.isbn13.map((isbn, index) => (
+                              <div key={`isbn13-${index}`}>{isbn}</div>
+                            )) : 
+                            <span className="text-muted-foreground italic">None</span>
+                          }
+                        </div>
+                      </div>
+                      
+                      {/* Legacy ISBN */}
+                      <div>
+                        <span className="font-medium">Legacy ISBN:</span>
+                        <div className="pl-4">
+                          {editedBook.isbn ? 
+                            <div>{editedBook.isbn}</div> : 
+                            <span className="text-muted-foreground italic">None</span>
+                          }
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <h4 className="text-sm font-medium mb-2">API Source</h4>
+                    <div className="space-y-2 text-sm">
+                      <div>
+                        <span className="font-medium">Source Type:</span> 
+                        <span className="ml-2">
+                          {editedBook.sourceType ? (
+                            <Badge variant="outline" className="ml-1">
+                              {editedBook.sourceType === 'google' ? 'Google Books' : 
+                               editedBook.sourceType === 'openlib' ? 'Open Library' : 
+                               editedBook.sourceType === 'manual' ? 'Manual Entry' : 
+                               editedBook.sourceType}
+                            </Badge>
+                          ) : (
+                            <span className="text-muted-foreground italic">Unknown</span>
+                          )}
+                        </span>
+                      </div>
+                      
+                      <div>
+                        <span className="font-medium">Source ID:</span> 
+                        <span className="ml-2">
+                          {editedBook.sourceId ? (
+                            <code className="px-1 py-0.5 bg-muted rounded text-xs">{editedBook.sourceId}</code>
+                          ) : (
+                            <span className="text-muted-foreground italic">None</span>
+                          )}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="mt-4 text-xs text-muted-foreground">
+                  <p>Metadata is read-only and is maintained automatically by the system.</p>
+                </div>
               </div>
             )}
           </div>

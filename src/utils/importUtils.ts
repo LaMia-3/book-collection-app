@@ -1,6 +1,11 @@
 import { Book } from '@/types/book';
 import { Book as ModelBook } from '@/types/models/Book';
 import { bookApiClient } from '@/services/api';
+import { createLogger } from './loggingUtils';
+import { normalizeGenreData, standardizeGenreData } from './genreUtils';
+
+// Create a logger for import functionality
+const log = createLogger('ImportUtils');
 
 /**
  * Represents a raw book entry from an imported CSV or JSON file
@@ -14,7 +19,7 @@ interface RawBookImport {
   completedDate?: string;
   rating?: string | number;
   notes?: string;
-  genre?: string;
+  genre?: string | string[];
   isPartOfSeries?: string | boolean;
   seriesName?: string;
   pageCount?: string | number;
@@ -42,8 +47,8 @@ export function parseCSV(csvString: string): RawBookImport[] {
   // Split into lines
   const lines = csvString.split(/\r?\n/);
   
-  // Log for debugging
-  console.log('CSV parsing - found lines:', lines.length);
+  // Log processing details
+  log.info('CSV parsing started', { lineCount: lines.length });
   
   if (lines.length < 2) {
     throw new Error('CSV file must contain at least a header row and one data row');
@@ -55,8 +60,8 @@ export function parseCSV(csvString: string): RawBookImport[] {
   // Parse data rows
   const result: RawBookImport[] = [];
   
-  // Log headers for debugging
-  console.log('CSV headers:', headers);
+  // Log detected headers
+  log.debug('CSV headers detected', { headers });
   
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i].trim();
@@ -64,8 +69,8 @@ export function parseCSV(csvString: string): RawBookImport[] {
       const values = parseCSVLine(line);
       const entry: Record<string, string> = {};
       
-      // Log line parsing for debugging
-      console.log(`Line ${i} values:`, values);
+      // Log line parsing details
+      log.trace(`Parsing CSV line ${i}`, { values });
       
       // Map values to headers
       headers.forEach((header, index) => {
@@ -77,7 +82,7 @@ export function parseCSV(csvString: string): RawBookImport[] {
       });
       
       // Log the parsed entry
-      console.log(`Parsed book ${i}:`, entry);
+      log.debug(`Parsed book entry from line ${i}`, { entry });
       
       result.push(entry as unknown as RawBookImport);
     }
@@ -127,28 +132,29 @@ function parseCSVLine(line: string): string[] {
  * @returns True if valid, false otherwise
  */
 export function validateImportedBook(book: RawBookImport): { valid: boolean; reason?: string } {
-  console.log('Validating book:', book);
+  log.debug('Validating imported book', { title: book.title, author: book.author });
   
   // Check for required title field
   if (!book.title || !book.title.trim()) {
-    console.log('Validation failed: Missing title');
+    log.warn('Validation failed: Missing title');
     return { valid: false, reason: 'Missing required field: title' };
   }
   
   // Check for either author or ISBN
   if ((!book.author || !book.author.trim()) && (!book.isbn || !book.isbn.trim()) && (!book.googleBooksId || !book.googleBooksId.trim())) {
-    console.log('Validation failed: Missing author/ISBN/googleBooksId');
-    console.log('Author:', book.author);
-    console.log('ISBN:', book.isbn);
-    console.log('GoogleBooksId:', book.googleBooksId);
+    log.warn('Validation failed: Missing required identifiers', { 
+      hasAuthor: Boolean(book.author?.trim()), 
+      hasISBN: Boolean(book.isbn?.trim()),
+      hasGoogleId: Boolean(book.googleBooksId?.trim())
+    });
     return { valid: false, reason: 'Missing required field: either author or ISBN is required' };
   }
   
   // Accept any status - we'll normalize it in the conversion function
   if (book.status) {
-    console.log('Status provided:', book.status);
+    log.trace('Status provided for import', { status: book.status });
   } else {
-    console.log('No status provided');
+    log.trace('No status provided for import');
   }
   
   // Check for valid rating if provided
@@ -197,38 +203,38 @@ function convertRawToBook(rawBook: RawBookImport): Partial<Book> {
     title: rawBook.title,
     author: rawBook.author || '',
     googleBooksId: rawBook.googleBooksId || rawBook.isbn, // Use ISBN as googleBooksId if available
-    genre: rawBook.genre,
+    genre: rawBook.genre ? standardizeGenreData(rawBook.genre) : undefined,
     notes: rawBook.notes,
   };
   
   // Convert status to our internal format
-  console.log('Raw status value:', rawBook.status);
+  log.debug('Processing book status', { rawStatus: rawBook.status });
   if (rawBook.status) {
     const status = rawBook.status.toLowerCase().trim();
-    console.log('Normalized status:', status);
+    log.trace('Normalized status value', { original: rawBook.status, normalized: status });
     
     // Handle various status values
     if (status.includes('want') || status === 'to read' || status === 'to-read') {
       book.status = 'want-to-read' as const;
-      console.log('Mapped to: want-to-read');
+      log.debug('Status mapped to: want-to-read');
     } else if (status.includes('reading') || status === 'currently reading' || status === 'in progress') {
       book.status = 'reading' as const;
-      console.log('Mapped to: reading');
+      log.debug('Status mapped to: reading');
     } else if (status.includes('complete') || status.includes('finished') || status.includes('read')) {
       book.status = 'completed' as const;
-      console.log('Mapped to: completed');
+      log.debug('Status mapped to: completed');
     } else {
       book.status = 'want-to-read' as const; // Default if invalid
-      console.log('Defaulted to: want-to-read');
+      log.debug('Unrecognized status, defaulted to: want-to-read', { originalStatus: rawBook.status });
     }
   } else {
     // If no status is provided but there's a completed date, mark as completed
     if (rawBook.completedDate) {
       book.status = 'completed' as const;
-      console.log('Has completed date, setting to: completed');
+      log.debug('No explicit status but has completed date, setting to: completed', { completedDate: rawBook.completedDate });
     } else {
       book.status = 'want-to-read' as const; // Default
-      console.log('No status or date, defaulted to: want-to-read');
+      log.debug('No status or completed date, defaulted to: want-to-read');
     }
   }
   
@@ -242,16 +248,16 @@ function convertRawToBook(rawBook: RawBookImport): Partial<Book> {
     if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
       // FIXED: Accept all valid YYYY-MM-DD dates, including future dates
       book.completedDate = dateStr;
-      console.log(`Valid date format accepted: ${dateStr} (even if in future)`);
+      log.debug(`Valid completed date format accepted`, { date: dateStr });
     } else {
-      console.warn(`Invalid date format: ${dateStr}. Expected YYYY-MM-DD format.`);
+      log.warn(`Invalid completed date format`, { date: dateStr, expected: 'YYYY-MM-DD' });
       // Still use the date but log a warning
       book.completedDate = dateStr;
     }
   } else if (book.status === 'completed') {
     // If the book is marked as completed but doesn't have a completed date,
     // set today's date as the completed date
-    console.log('Book is marked completed but has no completed date, setting today as completed date');
+    log.debug('Book marked as completed but missing completed date, using current date');
     book.completedDate = new Date().toISOString().split('T')[0]; // Today's date
   }
   
@@ -293,7 +299,7 @@ function convertRawToBook(rawBook: RawBookImport): Partial<Book> {
       if (/^\d{4}$/.test(dateStr)) {
         book.publishedDate = dateStr;
       } else {
-        console.warn(`Invalid published date format: ${dateStr}. Expected YYYY-MM-DD or YYYY format.`);
+        log.warn(`Invalid published date format`, { date: dateStr, expected: 'YYYY-MM-DD or YYYY' });
         // Still use the date but log a warning
         book.publishedDate = dateStr;
       }
@@ -329,12 +335,16 @@ export async function importFromCSV(file: File): Promise<ImportResult> {
         const result = await processImportedBooks(rawBooks);
         resolve(result);
       } catch (error) {
-        reject(new Error(`Failed to parse CSV: ${error instanceof Error ? error.message : String(error)}`));
+        const errorMessage = `Failed to parse CSV: ${error instanceof Error ? error.message : String(error)}`;
+        log.error(errorMessage);
+        reject(new Error(errorMessage));
       }
     };
     
     reader.onerror = () => {
-      reject(new Error('Failed to read the CSV file'));
+      const errorMessage = 'Failed to read the CSV file';
+      log.error(errorMessage);
+      reject(new Error(errorMessage));
     };
     
     // Start reading the file
@@ -361,23 +371,31 @@ export async function importFromJSON(file: File): Promise<ImportResult> {
         try {
           const parsed = JSON.parse(jsonString);
           if (!Array.isArray(parsed)) {
-            throw new Error('JSON file must contain an array of book objects');
+            const errorMessage = 'JSON file must contain an array of book objects';
+          log.error(errorMessage, { parsed: typeof parsed });
+          throw new Error(errorMessage);
           }
           rawBooks = parsed as RawBookImport[];
         } catch (parseError) {
-          throw new Error(`Invalid JSON format: ${parseError instanceof Error ? parseError.message : String(parseError)}`);
+          const errorMessage = `Invalid JSON format: ${parseError instanceof Error ? parseError.message : String(parseError)}`;
+          log.error(errorMessage);
+          throw new Error(errorMessage);
         }
         
         // Process each book
         const result = await processImportedBooks(rawBooks);
         resolve(result);
       } catch (error) {
-        reject(new Error(`Failed to parse JSON: ${error instanceof Error ? error.message : String(error)}`));
+        const errorMessage = `Failed to parse JSON: ${error instanceof Error ? error.message : String(error)}`;
+        log.error(errorMessage);
+        reject(new Error(errorMessage));
       }
     };
     
     reader.onerror = () => {
-      reject(new Error('Failed to read the JSON file'));
+      const errorMessage = 'Failed to read the JSON file';
+      log.error(errorMessage);
+      reject(new Error(errorMessage));
     };
     
     // Start reading the file
@@ -396,11 +414,14 @@ async function processImportedBooks(rawBooks: RawBookImport[]): Promise<ImportRe
     total: rawBooks.length
   };
   
+  log.info(`Processing ${rawBooks.length} imported books`);
+  
   // Process books in sequence to avoid overwhelming the APIs
   for (const rawBook of rawBooks) {
     // Validate the book
     const validation = validateImportedBook(rawBook);
     if (!validation.valid) {
+      log.warn(`Book validation failed`, { title: rawBook.title, reason: validation.reason });
       result.failed.push({
         rawData: rawBook,
         reason: validation.reason || 'Unknown validation error'
@@ -428,11 +449,14 @@ async function processImportedBooks(rawBooks: RawBookImport[]): Promise<ImportRe
       let enrichedBook: Book = baseBook as Book;
       
       try {
-        console.log(`Attempting to enrich book: ${rawBook.title} by ${rawBook.author || 'Unknown'}`);
+        log.info(`Attempting to enrich book with API data`, { 
+          title: rawBook.title, 
+          author: rawBook.author || 'Unknown'
+        });
         
         // Use specific ID if we have it, otherwise search by title/author
         if (rawBook.googleBooksId) {
-          console.log(`Using provided Google Books ID: ${rawBook.googleBooksId}`);
+          log.debug(`Using provided Google Books ID for enrichment`, { id: rawBook.googleBooksId });
           // Get book details directly if we have an ID
           const apiBookDetails = await bookApiClient.getBookDetails(rawBook.googleBooksId);
           
@@ -444,12 +468,12 @@ async function processImportedBooks(rawBooks: RawBookImport[]): Promise<ImportRe
             pageCount: apiBookDetails.pageCount,
             thumbnail: apiBookDetails.thumbnail,
             publishedDate: apiBookDetails.publishedDate,
-            genre: apiBookDetails.genre || baseBook.genre,
+            genre: apiBookDetails.genre ? standardizeGenreData(apiBookDetails.genre) : baseBook.genre,
             googleBooksId: rawBook.googleBooksId // Keep the ID for future reference
           };
         } 
         else if (rawBook.isbn) {
-          console.log(`Searching by ISBN: ${rawBook.isbn}`);
+          log.debug(`Searching for book by ISBN`, { isbn: rawBook.isbn });
           // Search by ISBN for more accurate results
           const searchResult = await bookApiClient.searchBooks({
             query: rawBook.isbn,
@@ -469,13 +493,16 @@ async function processImportedBooks(rawBooks: RawBookImport[]): Promise<ImportRe
               pageCount: apiBookDetails.pageCount,
               thumbnail: apiBookDetails.thumbnail,
               publishedDate: apiBookDetails.publishedDate,
-              genre: apiBookDetails.genre || baseBook.genre,
+              genre: apiBookDetails.genre ? standardizeGenreData(apiBookDetails.genre) : baseBook.genre,
               googleBooksId: searchResult.books[0].id // Store the Google Books ID
             };
           }
         } 
         else {
-          console.log(`Searching by title and author: ${rawBook.title} by ${rawBook.author || 'Unknown'}`);
+          log.debug(`Searching for book by title and author`, { 
+            title: rawBook.title, 
+            author: rawBook.author || 'Unknown' 
+          });
           // Search by title and author
           const searchTerm = `${rawBook.title} ${rawBook.author || ''}`;
           const searchResult = await bookApiClient.searchBooks({
@@ -507,20 +534,23 @@ async function processImportedBooks(rawBooks: RawBookImport[]): Promise<ImportRe
               pageCount: apiBookDetails.pageCount,
               thumbnail: apiBookDetails.thumbnail,
               publishedDate: apiBookDetails.publishedDate,
-              genre: apiBookDetails.genre || baseBook.genre,
+              genre: apiBookDetails.genre ? standardizeGenreData(apiBookDetails.genre) : baseBook.genre,
               googleBooksId: bestMatch.id, // Store the Google Books ID
               // Add any series information if available
               isPartOfSeries: apiBookDetails.isPartOfSeries || baseBook.isPartOfSeries,
-              seriesName: apiBookDetails.seriesName || baseBook.seriesName
+              _legacySeriesName: apiBookDetails.seriesName || baseBook._legacySeriesName
             };
           }
         }
         
-        console.log('Book successfully enriched with API data');
+        log.info('Book successfully enriched with API data', { title: enrichedBook.title });
       } catch (apiError) {
         // API enrichment failed, but we can still use the base book data
-        console.warn(`API enrichment failed: ${apiError instanceof Error ? apiError.message : String(apiError)}`);
-        console.log('Continuing with basic book data from import');
+        log.warn(`API enrichment failed`, { 
+          title: rawBook.title, 
+          error: apiError instanceof Error ? apiError.message : String(apiError) 
+        });
+        log.debug('Continuing with basic book data from import');
         
         // We'll use the baseBook without API enrichment
         // No action needed as enrichedBook defaults to baseBook
@@ -529,9 +559,11 @@ async function processImportedBooks(rawBooks: RawBookImport[]): Promise<ImportRe
       // Add to successful imports
       result.successful.push(enrichedBook);
     } catch (error) {
+      const errorMessage = `Processing error: ${error instanceof Error ? error.message : String(error)}`;
+      log.error(`Book processing failed`, { title: rawBook.title, error: errorMessage });
       result.failed.push({
         rawData: rawBook,
-        reason: `Processing error: ${error instanceof Error ? error.message : String(error)}`
+        reason: errorMessage
       });
     }
   }

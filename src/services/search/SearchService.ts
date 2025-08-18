@@ -376,8 +376,13 @@ class SearchIndex<T> {
   /**
    * Tokenize a string into searchable tokens
    */
-  private tokenize(text: string): string[] {
-    // Remove punctuation and split by whitespace
+  private tokenize(text: string | string[]): string[] {
+    // If text is an array, join it and then tokenize
+    if (Array.isArray(text)) {
+      return this.tokenize(text.join(' '));
+    }
+    
+    // For string values, remove punctuation and split by whitespace
     return text
       .replace(/[^\w\s]/g, ' ')
       .split(/\s+/)
@@ -405,16 +410,26 @@ export class SearchService {
       (book) => book.id,
       
       // Fields accessor
-      (book) => ({
-        title: book.title,
-        author: book.author,
-        genre: book.genre || '',
-        notes: book.notes || '',
-        seriesName: book.seriesName || '',
-        description: book.description || '',
-        status: book.status || '',
-        googleId: book.googleBooksId || ''
-      })
+      (book) => {
+        // Convert any field to string for consistent searching
+        const convertToSearchableString = (value: string | string[] | undefined): string => {
+          if (Array.isArray(value)) {
+            return value.join(' ');
+          }
+          return value || '';
+        };
+        
+        return {
+          title: book.title,
+          author: book.author,
+          genre: convertToSearchableString(book.genre),
+          notes: book.notes || '',
+          seriesName: book._legacySeriesName || '',  // Use legacy series name field
+          description: book.description || '',
+          status: book.status || '',
+          googleId: book.googleBooksId || ''
+        };
+      }
     );
   }
 

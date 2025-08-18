@@ -81,6 +81,22 @@ export class GoogleBooksProvider implements BookApiProvider {
     
     const data = await response.json();
     
+    // Extract ISBNs if available
+    const isbn10: string[] = [];
+    const isbn13: string[] = [];
+    
+    // Google Books API provides industry identifiers which include ISBNs
+    if (data.volumeInfo?.industryIdentifiers) {
+      data.volumeInfo.industryIdentifiers.forEach((identifier: any) => {
+        if (identifier.type === 'ISBN_10') {
+          isbn10.push(identifier.identifier);
+        }
+        if (identifier.type === 'ISBN_13') {
+          isbn13.push(identifier.identifier);
+        }
+      });
+    }
+
     // Transform to our Book format
     return {
       id: crypto.randomUUID(), // Generate a unique ID for our system
@@ -95,7 +111,9 @@ export class GoogleBooksProvider implements BookApiProvider {
       sourceType: 'google',
       spineColor: Math.floor(Math.random() * 8) + 1, // Random spine color
       addedDate: new Date().toISOString(),
-      status: ReadingStatus.TO_READ // Default status for newly added books
+      status: ReadingStatus.TO_READ, // Default status for newly added books
+      isbn10: isbn10.length > 0 ? isbn10 : undefined,
+      isbn13: isbn13.length > 0 ? isbn13 : undefined
     };
   }
 

@@ -1,13 +1,28 @@
 /**
  * Core Book model representing a book in the collection
  */
+
+/**
+ * Timestamps for tracking various book-related dates
+ */
+export interface BookTimestamps {
+  created: string;    // When the book was added to the collection
+  updated?: string;   // Last time the book data was modified
+  startedReading?: string;  // When the user started reading
+  finishedReading?: string;  // When the user finished reading
+  lastOpened?: string;      // Last time the book details were viewed
+}
+
+/**
+ * Core Book model representing a book in the collection
+ */
 export interface Book {
   id: string;
   title: string;
   author: string;
   
   // Basic book information
-  genre?: string;
+  genre?: string | string[];
   description?: string;
   publishedDate?: string;
   pageCount?: number;
@@ -19,10 +34,15 @@ export interface Book {
   
   // User tracking fields
   status?: ReadingStatus;
-  completedDate?: string;
-  startedDate?: string;
   rating?: number; // 1-5 stars
   notes?: string;
+  
+  // Consolidated timestamps
+  timestamps?: BookTimestamps;
+  
+  // Legacy timestamp fields - keeping for backward compatibility
+  completedDate?: string;
+  startedDate?: string;
   
   // Series information
   isPartOfSeries?: boolean;
@@ -43,7 +63,9 @@ export interface Book {
   favorite?: boolean;
   
   // Enhanced metadata
-  isbn?: string;
+  isbn?: string;  // Legacy field - keeping for backward compatibility
+  isbn10?: string[];
+  isbn13?: string[];
   language?: string;
   publisher?: string;
   format?: string; // hardcover, paperback, ebook, etc.
@@ -67,7 +89,7 @@ export interface BookSummary {
   id: string;
   title: string;
   author: string;
-  genre?: string;
+  genre?: string | string[];
   thumbnail?: string;
   rating?: number;
   status?: ReadingStatus;

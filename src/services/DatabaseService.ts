@@ -95,6 +95,8 @@ export class DatabaseService {
   
   /**
    * Migrate data from localStorage to IndexedDB
+   * 
+   * @deprecated IndexedDB is now the exclusive source of truth, this utility is only kept for legacy support
    */
   async migrateFromLocalStorage(): Promise<void> {
     // Migration implementation for books
@@ -156,17 +158,27 @@ export class DatabaseService {
   
   /**
    * Check if migration from localStorage is needed
+   * 
+   * @deprecated IndexedDB is now the exclusive source of truth, migration utilities are only kept for legacy support
    */
   async checkMigrationNeeded(): Promise<boolean> {
+    // First check if IndexedDB already has data
     const db = await this.initDb();
-    
-    // Check if the books store is empty
     const booksCount = await db.count('books');
     
-    // Check if localStorage has books
-    const hasLocalStorageBooks = !!localStorage.getItem('bookLibrary');
+    // If IndexedDB already has books, no migration is needed
+    if (booksCount > 0) {
+      return false;
+    }
     
-    return booksCount === 0 && hasLocalStorageBooks;
+    // Only check localStorage if IndexedDB is empty
+    try {
+      const hasLocalStorageBooks = !!localStorage.getItem('bookLibrary');
+      return hasLocalStorageBooks;
+    } catch (e) {
+      console.error('Error accessing localStorage:', e);
+      return false;
+    }
   }
   
   /**

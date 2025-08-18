@@ -14,13 +14,16 @@ A modern web application for tracking and managing your personal book collection
 - **Multiple Views**: Display your collection as a visual bookshelf, list, cover grid, or insights dashboard
 - **Book Management**: Track reading status, ratings, notes, and series information
 - **Data Visualization**: View reading trends and statistics with the insights dashboard
+  - Improved genre statistics display with clearer information layout
+  - Enhanced book cover visualization that respects theme colors
 - **Customization**: Personalize your bookshelf with different color palettes
 - **Enhanced Search**: Advanced search capabilities with fuzzy matching and field-specific filtering
 - **Import/Export**: Import and export your collection in CSV or JSON format with series relationship preservation
-- **Data Persistence**: All data is stored in IndexedDB for reliable offline access
+- **Data Persistence**: All data is stored exclusively in IndexedDB for reliable offline access
   - Full offline support after initial load
   - Efficient indexed queries for large collections
   - Robust error handling and recovery
+  - Complete migration from localStorage (legacy) to IndexedDB
 
 ### Customization
 - **Personalization**: Customize your bookshelf with different color palettes
@@ -36,6 +39,7 @@ A modern web application for tracking and managing your personal book collection
   - Optimized schema with appropriate indexes
   - Transaction-based operations for data integrity
   - Efficient caching strategies
+  - No localStorage dependencies for core functionality
 - **External APIs**: Google Books API and Open Library API integration
 - **Build Tools**: Vite
 
@@ -47,6 +51,11 @@ npm install
 
 # Start development server
 npm run dev
+# or
+npm start
+
+# Stop the application
+npm stop
 ```
 
 ### Windows-Specific Instructions
@@ -68,6 +77,11 @@ The application is fully compatible with Windows. If you're using Windows, follo
 
    # Start development server
    npm run dev
+   # or
+   npm start
+   
+   # Stop the application
+   npm stop
    ```
 
 4. **Troubleshooting Windows-Specific Issues**:
@@ -97,12 +111,11 @@ The application is fully compatible with Windows. If you're using Windows, follo
 - **/series/:seriesId** - Detailed view of a specific series
 
 ### Admin and Debug Pages
-- **/admin** - Admin dashboard with comprehensive debug tools:
+- **/admin** - Admin dashboard with streamlined debug tools:
   - Database Viewer - View and manage IndexedDB data stores
-  - Data Migration - Tools for migrating between storage systems
-  - Database Reset - Reset database to a clean state
-  - IndexedDB Test - Verify the IndexedDB implementation
-  - Backend Test - Test and verify backend API functionality
+  - Data Migration - Tools for migrating legacy localStorage data to IndexedDB
+  - Database Reset - Reset database components (IndexedDB primary, localStorage legacy)
+  - Workflow Tester - Comprehensive test that adds 50 books from multiple APIs, creates series relationships, and sets various reading statuses
 
 ## Customization
 
@@ -178,6 +191,20 @@ The application is currently undergoing these major improvements:
    - Intelligent data merging with conflict resolution
 
 3. **IndexedDB Optimization**:
-   - Fully migrated from localStorage to IndexedDB for all data
+   - ✅ Completed migration from localStorage to IndexedDB as exclusive source of truth
    - Enhanced query performance with strategic indexes
-   - Better error handling and recovery mechanisms
+   - Improved error handling and recovery mechanisms
+   - Clear UI indicators showing IndexedDB as primary storage
+
+4. **UI Refinements**:
+   - ✅ Enhanced Insights dashboard with improved genre statistics display
+   - ✅ Better visualization for books without covers using theme colors
+   - ✅ Streamlined admin interface for improved usability
+   - ✅ Optimized information tooltips and card layouts
+
+5. **Improved Testing Infrastructure**:
+   - New WorkflowTester component for comprehensive integration testing
+   - Automated addition of 50 books (25 from Google Books API, 25 from Open Library API)
+   - Diverse reading status assignment (5 reading, 20 completed, 25 want-to-read)
+   - Automatic series detection and creation for popular book series
+   - Data consistency verification and detailed progress reporting
