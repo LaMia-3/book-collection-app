@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, KeyboardEvent, useCallback } from "react";
+import React, { useState, useEffect, useRef, KeyboardEvent, useCallback } from "react";
 import { Book } from "@/types/book";
 import { Series } from "@/types/series";
 import { Button } from "@/components/ui/button";
@@ -2054,3 +2054,6 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
     </div>
   );
 };
+
+// Export as default as well to support both import styles
+export default BookDetails;
