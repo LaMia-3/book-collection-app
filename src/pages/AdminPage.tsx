@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { ArrowLeft, Database, AlertCircle, Trash2, RefreshCw, Settings, Server, CheckCircle2, Wrench, Zap } from "lucide-react";
+import { ArrowLeft, Database, AlertCircle, Trash2, RefreshCw, Settings, Server, CheckCircle2, Wrench, Zap, UserCircle } from "lucide-react";
 import { useToast } from '@/hooks/use-toast';
 
 // Import components and utilities
@@ -13,6 +13,7 @@ import { IndexedDBViewer } from '@/components/debug/IndexedDBViewer';
 import WorkflowTester from '@/components/debug/WorkflowTester';
 import { resetIndexedDB, resetLocalStorage, resetAllStorage } from '@/utils/ResetDatabaseUtil';
 import { migrateDataToIndexedDB, isMigrationNeeded } from '@/utils/DataMigrationUtil';
+import { useSettings } from '@/contexts/SettingsContext';
 
 // Import services
 import { databaseService } from '@/services/DatabaseService';
@@ -47,6 +48,7 @@ export default function AdminPage() {
   const tabParam = queryParams.get('tab');
   
   const [activeTab, setActiveTab] = useState(tabParam || 'viewer');
+  const { settings } = useSettings();
   const [isResetting, setIsResetting] = useState(false);
   const [resetType, setResetType] = useState<'indexeddb' | 'localstorage' | 'all' | null>(null);
   
@@ -227,6 +229,10 @@ export default function AdminPage() {
           <TabsTrigger value="viewer" className="flex items-center gap-2">
             <Database className="h-4 w-4" />
             <span>Database Viewer</span>
+          </TabsTrigger>
+          <TabsTrigger value="settings" className="flex items-center gap-2">
+            <UserCircle className="h-4 w-4" />
+            <span>User Settings</span>
           </TabsTrigger>
           <TabsTrigger value="migration" className="flex items-center gap-2">
             <Server className="h-4 w-4" />
@@ -572,6 +578,83 @@ export default function AdminPage() {
                     </Button>
                   </CardFooter>
                 </Card>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* User Settings Tab */}
+        <TabsContent value="settings">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <UserCircle className="h-5 w-5 mr-2" />
+                User Settings
+              </CardTitle>
+              <CardDescription>
+                View and manage user settings, including birthday information
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-6">
+                <Card className="p-4">
+                  <h3 className="font-medium mb-4">General Settings</h3>
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-3 gap-2 items-center">
+                      <span className="font-medium">Preferred Name:</span>
+                      <span className="col-span-2">{settings.preferredName || 'Not set'}</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 items-center">
+                      <span className="font-medium">Birthday:</span>
+                      <span className="col-span-2">{settings.birthday || 'Not set'}</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 items-center">
+                      <span className="font-medium">Celebrate Birthday:</span>
+                      <span className="col-span-2">{settings.celebrateBirthday ? 'Yes' : 'No'}</span>
+                    </div>
+                  </div>
+                </Card>
+
+                <Card className="p-4">
+                  <h3 className="font-medium mb-4">View & API Preferences</h3>
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-3 gap-2 items-center">
+                      <span className="font-medium">Default View:</span>
+                      <span className="col-span-2">{settings.defaultView || 'shelf'}</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 items-center">
+                      <span className="font-medium">Default API:</span>
+                      <span className="col-span-2">{settings.defaultApi || 'google'}</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 items-center">
+                      <span className="font-medium">Default Status:</span>
+                      <span className="col-span-2">{settings.defaultStatus || 'want-to-read'}</span>
+                    </div>
+                  </div>
+                </Card>
+
+                <Card className="p-4">
+                  <h3 className="font-medium mb-4">Reading Goals</h3>
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-3 gap-2 items-center">
+                      <span className="font-medium">Goals Enabled:</span>
+                      <span className="col-span-2">{settings.goals?.enabled ? 'Yes' : 'No'}</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 items-center">
+                      <span className="font-medium">Monthly Target:</span>
+                      <span className="col-span-2">{settings.goals?.monthlyTarget || 0} books</span>
+                    </div>
+                  </div>
+                </Card>
+
+                <Alert className="bg-blue-50 text-blue-800 border-blue-300 dark:bg-blue-950 dark:text-blue-200 dark:border-blue-900">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertTitle>Birthday Information</AlertTitle>
+                  <AlertDescription>
+                    The birthday is stored in user settings and is used to display the birthday celebration. 
+                    The current format is: {settings.birthday ? `"${settings.birthday}"` : 'Not set'}
+                  </AlertDescription>
+                </Alert>
               </div>
             </CardContent>
           </Card>

@@ -3,8 +3,10 @@ import { useSettings } from '@/contexts/SettingsContext';
 import { Cake, X } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { enhancedStorageService } from '@/services/storage/EnhancedStorageService';
+import { createLogger } from '@/utils/loggingUtils';
 
 export const BirthdayCelebration: React.FC = () => {
+  const log = createLogger('BirthdayCelebration');
   const { settings } = useSettings();
   const [showCelebration, setShowCelebration] = useState(false);
   const [dismissed, setDismissed] = useState(false);
@@ -17,26 +19,73 @@ export const BirthdayCelebration: React.FC = () => {
   // Get today's date in MM/DD format for comparison
   const getTodayFormatted = () => {
     const now = new Date();
+    // Make sure we're getting the local date components
     // Return month and day as numbers
-    return `${now.getMonth() + 1}/${now.getDate()}`;
+    const formattedDate = `${now.getMonth() + 1}/${now.getDate()}`;
+    log.debug(`Today's formatted date: ${formattedDate} (from date object: ${now.toISOString()})`);
+    return formattedDate;
   };
   
   // Extract month and day from birthday
   const getBirthdayMonthDay = (birthdayString: string) => {
     try {
-      // Create a date object with the birthday string
-      // Note: When parsing dates with new Date(), the date is interpreted in the local timezone
-      const date = new Date(birthdayString);
+      log.debug(`Processing birthday string: ${birthdayString}`);
+      
+      // Special handling for MM/DD/YYYY format with slashes
+      if (birthdayString.includes('/')) {
+        log.debug('Detected MM/DD/YYYY format with slashes');
+        const parts = birthdayString.split('/');
+        
+        // Check if we have MM/DD/YYYY format (3 parts)
+        if (parts.length === 3) {
+          const month = parseInt(parts[0], 10);
+          const day = parseInt(parts[1], 10);
+          
+          // Validate month and day
+          if (!isNaN(month) && !isNaN(day) && month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+            const formattedBirthday = `${month}/${day}`;
+            log.debug(`Parsed MM/DD/YYYY format as: ${formattedBirthday}`);
+            return formattedBirthday;
+          } else {
+            log.warn(`Invalid MM/DD/YYYY format: ${birthdayString}`);
+          }
+        }
+      }
+      
+      // Special handling for YYYY-MM-DD format (ISO date string)
+      if (birthdayString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        log.debug('Detected YYYY-MM-DD format');
+        const parts = birthdayString.split('-');
+        const year = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10);
+        const day = parseInt(parts[2], 10);
+        
+        // Validate month and day
+        if (!isNaN(year) && !isNaN(month) && !isNaN(day) && 
+            month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+          const formattedBirthday = `${month}/${day}`;
+          log.debug(`Parsed YYYY-MM-DD format as: ${formattedBirthday}`);
+          return formattedBirthday;
+        }
+      }
+      
+      // Fallback to standard date parsing for other formats
+      // Create date object ensuring it's parsed as local time
+      const dateStr = birthdayString.includes('T') ? birthdayString : `${birthdayString}T12:00:00`;
+      const date = new Date(dateStr);
       
       // Check if the date is valid
       if (isNaN(date.getTime())) {
+        log.warn(`Invalid birthday date string: ${birthdayString}`);
         return null;
       }
       
       // Return month and day as numbers to match the todayFormatted format
-      return `${date.getMonth() + 1}/${date.getDate()}`;
+      const formattedBirthday = `${date.getMonth() + 1}/${date.getDate()}`;
+      log.debug(`Parsed birthday as: ${formattedBirthday}`);
+      return formattedBirthday;
     } catch (e) {
-      console.error('Error parsing birthday date:', e);
+      log.error(`Error parsing birthday date: ${birthdayString}`, e);
       return null;
     }
   };
@@ -52,12 +101,15 @@ export const BirthdayCelebration: React.FC = () => {
         const settings = await enhancedStorageService.getSettings();
         const notificationSettings = settings?.notifications || {};
         
+        log.debug(`Checking dismissed status for key: ${dismissStorageKey}`);
         if (notificationSettings[dismissStorageKey] === true) {
+          log.info('Birthday celebration already dismissed today');
           setDismissed(true);
           return;
         }
+        log.debug('Birthday celebration not yet dismissed today');
       } catch (error) {
-        console.error('Error checking birthday celebration dismissed status:', error);
+        log.error('Error checking birthday celebration dismissed status:', error);
       }
     };
     checkDismissed();
@@ -72,18 +124,33 @@ export const BirthdayCelebration: React.FC = () => {
     // 4. The celebration hasn't been dismissed
     if (dismissed) {
       // Ensure the celebration is hidden when dismissed
+      log.debug('Birthday celebration is dismissed, not showing');
       setShowCelebration(false);
       return;
     }
+    
+    log.debug('Checking birthday settings', { 
+      hasBirthday: !!settings.birthday, 
+      celebrateBirthday: !!settings.celebrateBirthday,
+      birthdayValue: settings.birthday
+    });
     
     if (settings.birthday && settings.celebrateBirthday) {
       const todayFormatted = getTodayFormatted();
       const birthdayFormatted = getBirthdayMonthDay(settings.birthday);
       
+      log.info('Comparing dates', { 
+        today: todayFormatted, 
+        birthday: birthdayFormatted,
+        isMatch: birthdayFormatted && todayFormatted === birthdayFormatted
+      });
+      
       if (birthdayFormatted && todayFormatted === birthdayFormatted) {
+        log.info(`🎉 It's the user's birthday today! Showing celebration`);
         setShowCelebration(true);
         
         // Fire confetti when it's the user's birthday
+        log.debug('Triggering confetti celebration');
         confetti({
           particleCount: 100,
           spread: 70,
@@ -120,8 +187,9 @@ export const BirthdayCelebration: React.FC = () => {
                   [dismissStorageKey]: true
                 }
               });
+              log.info('Birthday celebration dismissed status saved successfully');
             } catch (error) {
-              console.error('Error saving birthday celebration dismissed status:', error);
+              log.error('Error saving birthday celebration dismissed status:', error);
             }
             
             setDismissed(true);
