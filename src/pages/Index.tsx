@@ -12,11 +12,12 @@ import { ViewToggle, ViewMode } from "@/components/ViewToggle";
 import { BookDetails } from "@/components/BookDetails";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { Library, Search, Settings as SettingsIcon } from "lucide-react";
+import { Library, Search, Settings as SettingsIcon, PlusCircle } from "lucide-react";
 import searchService, { SearchResult, SearchOptions } from "@/services/search/SearchService";
 import { AdvancedSearch } from "@/components/AdvancedSearch";
 import { GoalTracker } from "@/components/GoalTracker";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
+import { PageHeader, HeaderActionButton } from "@/components/ui/page-header";
 
 const Index = () => {
   const navigate = useNavigate();
@@ -324,41 +325,53 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-gradient-page">
-      <div className="container mx-auto px-4 py-8 max-w-6xl">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <div className="flex items-center justify-center gap-3 mb-4">
-            <Library className="h-8 w-8 text-primary" />
-            <h1 className="text-4xl font-serif font-bold text-foreground">
-              {libraryName}
-            </h1>
-          </div>
-          <p className="text-lg text-muted-foreground font-sans">
-            Track your reading journey, one book at a time
-          </p>
-        </div>
-
-        {/* Action Bar */}
-        <div className="flex flex-col sm:flex-row gap-4 mb-8">
-          <div className="relative flex-1">
-            <AdvancedSearch 
-              onSearch={handleSearch}
-              placeholder="Search your books..."
-              className="w-full"
+      <div className="container mx-auto max-w-6xl">
+        {/* Standardized Header */}
+        <PageHeader
+          title={libraryName}
+          subtitle="Track your reading journey, one book at a time"
+          actions={
+            <>
+              <HeaderActionButton
+                icon={<PlusCircle className="h-4 w-4" />}
+                label="Add Books"
+                onClick={() => setShowSearch(!showSearch)}
+                variant="primary"
+              />
+              <NotificationBell />
+              <HeaderActionButton
+                icon={<SettingsIcon className="h-4 w-4" />}
+                label="Settings"
+                onClick={() => setShowSettings(true)}
+              />
+            </>
+          }
+          className="py-6"
+        >
+          <div className="flex flex-col sm:flex-row gap-4 mt-4">
+            <div className="relative flex-1">
+              <AdvancedSearch 
+                onSearch={handleSearch}
+                placeholder="Search your books..."
+                className="w-full"
+              />
+            </div>
+            <ViewToggle 
+              viewMode={viewMode} 
+              onChange={(newViewMode) => {
+                if (newViewMode === 'series') {
+                  navigate('/series');
+                } else {
+                  setViewMode(newViewMode);
+                }
+              }}
             />
           </div>
-          <Button
-            onClick={() => setShowSearch(!showSearch)}
-            className="bg-gradient-warm hover:bg-primary-glow transition-all duration-300"
-          >
-            <Search className="h-4 w-4 mr-2" />
-            {showSearch ? "Hide Search" : "Add Books"}
-          </Button>
-        </div>
+        </PageHeader>
 
         {/* Book Search */}
         {showSearch && (
-          <div className="mb-8 p-6 bg-card rounded-lg shadow-elegant">
+          <div className="mb-8 p-6 mx-4 bg-card rounded-lg shadow-elegant">
             <BookSearch onAddBook={addBook} existingBooks={books} />
           </div>
         )}
@@ -389,7 +402,7 @@ const Index = () => {
         <GoalTracker booksCompletedThisMonth={booksCompletedThisMonth} />
 
         {/* Library View */}
-        <div className="bg-card rounded-lg p-6 shadow-elegant">
+        <div className="bg-card rounded-lg p-6 mx-4 shadow-elegant">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-2">
               <Library className="h-5 w-5 text-primary" />
@@ -401,34 +414,6 @@ const Index = () => {
                   ({filteredBooks.length} of {books.length} books)
                 </span>
               )}
-            </div>
-            
-            <div className="flex items-center gap-4">
-              {/* Notification Bell */}
-              <NotificationBell />
-              
-              {/* Settings Button */}
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setShowSettings(true)}
-                className="rounded-full"
-                title="Settings"
-              >
-                <SettingsIcon className="h-5 w-5" />
-              </Button>
-              
-              {/* View Toggle */}
-              <ViewToggle 
-                viewMode={viewMode} 
-                onChange={(newViewMode) => {
-                  if (newViewMode === 'series') {
-                    navigate('/series');
-                  } else {
-                    setViewMode(newViewMode);
-                  }
-                }}
-              />  
             </div>
           </div>
           
