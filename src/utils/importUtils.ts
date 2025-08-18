@@ -168,7 +168,7 @@ export function validateImportedBook(book: RawBookImport): { valid: boolean; rea
   // Check for valid completedDate if provided
   if (book.completedDate) {
     // Simple validation, check if it looks like a date
-    const datePattern = /^\\d{4}-\\d{2}-\\d{2}$/;
+    const datePattern = /^\d{4}-\d{2}-\d{2}$/;
     if (!datePattern.test(book.completedDate.trim())) {
       return { 
         valid: false, 
@@ -282,7 +282,7 @@ function convertRawToBook(rawBook: RawBookImport): Partial<Book> {
   
   // Add series name if book is part of series
   if (book.isPartOfSeries && rawBook.seriesName) {
-    book.seriesName = rawBook.seriesName;
+    book._legacySeriesName = rawBook.seriesName;
   }
   
   // Add published date - supports both quoted and unquoted YYYY-MM-DD format
