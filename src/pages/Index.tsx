@@ -12,7 +12,14 @@ import { ViewToggle, ViewMode } from "@/components/ViewToggle";
 import { BookDetails } from "@/components/BookDetails";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { Library, Search, Settings as SettingsIcon, PlusCircle } from "lucide-react";
+import { Library, Search, Settings as SettingsIcon, PlusCircle, PenLine } from "lucide-react";
+import { ManualAddBookDialog } from "@/components/dialogs/ManualAddBookDialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from "@/components/ui/dropdown-menu";
 import searchService, { SearchResult, SearchOptions } from "@/services/search/SearchService";
 import { AdvancedSearch } from "@/components/AdvancedSearch";
 import { GoalTracker } from "@/components/GoalTracker";
@@ -36,6 +43,7 @@ const Index = () => {
     limit: 100
   });
   const [showSearch, setShowSearch] = useState(false);
+  const [showManualAddDialog, setShowManualAddDialog] = useState(false);
   // Use default view from settings or fallback to 'shelf'
   const [viewMode, setViewMode] = useState<ViewMode>(settings.defaultView as ViewMode || 'shelf');
   const [showSettings, setShowSettings] = useState(false);
@@ -332,12 +340,30 @@ const Index = () => {
           subtitle="Track your reading journey, one book at a time"
           actions={
             <>
-              <HeaderActionButton
-                icon={<PlusCircle className="h-4 w-4" />}
-                label="Add Books"
-                onClick={() => setShowSearch(!showSearch)}
-                variant="primary"
-              />
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="default" className="flex items-center gap-2" size="sm">
+                    <PlusCircle className="h-4 w-4" />
+                    Add Books
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  <DropdownMenuItem onClick={() => {
+                    setShowSearch(true);
+                    setShowManualAddDialog(false);
+                  }}>
+                    <Search className="h-4 w-4 mr-2" />
+                    Search API
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => {
+                    setShowManualAddDialog(true);
+                    setShowSearch(false);
+                  }}>
+                    <PenLine className="h-4 w-4 mr-2" />
+                    Manual Entry
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
               <NotificationBell />
               <HeaderActionButton
                 icon={<SettingsIcon className="h-4 w-4" />}
@@ -451,6 +477,20 @@ const Index = () => {
             onClose={() => setSelectedBook(null)}
           />
         )}
+        
+        {/* Manual Add Book Dialog */}
+        <ManualAddBookDialog 
+          isOpen={showManualAddDialog} 
+          onClose={() => setShowManualAddDialog(false)}
+          onSave={(newBook) => {
+            addBook(newBook);
+            setShowManualAddDialog(false);
+            toast({
+              title: "Book Added",
+              description: `${newBook.title} has been added to your library.`
+            });
+          }}
+        />
         
         {/* Settings Modal */}
         <Settings
