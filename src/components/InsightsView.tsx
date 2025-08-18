@@ -36,9 +36,10 @@ const mapToModelBook = (book: Book): ModelBook => {
 
 interface InsightsViewProps {
   books: Book[];
+  onBookClick?: (book: Book) => void;
 }
 
-export const InsightsView: React.FC<InsightsViewProps> = ({ books }) => {
+export const InsightsView: React.FC<InsightsViewProps> = ({ books, onBookClick }) => {
   // Get the selected palette for theme colors
   const { selectedPalette } = usePalette();
   // Tabs for switching between different insight sections
@@ -633,7 +634,23 @@ export const InsightsView: React.FC<InsightsViewProps> = ({ books }) => {
                   {[...filteredBooks]
                     .sort((a, b) => new Date(a.completedDate!).getTime() - new Date(b.completedDate!).getTime())
                     .map(book => (
-                      <div key={book.id} className="flex flex-col sm:flex-row gap-4 border-b pb-4 last:border-0">
+                      <div 
+  key={book.id} 
+  className={cn(
+    "flex flex-col sm:flex-row gap-4 border-b pb-4 last:border-0",
+    onBookClick ? "cursor-pointer hover:bg-accent/10 rounded transition-colors" : ""
+  )}
+  onClick={() => onBookClick?.(book)}
+  role={onBookClick ? "button" : undefined}
+  tabIndex={onBookClick ? 0 : undefined}
+  onKeyDown={(e) => {
+    if (onBookClick && (e.key === "Enter" || e.key === " ")) {
+      e.preventDefault();
+      onBookClick(book);
+    }
+  }}
+  aria-label={onBookClick ? `View details for ${book.title}` : undefined}
+>
                         <div className="flex-shrink-0 w-16 h-24">
                           {book.thumbnail ? (
                             <img 

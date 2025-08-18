@@ -451,7 +451,7 @@ const Index = () => {
             )}
             {viewMode === 'insights' && (
               <div className="animate-fade-in">
-                <InsightsView books={books} />
+                <InsightsView books={books} onBookClick={setSelectedBook} />
               </div>
             )}
           </div>
