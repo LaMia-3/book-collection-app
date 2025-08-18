@@ -353,14 +353,32 @@ export const InsightsView: React.FC<InsightsViewProps> = ({ books }) => {
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart
                       data={booksPerMonth}
-                      margin={{ top: 5, right: 30, left: 0, bottom: 5 }}
+                      margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
                     >
                       <CartesianGrid strokeDasharray="3 3" opacity={0.1} />
-                      <XAxis dataKey="name" />
-                      <YAxis allowDecimals={false} />
+                      <XAxis 
+                        dataKey="name" 
+                        tick={{ fontSize: 12 }}
+                        angle={window.innerWidth < 500 ? -45 : 0}
+                        textAnchor={window.innerWidth < 500 ? "end" : "middle"}
+                        height={window.innerWidth < 500 ? 60 : 30}
+                      />
+                      <YAxis 
+                        allowDecimals={false} 
+                        tick={{ fontSize: 12 }}
+                        width={35}
+                      />
                       <Tooltip 
                         formatter={(value) => [`${value} books`, 'Completed']}
-                        contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.8)', borderRadius: '6px' }}
+                        contentStyle={{ 
+                          backgroundColor: 'rgba(255, 255, 255, 0.95)', 
+                          borderRadius: '6px',
+                          padding: '8px',
+                          fontSize: '12px'
+                        }}
+                      />
+                      <Legend 
+                        wrapperStyle={{ paddingTop: '15px', fontSize: '12px' }}
                       />
                       <Bar dataKey="books" fill="#ff9f7f" radius={[4, 4, 0, 0]} />
                     </BarChart>
@@ -380,14 +398,33 @@ export const InsightsView: React.FC<InsightsViewProps> = ({ books }) => {
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart
                       data={pagesPerMonth}
-                      margin={{ top: 5, right: 30, left: 0, bottom: 5 }}
+                      margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
                     >
                       <CartesianGrid strokeDasharray="3 3" opacity={0.1} />
-                      <XAxis dataKey="name" />
-                      <YAxis />
+                      <XAxis 
+                        dataKey="name" 
+                        tick={{ fontSize: 12 }}
+                        angle={window.innerWidth < 500 ? -45 : 0}
+                        textAnchor={window.innerWidth < 500 ? "end" : "middle"}
+                        height={window.innerWidth < 500 ? 60 : 30}
+                      />
+                      <YAxis 
+                        tick={{ fontSize: 12 }} 
+                        width={35}
+                        tickFormatter={(value) => value >= 1000 ? `${(value/1000).toFixed(1)}k` : value}
+                      />
                       <Tooltip 
                         formatter={(value) => [`${value} pages`, 'Read']}
-                        contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.8)', borderRadius: '6px' }}
+                        labelFormatter={(label) => `Month: ${label}`}
+                        contentStyle={{ 
+                          backgroundColor: 'rgba(255, 255, 255, 0.95)', 
+                          borderRadius: '6px',
+                          padding: '8px',
+                          fontSize: '12px'
+                        }}
+                      />
+                      <Legend 
+                        wrapperStyle={{ paddingTop: '15px', fontSize: '12px' }}
                       />
                       <Line 
                         type="monotone" 
@@ -395,7 +432,7 @@ export const InsightsView: React.FC<InsightsViewProps> = ({ books }) => {
                         stroke="#7fd4ff" 
                         strokeWidth={2}
                         dot={{ fill: '#7fd4ff', strokeWidth: 2 }}
-                        activeDot={{ r: 6 }}
+                        activeDot={{ r: 6, stroke: '#7fd4ff', strokeWidth: 2 }}
                       />
                     </LineChart>
                   </ResponsiveContainer>
@@ -452,14 +489,29 @@ export const InsightsView: React.FC<InsightsViewProps> = ({ books }) => {
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart
                       data={ratingsData}
-                      margin={{ top: 5, right: 30, left: 0, bottom: 5 }}
+                      margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
                     >
                       <CartesianGrid strokeDasharray="3 3" opacity={0.1} />
-                      <XAxis dataKey="name" />
-                      <YAxis allowDecimals={false} />
+                      <XAxis 
+                        dataKey="name" 
+                        tick={{ fontSize: 12 }}
+                      />
+                      <YAxis 
+                        allowDecimals={false} 
+                        tick={{ fontSize: 12 }}
+                        width={35}
+                      />
                       <Tooltip
                         formatter={(value) => [`${value} books`, 'Rated']}
-                        contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.8)', borderRadius: '6px' }}
+                        contentStyle={{ 
+                          backgroundColor: 'rgba(255, 255, 255, 0.95)', 
+                          borderRadius: '6px',
+                          padding: '8px',
+                          fontSize: '12px'
+                        }}
+                      />
+                      <Legend 
+                        wrapperStyle={{ paddingTop: '15px', fontSize: '12px' }}
                       />
                       <Bar dataKey="books" radius={[4, 4, 0, 0]}>
                         {ratingsData.map((entry, index) => (

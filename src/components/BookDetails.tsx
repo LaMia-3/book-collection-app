@@ -81,6 +81,14 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
   const [volumeNumber, setVolumeNumber] = useState<number | undefined>(book.volumeNumber);
   const [showSeriesInfo, setShowSeriesInfo] = useState(!!book.seriesId);
   
+  // Log component initialization
+  log.info('BookDetails component initialized', { 
+    bookId: book.id,
+    title: book.title,
+    author: book.author,
+    isInSeries: !!book.seriesId
+  });
+  
   // States for improved UI from main branch
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [titleError, setTitleError] = useState<string | null>(null);
@@ -196,10 +204,22 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
 
   // Function to detect series and open the advanced dialog
   const detectAndOpenSeriesDialog = async () => {
+    log.info('Detecting series for book', { 
+      bookId: book.id, 
+      title: book.title,
+      author: book.author,
+      hasGoogleId: !!book.googleBooksId
+    });
+    
     try {
       // If the book is already in a series, we'll use it as the current series
       // Otherwise, try to detect a series
       if (!book.seriesId) {
+        log.debug('Calling series detection API', { 
+          bookId: book.id,
+          googleBooksId: book.googleBooksId || 'not available' 
+        });
+        
         const detectionResult = await seriesApiService.detectSeries(
           book.googleBooksId || '',
           book.title,
@@ -207,14 +227,25 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
         );
         
         if (detectionResult) {
+          log.info('Series detection successful', { 
+            bookId: book.id, 
+            detectedSeries: detectionResult.series?.name || 'Unnamed series',
+            detectionSource: detectionResult.source || 'unknown' 
+          });
           setSeriesDetectionResult(detectionResult);
+        } else {
+          log.info('No series detected for book', { bookId: book.id });
         }
       }
       
       // Open the dialog
       setShowSeriesAssignmentDialog(true);
     } catch (error) {
-      console.error('Error detecting series:', error);
+      log.error('Error detecting series', { 
+        bookId: book.id, 
+        error: error.message || String(error),
+        stack: error.stack
+      });
       // Open the dialog anyway, just without detected series
       setShowSeriesAssignmentDialog(true);
     }
@@ -223,6 +254,12 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
   // Handle removing a book from series with database update
   const handleRemoveFromSeries = async () => {
     if (!book.seriesId) return;
+    
+    log.info('Removing book from series', { 
+      bookId: book.id, 
+      title: book.title, 
+      seriesId: book.seriesId 
+    });
     
     try {
       setIsSaving(true);
@@ -446,6 +483,12 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
   const handleSave = useCallback(async () => {
     if (isSaving) return;
     
+    log.info('Saving book changes', {
+      bookId: book.id,
+      title: editedBook.title,
+      hasSeriesChanges: book.seriesId !== selectedSeriesId
+    });
+    
     setIsSaving(true);
     
     try {
@@ -459,6 +502,16 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
         const pageCountValue = pageCountInputRef.current.value.trim();
         pageCountToUse = pageCountValue ? parseInt(pageCountValue, 10) : undefined;
       }
+      
+      log.debug('Processed form values', {
+        bookId: book.id,
+        title: titleToUse,
+        titleChanged: titleToUse !== book.title,
+        author: authorToUse,
+        authorChanged: authorToUse !== book.author,
+        pageCount: pageCountToUse,
+        pageCountChanged: pageCountToUse !== book.pageCount
+      });
       
       const updatedBook: Book = {
         ...editedBook,
@@ -518,9 +571,16 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
         };
 
         await enhancedStorageService.saveBook(enhancedBook as any);
-        console.log('Book saved to IndexedDB successfully');
+        log.info('Book saved to IndexedDB successfully', {
+          bookId: book.id,
+          title: updatedBook.title,
+          lastModified: new Date().toISOString()
+        });
       } catch (indexedDBError) {
-        console.error('Error saving book to IndexedDB:', indexedDBError);
+        log.error('Error saving book to IndexedDB', {
+          bookId: book.id,
+          error: indexedDBError.message || String(indexedDBError)
+        });
         // Continue even if IndexedDB update fails - we'll still update the UI
       }
 
@@ -532,7 +592,11 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
         description: "Book details updated successfully."
       });
     } catch (error) {
-      console.error('Error saving book:', error);
+      log.error('Error saving book changes', {
+        bookId: book.id, 
+        error: error.message || String(error),
+        stack: error.stack
+      });
       toast({
         title: "Error",
         description: "Failed to save changes. Please try again.",
@@ -540,19 +604,22 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
       });
     } finally {
       setIsSaving(false);
+      log.debug('Save operation completed', { bookId: book.id });
     }
   }, [editedBook, isSaving, onUpdate, onClose, selectedSeriesId, toast]);
 
   // Delete confirmation and handling
   const handleDeleteConfirmation = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
+    log.info('Book delete confirmation requested', { bookId: book.id, title: book.title });
     setShowDeleteConfirm(true);
-  }, []);
+  }, [book.id, book.title]);
   
   const confirmDelete = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     if (isDeleting || !onDelete) return;
     
+    log.info('Deleting book', { bookId: book.id, title: book.title });
     setIsDeleting(true);
     
     try {
@@ -577,6 +644,7 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
 
   // Title editing functions
   const startTitleEdit = useCallback(() => {
+    log.debug('Starting title edit', { bookId: book.id, currentTitle: editedBook.title });
     setIsEditingTitle(true);
     setTitleError(null);
     // Focus the input after state update
@@ -586,10 +654,11 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
         titleInputRef.current.select();
       }
     }, 10);
-  }, []);
+  }, [book.id, editedBook.title]);
   
-  // Author editing functions
+  // Author editing function
   const startAuthorEdit = useCallback(() => {
+    log.debug('Starting author edit', { bookId: book.id, currentAuthor: editedBook.author });
     setIsEditingAuthor(true);
     setAuthorError(null);
     // Focus the input after state update
@@ -599,21 +668,31 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
         authorInputRef.current.select();
       }
     }, 10);
-  }, []);
+  }, [book.id, editedBook.author]);
   
   const validateAndSaveTitle = useCallback(() => {
     const newTitle = titleInputRef.current?.value.trim();
     
+    log.debug('Validating title', { bookId: book.id, newTitle });
+    
     if (!newTitle) {
+      log.warn('Empty title validation failed', { bookId: book.id });
       setTitleError("Title cannot be empty");
       return false;
     }
     
-    setEditedBook(prev => ({ ...prev, title: newTitle }));
+    setEditedBook(prev => {
+      log.info('Title updated', { 
+        bookId: book.id, 
+        oldTitle: prev.title, 
+        newTitle 
+      });
+      return { ...prev, title: newTitle };
+    });
     setIsEditingTitle(false);
     setTitleError(null);
     return true;
-  }, []);
+  }, [book.id]);
   
   const validateAndSaveAuthor = useCallback(() => {
     const newAuthor = authorInputRef.current?.value.trim();
@@ -633,8 +712,11 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
   const validateAndSavePageCount = useCallback(() => {
     const newPageCount = pageCountInputRef.current?.value.trim();
     
+    log.debug('Validating page count', { bookId: book.id, newPageCount });
+    
     // Allow empty string (optional field)
     if (!newPageCount) {
+      log.debug('Empty page count - setting to undefined', { bookId: book.id });
       setEditedBook(prev => ({ ...prev, pageCount: undefined }));
       setIsEditingPageCount(false);
       setPageCountError(null);
@@ -646,15 +728,27 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
     
     // Check if it's a valid positive integer
     if (isNaN(numValue) || numValue <= 0 || !Number.isInteger(numValue)) {
+      log.warn('Invalid page count format', { 
+        bookId: book.id, 
+        attemptedValue: newPageCount, 
+        parsedValue: numValue 
+      });
       setPageCountError("Page count must be a positive whole number");
       return false;
     }
     
-    setEditedBook(prev => ({ ...prev, pageCount: numValue }));
+    setEditedBook(prev => {
+      log.info('Page count updated', { 
+        bookId: book.id, 
+        oldPageCount: prev.pageCount, 
+        newPageCount: numValue 
+      });
+      return { ...prev, pageCount: numValue };
+    });
     setIsEditingPageCount(false);
     setPageCountError(null);
     return true;
-  }, []);
+  }, [book.id]);
   
   const cancelTitleEdit = useCallback(() => {
     if (titleInputRef.current) {
@@ -868,7 +962,14 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
       }
     };
     
-  }, [handleSave, onClose, isEditingTitle, isEditingAuthor, showDeleteConfirm]);
+    // Add event listener
+    window.addEventListener('keydown', handleKeyDown);
+    
+    // Cleanup
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [handleSave, onClose, isEditingTitle, isEditingAuthor, isEditingPageCount, isEditingDescription, isEditingPublishedDate, isEditingGenre, showDeleteConfirm]);
 
   return (
     <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -1672,15 +1773,7 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
                       </div>
                       
                       {/* Legacy ISBN */}
-                      <div>
-                        <span className="font-medium">Legacy ISBN:</span>
-                        <div className="pl-4">
-                          {editedBook.isbn ? 
-                            <div>{editedBook.isbn}</div> : 
-                            <span className="text-muted-foreground italic">None</span>
-                          }
-                        </div>
-                      </div>
+                      {/* Legacy ISBN field removed - not in Book interface */}
                     </div>
                   </div>
                   
