@@ -1471,6 +1471,7 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
                   {editedBook.status === 'reading' && 'Currently Reading'}
                   {editedBook.status === 'completed' && 'Completed'}
                   {editedBook.status === 'want-to-read' && 'Want to Read'}
+                  {editedBook.status === 'dnf' && 'Did Not Finish'}
                   {!editedBook.status && (editedBook.completedDate ? 'Completed' : 'Currently Reading')}
                 </div>
               ) : (
@@ -1482,7 +1483,7 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
                     id="readingStatus"
                     value={editedBook.status || (editedBook.completedDate ? 'completed' : 'reading')}
                     onChange={(e) => {
-                      const status = e.target.value as 'reading' | 'completed' | 'want-to-read';
+                      const status = e.target.value as 'reading' | 'completed' | 'want-to-read' | 'dnf';
                       // If changing to completed, set today as completion date if none exists
                       // If changing away from completed, clear completion date
                       const completedDate = status === 'completed' 
@@ -1497,6 +1498,7 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
                     <option value="reading">Currently Reading</option>
                     <option value="completed">Completed</option>
                     <option value="want-to-read">Want to Read</option>
+                    <option value="dnf">Did Not Finish</option>
                   </select>
                 </>
               )}  

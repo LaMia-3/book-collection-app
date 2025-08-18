@@ -109,6 +109,11 @@ export const BookCoverView = ({ books, onBookClick }: BookCoverViewProps) => {
                   Read
                 </Badge>
               )}
+              {book.status === 'dnf' && (
+                <Badge className="absolute top-2 right-2 bg-gradient-to-r from-red-500 to-red-700 text-white">
+                  Did Not Finish
+                </Badge>
+              )}
               {(book.status === 'reading' || (!book.status && !book.completedDate && book.status !== 'want-to-read')) && (
                 <Badge className="absolute top-2 right-2 bg-gradient-warm text-white">
                   Reading

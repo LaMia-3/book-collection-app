@@ -163,10 +163,10 @@ describe('BookTypeAdapter', () => {
       expect(convertDbBookToUiBook({ status: ReadingStatus.TO_READ } as any).status).toEqual('want-to-read');
       expect(convertDbBookToUiBook({ status: ReadingStatus.READING } as any).status).toEqual('reading');
       expect(convertDbBookToUiBook({ status: ReadingStatus.COMPLETED } as any).status).toEqual('completed');
-      // It seems ON_HOLD maps to 'want-to-read' in the implementation
+      // ON_HOLD status maps to 'want-to-read'
       expect(convertDbBookToUiBook({ status: ReadingStatus.ON_HOLD } as any).status).toEqual('want-to-read');
-      // It seems DNF also maps to 'want-to-read' in the implementation
-      expect(convertDbBookToUiBook({ status: ReadingStatus.DNF } as any).status).toEqual('want-to-read');
+      // DNF status maps to 'dnf'
+      expect(convertDbBookToUiBook({ status: ReadingStatus.DNF } as any).status).toEqual('dnf');
     });
 
     it('should handle genre as a string', () => {

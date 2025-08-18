@@ -28,6 +28,9 @@ export const BookShelf = ({ books, onBookClick }: BookShelfProps) => {
   
   const wantToReadBooks = books.filter(book => book.status === 'want-to-read');
 
+  // DNF books (Did Not Finish)
+  const dnfBooks = books.filter(book => book.status === 'dnf');
+
   // Function to intelligently group books by width to fit on shelves
   const groupBooksByShelves = (books: Book[]) => {
     const shelves: Book[][] = [];
@@ -111,6 +114,10 @@ export const BookShelf = ({ books, onBookClick }: BookShelfProps) => {
     
   const wantToReadShelves = wantToReadBooks.length > 0
     ? groupBooksByShelves(wantToReadBooks)
+    : [];
+
+  const dnfShelves = dnfBooks.length > 0
+    ? groupBooksByShelves(dnfBooks)
     : [];
 
   const renderShelf = (shelfBooks: Book[], isFirst?: boolean, isLast?: boolean, shelfIndex?: number) => {
@@ -233,6 +240,29 @@ export const BookShelf = ({ books, onBookClick }: BookShelfProps) => {
                     isFirst, 
                     isLast, 
                     shelfIndex + currentlyReadingShelves.length + completedShelves.length
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Did Not Finish Books Section */}
+      {dnfShelves.length > 0 && (
+        <div>
+          <h3 className="text-lg font-serif text-foreground mb-3 px-2">Did Not Finish</h3>
+          <div className="flex flex-col">
+            {dnfShelves.map((shelfBooks, shelfIndex) => {
+              const isFirst = shelfIndex === 0;
+              const isLast = shelfIndex === dnfShelves.length - 1;
+              return (
+                <div key={`dnf-${shelfIndex}`}>
+                  {renderShelf(
+                    shelfBooks,
+                    isFirst,
+                    isLast,
+                    shelfIndex + currentlyReadingShelves.length + completedShelves.length + wantToReadShelves.length
                   )}
                 </div>
               );

@@ -134,14 +134,18 @@ export const BookListView = ({ books, onBookClick }: BookListViewProps) => {
                       ? "bg-gradient-cool text-white"
                       : book.status === 'completed' || (!book.status && book.completedDate)
                         ? "bg-gradient-success text-white" 
-                        : "bg-gradient-warm text-white"
+                        : book.status === 'dnf'
+                          ? "bg-gradient-danger text-white"
+                          : "bg-gradient-warm text-white"
                   }
                 >
                   {book.status === 'want-to-read'
                     ? "Want to Read"
                     : book.status === 'completed' || (!book.status && book.completedDate)
                       ? "Read" 
-                      : "Reading"
+                      : book.status === 'dnf'
+                        ? "Do Not Finish"
+                        : "Reading"
                   }
                 </Badge>
               </TableCell>

@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils';
 import { SeriesInsights } from '@/components/insights/SeriesInsights';
 import { GenreChart } from '@/components/GenreChart';
 import { createLogger } from '@/utils/loggingUtils';
+import { calculateReadingStatusStatistics, getReadingStatusChartData } from '@/utils/statisticsUtils';
 
 // Create a logger for the InsightsView component
 const log = createLogger('InsightsView');
@@ -30,7 +31,9 @@ const mapToModelBook = (book: Book): ModelBook => {
     // Map status values to ReadingStatus enum
     status: book.status === 'reading' ? ReadingStatus.READING :
             book.status === 'completed' ? ReadingStatus.COMPLETED :
-            book.status === 'want-to-read' ? ReadingStatus.TO_READ : undefined,
+            book.status === 'want-to-read' ? ReadingStatus.TO_READ :
+            book.status === 'dnf' ? ReadingStatus.DNF :
+            book.status === 'on-hold' ? ReadingStatus.ON_HOLD : undefined,
   } as ModelBook;
 };
 

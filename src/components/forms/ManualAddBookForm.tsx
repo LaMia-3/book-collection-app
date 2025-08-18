@@ -87,8 +87,8 @@ export const ManualAddBookForm: React.FC<ManualAddBookFormProps> = ({ onSave, on
       description: values.description || '',
       // Split comma-separated genre string into an array of genres
       genre: values.genre ? values.genre.split(',').map(g => g.trim()).filter(Boolean) : [],
-      // Map 'dnf' status to 'want-to-read' as 'dnf' is not in Book type
-      status: values.status === 'dnf' ? 'want-to-read' : values.status,
+      // Save status as selected, including 'dnf'
+      status: values.status,
       notes: values.notes || '',
       thumbnail: coverImage || undefined,
       addedDate: new Date().toISOString(),

@@ -158,4 +158,46 @@ describe('ManualAddBookForm Component', () => {
     // Clean up mock
     jest.restoreAllMocks();
   });
+
+  test('form submits with DNF status correctly', () => {
+    // Create a controlled mock of the form submission for DNF status
+    const mockHandleSubmit = jest.fn(callback => {
+      return (e) => {
+        e?.preventDefault?.();
+        // Call the form's submit handler with DNF status
+        callback({
+          title: 'DNF Book',
+          author: 'Test Author',
+          status: 'dnf',
+        });
+      };
+    });
+    
+    // Mock useForm to return our controlled form handlers
+    jest.spyOn(require('react-hook-form'), 'useForm').mockImplementation(() => ({
+      handleSubmit: mockHandleSubmit,
+      control: {},
+      watch: jest.fn(),
+      getValues: jest.fn(),
+      setValue: jest.fn()
+    }));
+    
+    render(<ManualAddBookForm onSave={mockOnSave} />);
+    
+    // Submit the form
+    const submitButton = screen.getByText('Save Book');
+    fireEvent.click(submitButton);
+    
+    // Check onSave was called with DNF status preserved correctly
+    expect(mockOnSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'DNF Book',
+        author: 'Test Author',
+        status: 'dnf', // Should be 'dnf', not converted to 'want-to-read'
+      })
+    );
+    
+    // Clean up mock
+    jest.restoreAllMocks();
+  });
 });

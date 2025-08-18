@@ -1,17 +1,35 @@
 import { createLogger } from './loggingUtils';
 import { normalizeGenreData } from './genreUtils';
-import type { Book } from '@/types/models/Book';
+import { Book, ReadingStatus } from '@/types/models/Book';
 
 /**
- * Represents a count of books per genre
+ * Represents a count of books per genre or status category
  */
 export interface GenreCount {
-  /** Genre name */
+  /** Category name (genre name or reading status) */
   name: string;
-  /** Number of books with this genre */
+  /** Number of books in this category */
   value: number;
-  /** Percentage of total genre instances */
+  /** Percentage of total instances */
   percentage?: number;
+}
+
+/**
+ * Represents reading status statistics
+ */
+export interface ReadingStatusStats {
+  /** Books currently being read */
+  reading: number;
+  /** Books completed */
+  completed: number;
+  /** Books marked as "want to read" */
+  wantToRead: number;
+  /** Books marked as "did not finish" */
+  dnf: number;
+  /** Books on hold */
+  onHold: number;
+  /** Total number of books */
+  total: number;
 }
 
 /**
@@ -97,4 +115,72 @@ export function getTopGenresWithOthers(genreCounts: GenreCount[], topCount: numb
   
   log.debug(`Returning top ${topCount} genres plus 'Other' category (${otherValue} books)`);
   return result;
+}
+
+/**
+ * Calculates statistics about reading status across books
+ * 
+ * @param books - Array of books to analyze
+ * @returns Object containing counts for each reading status
+ */
+export function calculateReadingStatusStatistics(books: Book[]): ReadingStatusStats {
+  const log = createLogger('calculateReadingStatusStatistics');
+  
+  // Initialize counters
+  const stats: ReadingStatusStats = {
+    reading: 0,
+    completed: 0,
+    wantToRead: 0,
+    dnf: 0,
+    onHold: 0,
+    total: books.length
+  };
+  
+  log.debug(`Calculating reading status statistics for ${books.length} books`);
+  
+  // Count books by status
+  books.forEach(book => {
+    if (!book.status) {
+      // Default to want-to-read if no status is specified
+      stats.wantToRead += 1;
+    } else {
+      // Use string comparison since book.status might be either the enum value or string
+      const status = String(book.status).toLowerCase();
+      if (status === 'reading' || status === ReadingStatus.READING.toLowerCase()) {
+        stats.reading += 1;
+      } else if (status === 'completed' || status === ReadingStatus.COMPLETED.toLowerCase()) {
+        stats.completed += 1;
+      } else if (status === 'want-to-read' || status === 'to_read' || status === ReadingStatus.TO_READ.toLowerCase()) {
+        stats.wantToRead += 1;
+      } else if (status === 'dnf' || status === ReadingStatus.DNF.toLowerCase()) {
+        stats.dnf += 1;
+      } else if (status === 'on-hold' || status === 'on_hold' || status === ReadingStatus.ON_HOLD.toLowerCase()) {
+        stats.onHold += 1;
+      } else {
+        // Fallback for any unrecognized status
+        log.warn(`Unrecognized reading status: ${book.status}`);
+        stats.wantToRead += 1;
+      }
+    }
+  });
+  
+  log.debug('Reading status statistics calculated', stats);
+  
+  return stats;
+}
+
+/**
+ * Converts reading status statistics to chart-friendly data format
+ * 
+ * @param stats - Reading status statistics object
+ * @returns Array of reading status counts for chart visualization
+ */
+export function getReadingStatusChartData(stats: ReadingStatusStats): GenreCount[] {
+  return [
+    { name: 'Currently Reading', value: stats.reading },
+    { name: 'Completed', value: stats.completed },
+    { name: 'Want to Read', value: stats.wantToRead },
+    { name: 'Did Not Finish', value: stats.dnf },
+    { name: 'On Hold', value: stats.onHold }
+  ].filter(item => item.value > 0);  // Only include statuses with books
 }
