@@ -43,8 +43,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { SeriesInfoPanel } from "@/components/series/SeriesInfoPanel";
-import { SeriesAssignmentDialog } from "@/components/dialogs/SeriesAssignmentDialog";
+import { SeriesInfoPanel } from '@/components/series/SeriesInfoPanel';
+import { SeriesAssignmentDialog } from '@/components/dialogs/SeriesAssignmentDialog';
+import { CreateSeriesDialog } from '@/components/series/CreateSeriesDialog';
 import { cn } from "@/lib/utils";
 import { cleanHtml } from "@/utils/textUtils";
 import { format, parse, isValid } from "date-fns";
@@ -116,6 +117,7 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showSeriesAssignmentDialog, setShowSeriesAssignmentDialog] = useState(false);
+  const [showCreateSeriesDialog, setShowCreateSeriesDialog] = useState(false);
   const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
   const [showMetadataInfo, setShowMetadataInfo] = useState(false);
   const [seriesDetectionResult, setSeriesDetectionResult] = useState<any>(null);
@@ -1801,17 +1803,19 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
                 {!selectedSeriesId && (
                   <div className="flex flex-col items-center justify-center p-4 border border-dashed rounded-md bg-muted/50">
                     <p className="text-sm text-muted-foreground mb-2">This book is not part of any series</p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="flex items-center mt-2"
-                      onClick={() => {
-                        window.open('/series', '_blank');
-                      }}
-                    >
-                      <Plus className="mr-1 h-3 w-3" />
-                      Create New Series
-                    </Button>
+                    {!isViewMode && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex items-center mt-2"
+                        onClick={() => {
+                          setShowCreateSeriesDialog(true);
+                        }}
+                      >
+                        <Plus className="mr-1 h-3 w-3" />
+                        Create New Series
+                      </Button>
+                    )}
                   </div>
                 )}
                 
@@ -2052,6 +2056,20 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
             onCreateNewSeries={handleCreateNewSeries}
             mode="change"
             currentBookSeriesId={selectedSeriesId}
+          />
+          
+          {/* Create Series Dialog */}
+          <CreateSeriesDialog
+            open={showCreateSeriesDialog}
+            onOpenChange={setShowCreateSeriesDialog}
+            onSeriesCreated={(newSeries) => {
+              // Associate current book with new series
+              handleAssignSeries(book, newSeries.id);
+              toast({
+                title: "Book added to new series",
+                description: `Successfully added "${book.title}" to "${newSeries.name}" series`
+              });
+            }}
           />
         </CardContent>
       </Card>

@@ -236,7 +236,6 @@ export const Settings: React.FC<SettingsProps> = ({
                           <option value="shelf">Bookshelf</option>
                           <option value="list">List</option>
                           <option value="cover">Cover Grid</option>
-                          <option value="insights">Insights</option>
                         </select>
                         <p className="text-xs text-muted-foreground">Default view when you open the application</p>
                       </div>
