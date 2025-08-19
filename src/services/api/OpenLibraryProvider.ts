@@ -5,6 +5,7 @@ import {
   SearchResult, 
   BookSearchItem 
 } from '@/types/api/BookApiProvider';
+import { createLogger } from '@/utils/loggingUtils';
 
 /**
  * Provider implementation for the Open Library API
@@ -16,7 +17,82 @@ export class OpenLibraryProvider implements BookApiProvider {
   private readonly searchBaseUrl = 'https://openlibrary.org/search.json';
   private readonly detailsBaseUrl = 'https://openlibrary.org/works';
   private readonly coverBaseUrl = 'https://covers.openlibrary.org/b';
+  private readonly log = createLogger('OpenLibraryProvider');
   
+  // Rate limiting configuration
+  private lastRequestTime = 0;
+  private readonly minRequestInterval = 1000; // Minimum 1 second between requests
+  private readonly maxRetries = 3;
+  private readonly initialBackoffDelay = 2000; // Start with 2 seconds
+  
+  /**
+   * Sleep/delay function
+   * @param ms Milliseconds to delay
+   */
+  private async delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+  
+  /**
+   * Ensures we don't send requests too quickly
+   */
+  private async enforceRateLimit(): Promise<void> {
+    const now = Date.now();
+    const elapsed = now - this.lastRequestTime;
+    
+    if (elapsed < this.minRequestInterval) {
+      const delayTime = this.minRequestInterval - elapsed;
+      this.log.debug(`Rate limiting: Waiting ${delayTime}ms before next request`);
+      await this.delay(delayTime);
+    }
+    
+    this.lastRequestTime = Date.now();
+  }
+  
+  /**
+   * Makes an API request with retry logic for rate limits
+   * @param url The URL to request
+   * @returns Response
+   */
+  private async makeRequest(url: string): Promise<Response> {
+    let retries = 0;
+    let backoffDelay = this.initialBackoffDelay;
+    
+    while (true) {
+      try {
+        // Enforce rate limiting before each request
+        await this.enforceRateLimit();
+        
+        const response = await fetch(url);
+        
+        // Handle rate limiting with exponential backoff
+        if (response.status === 429) {
+          if (retries >= this.maxRetries) {
+            this.log.error(`Rate limit exceeded after ${retries} retries`);
+            throw new Error(`Open Library API rate limit exceeded after ${retries} retries`);
+          }
+          
+          retries++;
+          this.log.warn(`Rate limited (429). Retry ${retries}/${this.maxRetries} after ${backoffDelay}ms`);
+          await this.delay(backoffDelay);
+          backoffDelay *= 2; // Exponential backoff
+          continue;
+        }
+        
+        return response;
+      } catch (error) {
+        if (retries >= this.maxRetries) {
+          throw error;
+        }
+        
+        retries++;
+        this.log.warn(`Request failed. Retry ${retries}/${this.maxRetries} after ${backoffDelay}ms`, error);
+        await this.delay(backoffDelay);
+        backoffDelay *= 2; // Exponential backoff
+      }
+    }
+  }
+
   /**
    * Search for books using the Open Library API
    * @param params Search parameters
@@ -43,10 +119,9 @@ export class OpenLibraryProvider implements BookApiProvider {
       searchQuery = ''; // Use empty query with field search
     }
     
-    // Make API request
-    const response = await fetch(
-      `${this.searchBaseUrl}?q=${encodeURIComponent(searchQuery)}${searchField}&offset=${offset}&limit=${limit}`
-    );
+    // Make API request with retry logic
+    const url = `${this.searchBaseUrl}?q=${encodeURIComponent(searchQuery)}${searchField}&offset=${offset}&limit=${limit}`;
+    const response = await this.makeRequest(url);
     
     if (!response.ok) {
       throw new Error(`Open Library API error: ${response.status} ${response.statusText}`);
@@ -86,8 +161,8 @@ export class OpenLibraryProvider implements BookApiProvider {
    * @returns Book details
    */
   async getBookDetails(id: string): Promise<Book> {
-    // First, get the work details
-    const workResponse = await fetch(`${this.detailsBaseUrl}/${id}.json`);
+    // First, get the work details with retry logic
+    const workResponse = await this.makeRequest(`${this.detailsBaseUrl}/${id}.json`);
     
     if (!workResponse.ok) {
       throw new Error(`Open Library API error: ${workResponse.status} ${workResponse.statusText}`);
@@ -99,12 +174,12 @@ export class OpenLibraryProvider implements BookApiProvider {
     let editionData: any = {};
     if (workData.editions_key && workData.editions_key.length > 0) {
       try {
-        const editionResponse = await fetch(`https://openlibrary.org/books/${workData.editions_key[0]}.json`);
+        const editionResponse = await this.makeRequest(`https://openlibrary.org/books/${workData.editions_key[0]}.json`);
         if (editionResponse.ok) {
           editionData = await editionResponse.json();
         }
       } catch (error) {
-        console.warn('Could not fetch edition details', error);
+        this.log.warn('Could not fetch edition details', error);
       }
     }
     
@@ -162,6 +237,8 @@ export class OpenLibraryProvider implements BookApiProvider {
   async isAvailable(): Promise<boolean> {
     try {
       // Make a simple query to check if the API is responding
+      // We don't use makeRequest here to avoid retry loops when checking availability
+      await this.enforceRateLimit();
       const response = await fetch(`${this.searchBaseUrl}?q=test&limit=1`);
       return response.ok;
     } catch {
