@@ -1,6 +1,14 @@
 import React from "react";
 import { Book } from "@/types/book";
 import { BookSpine } from "./BookSpine";
+import { useSettings } from "@/contexts/SettingsContext";
+import { InfoIcon } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface BookShelfProps {
   books: Book[];
@@ -8,6 +16,10 @@ interface BookShelfProps {
 }
 
 export const BookShelf = ({ books, onBookClick }: BookShelfProps) => {
+  // Get settings to check display preferences
+  const { settings } = useSettings();
+  const groupSpecialStatuses = settings.displayOptions?.groupSpecialStatuses || false;
+
   if (books.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -23,17 +35,29 @@ export const BookShelf = ({ books, onBookClick }: BookShelfProps) => {
     book.status === 'reading' || (!book.status && !book.completedDate)
   );
   
-  // On Hold books
-  const onHoldBooks = books.filter(book => book.status === 'on-hold');
+  // On Hold books - only separate if not grouping with completed
+  const onHoldBooks = !groupSpecialStatuses
+    ? books.filter(book => book.status === 'on-hold')
+    : [];
   
-  const completedBooks = books.filter(book => 
-    book.status === 'completed' || (!book.status && book.completedDate)
-  );
+  // Completed books - may include DNF and On Hold if grouping is enabled
+  const completedBooks = groupSpecialStatuses
+    ? books.filter(book => 
+        book.status === 'completed' ||
+        book.status === 'dnf' ||
+        book.status === 'on-hold' ||
+        (!book.status && book.completedDate)
+      )
+    : books.filter(book => 
+        book.status === 'completed' || (!book.status && book.completedDate)
+      );
   
   const wantToReadBooks = books.filter(book => book.status === 'want-to-read');
 
-  // DNF books (Did Not Finish)
-  const dnfBooks = books.filter(book => book.status === 'dnf');
+  // DNF books (Did Not Finish) - only separate if not grouping with completed
+  const dnfBooks = !groupSpecialStatuses
+    ? books.filter(book => book.status === 'dnf')
+    : [];
 
   // Function to intelligently group books by width to fit on shelves
   const groupBooksByShelves = (books: Book[]) => {
@@ -241,7 +265,23 @@ export const BookShelf = ({ books, onBookClick }: BookShelfProps) => {
       {/* Completed Books Section */}
       {completedShelves.length > 0 && (
         <div>
-          <h3 className="text-lg font-serif text-foreground mb-3 px-2">Completed Books</h3>
+          <h3 className="text-lg font-serif text-foreground mb-3 px-2 flex items-center gap-1">
+            Completed
+            {groupSpecialStatuses && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span>
+                      <InfoIcon className="h-4 w-4 text-muted-foreground cursor-help" />
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Includes DNF and On Hold books</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+          </h3>
           <div className="flex flex-col">
             {completedShelves.map((shelfBooks, shelfIndex) => {
               const isFirst = shelfIndex === 0;

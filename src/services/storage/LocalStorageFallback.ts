@@ -1,11 +1,12 @@
+import { Book } from '@/types/models/Book';
 import { 
   StorageInterface, 
-  Book, 
   Collection, 
   UserSettings, 
   BackupRecord,
   StorageError,
-  StorageErrorType
+  StorageErrorType,
+  BookRecord
 } from './types';
 
 /**
@@ -107,7 +108,7 @@ export class LocalStorageFallback implements StorageInterface {
    * Get all books
    */
   async getBooks(): Promise<Book[]> {
-    const books = this.loadArray<Book>(this.BOOKS_KEY)
+    const books = this.loadArray<BookRecord>(this.BOOKS_KEY)
       .filter(book => !book.deleted); // Filter out deleted books
     return books;
   }
@@ -116,7 +117,7 @@ export class LocalStorageFallback implements StorageInterface {
    * Get a book by its ID
    */
   async getBookById(id: string): Promise<Book | undefined> {
-    const books = this.loadArray<Book>(this.BOOKS_KEY);
+    const books = this.loadArray<BookRecord>(this.BOOKS_KEY);
     const book = books.find(book => book.id === id && !book.deleted);
     return book;
   }
@@ -125,7 +126,7 @@ export class LocalStorageFallback implements StorageInterface {
    * Save a book
    */
   async saveBook(book: Book): Promise<string> {
-    const books = this.loadArray<Book>(this.BOOKS_KEY);
+    const books = this.loadArray<BookRecord>(this.BOOKS_KEY);
     
     // Ensure the book has an ID
     if (!book.id) {
@@ -154,7 +155,7 @@ export class LocalStorageFallback implements StorageInterface {
    * Save multiple books at once
    */
   async saveBooks(books: Book[]): Promise<string[]> {
-    const existingBooks = this.loadArray<Book>(this.BOOKS_KEY);
+    const existingBooks = this.loadArray<BookRecord>(this.BOOKS_KEY);
     const ids: string[] = [];
     const timestamp = new Date().toISOString();
     
@@ -189,7 +190,7 @@ export class LocalStorageFallback implements StorageInterface {
    * Delete a book (soft delete)
    */
   async deleteBook(id: string): Promise<void> {
-    const books = this.loadArray<Book>(this.BOOKS_KEY);
+    const books = this.loadArray<BookRecord>(this.BOOKS_KEY);
     const bookIndex = books.findIndex(book => book.id === id);
     
     if (bookIndex >= 0) {
@@ -214,7 +215,7 @@ export class LocalStorageFallback implements StorageInterface {
       return Promise.resolve();
     }
     
-    const books = this.loadArray<Book>(this.BOOKS_KEY);
+    const books = this.loadArray<BookRecord>(this.BOOKS_KEY);
     const timestamp = new Date().toISOString();
     
     // Mark each book as deleted
@@ -466,7 +467,7 @@ export class LocalStorageFallback implements StorageInterface {
    * Get storage statistics
    */
   async getStorageStats(): Promise<{ books: number; collections: number; backups: number; totalSize: number; }> {
-    const books = this.loadArray<Book>(this.BOOKS_KEY).filter(book => !book.deleted);
+    const books = this.loadArray<BookRecord>(this.BOOKS_KEY).filter(book => !book.deleted);
     const collections = this.loadArray<Collection>(this.COLLECTIONS_KEY);
     const backups = this.loadArray<BackupRecord>(this.BACKUPS_KEY);
     

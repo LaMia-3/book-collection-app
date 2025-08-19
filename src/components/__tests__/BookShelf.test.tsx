@@ -82,7 +82,7 @@ describe('BookShelf', () => {
 
     // Check that all section headings are rendered
     expect(screen.getByText('Currently Reading')).toBeInTheDocument();
-    expect(screen.getByText('Completed Books')).toBeInTheDocument();
+    expect(screen.getByText('Completed')).toBeInTheDocument();
     expect(screen.getByText('Want to Read')).toBeInTheDocument();
     expect(screen.getByText('Did Not Finish')).toBeInTheDocument();
     expect(screen.getByText('On Hold')).toBeInTheDocument();
@@ -131,7 +131,7 @@ describe('BookShelf', () => {
     // Check the order of the sections
     expect(headings[0].textContent).toBe('Currently Reading');
     expect(headings[1].textContent).toBe('On Hold');
-    expect(headings[2].textContent).toBe('Completed Books');
+    expect(headings[2].textContent).toBe('Completed');
   });
 
   it('only shows the On Hold section when books with on-hold status are present', () => {
