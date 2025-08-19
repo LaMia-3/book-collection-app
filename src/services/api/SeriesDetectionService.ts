@@ -3,6 +3,8 @@ import { Series } from '@/types/series';
 
 /**
  * Service for detecting series from existing books using pattern matching and external APIs
+ * 
+ * TODO: This entire service will be redone in a future update
  */
 export class SeriesDetectionService {
   /**

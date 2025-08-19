@@ -293,6 +293,7 @@ const SeriesPage = () => {
     }
   };
 
+  // TODO: This function will be redone in a future update
   // Detect series from books using the API service
   const detectSeriesFromBooks = async (books: Book[]): Promise<Series[]> => {
     try {
@@ -325,6 +326,7 @@ const SeriesPage = () => {
     }
   };
   
+  // TODO: This function will be redone in a future update
   // Handle series detection button click
   const handleDetectSeries = async () => {
     setIsLoading(true);
@@ -387,12 +389,8 @@ const SeriesPage = () => {
         backAriaLabel="Back to Library"
         actions={
           <>
-            <HeaderActionButton
-              icon={<RefreshCw className={isLoading ? 'animate-spin' : ''} />}
-              label="Detect Series"
-              onClick={handleDetectSeries}
-              variant="secondary"
-            />
+            {/* Detect Series button removed - functionality to be redone */}
+            {/* TODO: Redo series detection functionality */}
             <HeaderActionButton
               icon={<Plus />}
               label="New Series"
