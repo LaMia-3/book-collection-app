@@ -3,7 +3,7 @@ import { usePalette } from '@/contexts/PaletteContext';
 import { InfoTooltip } from '@/components/InfoTooltip';
 import { 
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
-  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer 
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer 
 } from 'recharts';
 import { Book } from '@/types/book';
 import { Book as ModelBook, ReadingStatus } from '@/types/models/Book';
@@ -381,9 +381,7 @@ export const InsightsView: React.FC<InsightsViewProps> = ({ books, onBookClick }
                           fontSize: '12px'
                         }}
                       />
-                      <Legend 
-                        wrapperStyle={{ paddingTop: '15px', fontSize: '12px' }}
-                      />
+                      {/* Legend removed */}
                       <Bar dataKey="books" fill="#ff9f7f" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
@@ -427,9 +425,7 @@ export const InsightsView: React.FC<InsightsViewProps> = ({ books, onBookClick }
                           fontSize: '12px'
                         }}
                       />
-                      <Legend 
-                        wrapperStyle={{ paddingTop: '15px', fontSize: '12px' }}
-                      />
+                      {/* Legend removed */}
                       <Line 
                         type="monotone" 
                         dataKey="pages" 
@@ -514,9 +510,7 @@ export const InsightsView: React.FC<InsightsViewProps> = ({ books, onBookClick }
                           fontSize: '12px'
                         }}
                       />
-                      <Legend 
-                        wrapperStyle={{ paddingTop: '15px', fontSize: '12px' }}
-                      />
+                      {/* Legend removed */}
                       <Bar dataKey="books" radius={[4, 4, 0, 0]}>
                         {ratingsData.map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={`hsl(${index * 10 + 25}, 70%, 60%)`} />

@@ -13,9 +13,12 @@ A modern web application for tracking and managing your personal book collection
   - Intelligent duplicate detection
 - **Multiple Views**: Display your collection as a visual bookshelf, list, cover grid, or insights dashboard
 - **Book Management**: Track reading status, ratings, notes, and series information
+  - Enhanced book details editing with improved UI for title, author, page count, and published date
+  - Support for editing book descriptions and managing genre lists
 - **Data Visualization**: View reading trends and statistics with the insights dashboard
   - Improved genre statistics display with clearer information layout
   - Enhanced book cover visualization that respects theme colors
+  - Streamlined chart display with legend removal for cleaner UI
 - **Customization**: Personalize your bookshelf with different color palettes
 - **Enhanced Search**: Advanced search capabilities with fuzzy matching and field-specific filtering
 - **Import/Export**: Import and export your collection in CSV or JSON format with series relationship preservation
@@ -201,6 +204,8 @@ The application is currently undergoing these major improvements:
    - ✅ Better visualization for books without covers using theme colors
    - ✅ Streamlined admin interface for improved usability
    - ✅ Optimized information tooltips and card layouts
+   - ✅ Removed chart legends for cleaner reading insights visualization
+   - ✅ Improved book details editing experience with enhanced form controls
 
 5. **Improved Testing Infrastructure**:
    - New WorkflowTester component for comprehensive integration testing

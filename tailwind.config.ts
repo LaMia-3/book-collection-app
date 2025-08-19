@@ -123,6 +123,7 @@ export default {
 				'gradient-cool': 'var(--gradient-cool)',
 				'gradient-success': 'var(--gradient-success)',
 				'gradient-danger': 'var(--gradient-danger)',
+				'gradient-amber': 'var(--gradient-amber)',
 				'gradient-shelf-dark': 'var(--gradient-shelf-dark)',
 				'gradient-shelf-light': 'var(--gradient-shelf-light)',
 				'gradient-shelf-side': 'var(--gradient-shelf-side)',
