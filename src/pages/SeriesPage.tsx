@@ -4,7 +4,7 @@ import { useSettings } from "@/contexts/SettingsContext";
 import { Series } from "@/types/series";
 import { Book } from "@/types/book";
 import { Button } from "@/components/ui/button";
-import { Library, Plus, ArrowLeft, BookOpen, Bell, BellOff, RefreshCw, BookMarked } from "lucide-react";
+import { Library, Plus, BookOpen, Bell, BellOff, RefreshCw, BookMarked } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { SeriesCard } from "@/components/series/SeriesCard";
 import { CreateSeriesDialog } from "@/components/series/CreateSeriesDialog";
@@ -13,6 +13,7 @@ import { seriesDetectionService } from "@/services/api/SeriesDetectionService";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SeriesFilterPanel, SeriesFilter } from "@/components/filters/SeriesFilterPanel";
 import { enhancedStorageService } from "@/services/storage/EnhancedStorageService";
+import { PageHeader, HeaderActionButton } from "@/components/ui/page-header";
 
 /**
  * Series management page component
@@ -129,18 +130,19 @@ const SeriesPage = () => {
             thumbnail: book.thumbnail,
             googleBooksId: book.sourceId, // Map from new field to old field
             status: book.status as any, // Convert status enum
-            completedDate: book.dateCompleted,
+            completedDate: (book as any).dateCompleted,
             rating: book.rating,
             notes: book.notes,
             // CRITICAL FIX: Handle series fields properly for filtering in CreateSeriesDialog
             isPartOfSeries: !!book.seriesId || book.isPartOfSeries === true ? true : false,
             seriesId: book.seriesId || undefined,
-            _legacySeriesName: book.seriesName || undefined, // Add legacy series name if it exists
-            volumeNumber: (book as any).volumeNumber || book.seriesPosition, // Use either field with type assertion
-            seriesPosition: book.seriesPosition,
-            spineColor: book.spineColor,
+            // Use safe type assertions for fields that might not exist in the type
+            _legacySeriesName: (book as any).seriesName || undefined, // Add legacy series name if it exists
+            volumeNumber: (book as any).volumeNumber || (book as any).seriesPosition, // Use either field with type assertion
+            seriesPosition: (book as any).seriesPosition,
+            spineColor: (book as any).spineColor,
             // Use dateAdded if available, otherwise addedDate or current date
-            addedDate: book.dateAdded || (book as any).addedDate || new Date().toISOString()
+            addedDate: (book as any).dateAdded || (book as any).addedDate || new Date().toISOString()
           };
           return adaptedBook;
         });
@@ -291,6 +293,7 @@ const SeriesPage = () => {
     }
   };
 
+  // TODO: This function will be redone in a future update
   // Detect series from books using the API service
   const detectSeriesFromBooks = async (books: Book[]): Promise<Series[]> => {
     try {
@@ -323,6 +326,7 @@ const SeriesPage = () => {
     }
   };
   
+  // TODO: This function will be redone in a future update
   // Handle series detection button click
   const handleDetectSeries = async () => {
     setIsLoading(true);
@@ -375,76 +379,49 @@ const SeriesPage = () => {
   };
 
   return (
-    <div className="container mx-auto px-4 py-6">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <div className="flex items-center justify-between mb-1">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => navigate('/')}
-              className="flex items-center gap-1 text-muted-foreground hover:text-foreground"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              <BookOpen className="h-4 w-4 mr-1" />
-              Back to Library
-            </Button>
+    <div className="container mx-auto">
+      <PageHeader
+        title={libraryName}
+        subtitle={series.length === 0 
+          ? "Start organizing your books into series"
+          : `${series.length} series in your collection`}
+        backTo="/"
+        backAriaLabel="Back to Library"
+        actions={
+          <>
+            {/* Detect Series button removed - functionality to be redone */}
+            {/* TODO: Redo series detection functionality */}
+            <HeaderActionButton
+              icon={<Plus />}
+              label="New Series"
+              onClick={() => setIsCreatingNewSeries(true)}
+              variant="primary"
+            />
+            <NotificationBell />
+          </>
+        }
+        className="py-6"
+      >
+        {/* Series Tabs */}
+        <Tabs defaultValue="tracked" onValueChange={(v) => setActiveTab(v as "all" | "tracked")} className="mt-6">
+          <div className="flex items-center justify-between mb-6">
+            <TabsList className="grid w-[400px] grid-cols-2">
+              <TabsTrigger value="tracked" className="flex items-center gap-2">
+                <BookMarked className="h-4 w-4" />
+                Tracked Series <span className="ml-1.5 text-xs bg-muted rounded-full px-2 py-0.5">{series.filter(s => s.isTracked).length}</span>
+              </TabsTrigger>
+              <TabsTrigger value="all" className="flex items-center gap-2">
+                <Library className="h-4 w-4" />
+                All Series <span className="ml-1.5 text-xs bg-muted rounded-full px-2 py-0.5">{series.length}</span>
+              </TabsTrigger>
+            </TabsList>
             
-            <div className="flex items-center">
-              <NotificationBell />
+            <div className="text-sm text-muted-foreground">
+              {activeTab === "tracked" 
+                ? "Series you're tracking for updates"
+                : "All series in your collection"}
             </div>
           </div>
-          <h1 className="text-2xl font-serif font-semibold mb-1">
-            {libraryName}
-          </h1>
-          <p className="text-muted-foreground">
-            {series.length === 0 
-              ? "Start organizing your books into series"
-              : `${series.length} series in your collection`}
-          </p>
-        </div>
-        
-        <div className="flex items-center gap-2">
-          <Button 
-            variant="outline"
-            onClick={handleDetectSeries}
-            disabled={isLoading}
-            title="Detect series from your book collection"
-          >
-            <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-            Detect Series
-          </Button>
-          
-          <Button 
-            onClick={() => setIsCreatingNewSeries(true)}
-            className="bg-gradient-warm hover:bg-primary-glow"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            New Series
-          </Button>
-        </div>
-      </div>
-      
-      {/* Series Tabs */}
-      <Tabs defaultValue="tracked" onValueChange={(v) => setActiveTab(v as "all" | "tracked")} className="mt-6">
-        <div className="flex items-center justify-between mb-6">
-          <TabsList className="grid w-[400px] grid-cols-2">
-            <TabsTrigger value="tracked" className="flex items-center gap-2">
-              <BookMarked className="h-4 w-4" />
-              Tracked Series <span className="ml-1.5 text-xs bg-muted rounded-full px-2 py-0.5">{series.filter(s => s.isTracked).length}</span>
-            </TabsTrigger>
-            <TabsTrigger value="all" className="flex items-center gap-2">
-              <Library className="h-4 w-4" />
-              All Series <span className="ml-1.5 text-xs bg-muted rounded-full px-2 py-0.5">{series.length}</span>
-            </TabsTrigger>
-          </TabsList>
-          
-          <div className="text-sm text-muted-foreground">
-            {activeTab === "tracked" 
-              ? "Series you're tracking for updates"
-              : "All series in your collection"}
-          </div>
-        </div>
         
         {/* Series Filter Panel */}
         <SeriesFilterPanel
@@ -567,14 +544,14 @@ const SeriesPage = () => {
                     onToggleTracking={handleToggleTracking}
                     onDeleteSeries={handleDeleteSeries}
                   />
-                ))
-                }
+                ))}
               </div>
             </>
           )}
         </TabsContent>
       </Tabs>
-      
+      </PageHeader>
+
       {/* Create Series Dialog */}
       <CreateSeriesDialog
         open={isCreatingNewSeries}

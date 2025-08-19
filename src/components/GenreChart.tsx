@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { calculateGenreStatistics, getTopGenresWithOthers, GenreCount } from '@/utils/statisticsUtils';
 import { createLogger } from '@/utils/loggingUtils';
@@ -31,6 +31,26 @@ export const GenreChart: React.FC<GenreChartProps> = ({
   topGenres = 10
 }) => {
   const log = createLogger('GenreChart');
+  
+  // State to track the container width for responsive sizing
+  const [containerWidth, setContainerWidth] = useState(300);
+  
+  // Calculate outer and inner radius based on container width
+  const outerRadius = useMemo(() => Math.min(containerWidth * 0.35, 80), [containerWidth]);
+  const innerRadius = useMemo(() => Math.min(containerWidth * 0.15, 30), [containerWidth]);
+  
+  // Effect to estimate container width based on window size
+  useEffect(() => {
+    const updateWidth = () => {
+      // Simple estimation based on window width - adjust as needed
+      const estimatedWidth = Math.min(window.innerWidth * 0.8, 500);
+      setContainerWidth(estimatedWidth);
+    };
+    
+    updateWidth();
+    window.addEventListener('resize', updateWidth);
+    return () => window.removeEventListener('resize', updateWidth);
+  }, []);
   
   const chartData = useMemo(() => {
     log.debug(`Generating genre chart data for ${books.length} books`);
@@ -66,15 +86,31 @@ export const GenreChart: React.FC<GenreChartProps> = ({
       
       {chartData.length > 0 ? (
         <ResponsiveContainer width="100%" height={height}>
-          <PieChart>
+          <PieChart margin={{ top: 10, right: 30, left: 30, bottom: 10 }}>
             <Pie
               data={chartData}
               cx="50%"
               cy="50%"
-              outerRadius={80}
+              // Use pre-calculated radius values
+              outerRadius={outerRadius}
+              innerRadius={innerRadius}
               dataKey="value"
               nameKey="name"
-              label={({ name, value }) => `${name}: ${value}`}
+              // Smart label rendering that prevents overlap
+              label={({ name, value, percent }) => {
+                // Only show labels for segments that are large enough
+                if (percent < 0.05) return null;
+                
+                // Truncate long names
+                const truncatedName = name.length > 12 ? `${name.slice(0, 12)}...` : name;
+                return `${truncatedName}: ${value}`;
+              }}
+              labelLine={{ 
+                stroke: '#8884d8', 
+                strokeWidth: 1,
+                // Use fixed strokeDasharray - can't be dynamic with recharts typings
+                strokeDasharray: "3 3"
+              }}
             >
               {chartData.map((entry, index) => (
                 <Cell 
@@ -84,7 +120,14 @@ export const GenreChart: React.FC<GenreChartProps> = ({
               ))}
             </Pie>
             <Tooltip 
-              formatter={(value: number) => [`${value} ${value === 1 ? 'book' : 'books'}`, 'Count']}
+              formatter={(value, name) => [`${value} books`, name]} 
+              contentStyle={{
+                backgroundColor: 'white',
+                borderRadius: '6px',
+                padding: '8px 12px',
+                fontSize: '12px',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.12)'
+              }}
             />
           </PieChart>
         </ResponsiveContainer>

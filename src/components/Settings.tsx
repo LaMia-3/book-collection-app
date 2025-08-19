@@ -59,6 +59,7 @@ export const Settings: React.FC<SettingsProps> = ({
   const [defaultView, setDefaultView] = useState<string>('shelf');
   const [defaultApi, setDefaultApi] = useState<string>('google');
   const [defaultStatus, setDefaultStatus] = useState<string>('want-to-read');
+  const [groupSpecialStatuses, setGroupSpecialStatuses] = useState(false);
   
   // Initialize form state from settings
   useEffect(() => {
@@ -69,6 +70,7 @@ export const Settings: React.FC<SettingsProps> = ({
       setDefaultView(settings.defaultView || 'shelf');
       setDefaultApi(settings.defaultApi || 'google');
       setDefaultStatus(settings.defaultStatus || 'want-to-read');
+      setGroupSpecialStatuses(settings.displayOptions?.groupSpecialStatuses ?? false);
     }
   }, [isLoading, settings]);
   
@@ -101,6 +103,16 @@ export const Settings: React.FC<SettingsProps> = ({
   const handleDefaultStatusChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     setDefaultStatus(e.target.value);
     updateSettings({ defaultStatus: e.target.value as any });
+  };
+
+  const handleGroupSpecialStatusesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setGroupSpecialStatuses(e.target.checked);
+    updateSettings({ 
+      displayOptions: {
+        ...settings.displayOptions,
+        groupSpecialStatuses: e.target.checked 
+      }
+    });
   };
 
   return (
@@ -224,7 +236,6 @@ export const Settings: React.FC<SettingsProps> = ({
                           <option value="shelf">Bookshelf</option>
                           <option value="list">List</option>
                           <option value="cover">Cover Grid</option>
-                          <option value="insights">Insights</option>
                         </select>
                         <p className="text-xs text-muted-foreground">Default view when you open the application</p>
                       </div>
@@ -256,6 +267,21 @@ export const Settings: React.FC<SettingsProps> = ({
                           <option value="completed">Completed</option>
                         </select>
                         <p className="text-xs text-muted-foreground">Status assigned to newly added books</p>
+                      </div>
+
+                      <div className="grid gap-2">
+                        <label htmlFor="group-special-statuses" className="text-sm font-medium">Library View Organization</label>
+                        <div className="flex items-center space-x-2 mt-1">
+                          <input
+                            type="checkbox"
+                            id="group-special-statuses"
+                            className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                            checked={groupSpecialStatuses}
+                            onChange={handleGroupSpecialStatusesChange}
+                          />
+                          <label htmlFor="group-special-statuses" className="text-sm">Group "Did Not Finish" and "On Hold" books with Completed books</label>
+                        </div>
+                        <p className="text-xs text-muted-foreground">When enabled, DNF and On Hold books appear on the same shelf as Completed books</p>
                       </div>
                     </div>
                   </div>

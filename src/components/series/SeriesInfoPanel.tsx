@@ -57,9 +57,9 @@ export const SeriesInfoPanel = ({
               .filter(book => seriesData.books.includes(book.id))
               .map(book => ({
                 ...book,
-                // Convert from IndexedDB format to UI format
-                addedDate: book.dateAdded,
-                completedDate: book.dateCompleted
+                // Use properties that already exist in the Book interface
+                addedDate: book.addedDate || "",
+                completedDate: book.completedDate || ""
               }));
               
             setSeriesBooks(filteredBooks as Book[]);

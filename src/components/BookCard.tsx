@@ -82,6 +82,7 @@ export const BookCard = ({
     <Card className={cn(
       "h-full overflow-hidden transition-all", 
       compact ? "border-0 shadow-none" : "border shadow-sm",
+      book.status === 'dnf' ? "ring-1 ring-amber-500" : "",
       className
     )}>
       <div className={cn(
@@ -101,6 +102,14 @@ export const BookCard = ({
         )}
         {book.status === 'reading' && (
           <div className="absolute top-0 left-0 w-full h-1 bg-accent" />
+        )}
+        {book.status === 'dnf' && (
+          <>
+            <div className="absolute inset-0 border-2 border-amber-500 rounded-t-md" />
+            <div className="absolute top-2 right-2">
+              <Badge className="bg-amber-500 text-[10px] py-0">DNF</Badge>
+            </div>
+          </>
         )}
       </div>
       

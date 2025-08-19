@@ -6,7 +6,7 @@ import { Series } from '@/types/series';
 import { Book } from '@/types/book';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, BookOpen, Bell, BellOff, Pencil, Trash2, Loader2 } from 'lucide-react';
+import { BookOpen, Bell, BellOff, Pencil, Trash2, Loader2 } from 'lucide-react';
 import { SeriesBooksTab } from '@/components/series/SeriesBooksTab';
 import { SeriesInfoTab } from '@/components/series/SeriesInfoTab';
 import { UpcomingReleasesTab } from '@/components/series/UpcomingReleasesTab';
@@ -14,6 +14,7 @@ import { SeriesEditDialog } from '@/components/series/SeriesEditDialog';
 import { seriesApiService } from '@/services/api/SeriesApiService';
 import { upcomingReleasesApiService } from '@/services/api/UpcomingReleasesApiService';
 import { enhancedStorageService } from '@/services/storage/EnhancedStorageService';
+import { PageHeader, HeaderActionButton } from '@/components/ui/page-header';
 
 /**
  * Detailed view of a specific series
@@ -60,8 +61,8 @@ const SeriesDetailPage = () => {
           const uiBooks = booksFromDB.map(book => ({
             ...book,
             // Convert fields for UI format
-            addedDate: book.dateAdded || new Date().toISOString(),
-            completedDate: book.dateCompleted,
+            addedDate: (book as any).dateAdded || new Date().toISOString(),
+            completedDate: (book as any).dateCompleted,
           } as Book));
           
           setBooks(uiBooks);
@@ -285,94 +286,64 @@ const SeriesDetailPage = () => {
   
   return (
     <div className="container mx-auto px-4 py-6">
-      {/* Navigation */}
-      <div className="mb-2">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => navigate('/series')}
-          className="flex items-center gap-1 text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to Series
-        </Button>
-      </div>
-      
-      {/* Hero Header */}
-      <div className="relative h-64 rounded-lg overflow-hidden mb-6">
-        {series.coverImage ? (
-          <img 
-            src={series.coverImage} 
-            alt={series.name}
-            className="w-full h-full object-cover"
-          />
-        ) : (
-          <div className="w-full h-full bg-gradient-to-r from-muted/60 via-muted to-muted/60 flex items-center justify-center">
-            <BookOpen className="h-24 w-24 text-muted-foreground/30" />
-          </div>
-        )}
-        
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent"></div>
-        
-        <div className="absolute bottom-0 left-0 right-0 p-6 text-white">
-          <div className="flex items-center justify-between">
-            <div className="flex-grow">
-              <h1 className="font-serif text-3xl font-medium mb-2 mr-12">
-                {series.name}
-                {isRefreshing && (
-                  <Loader2 className="inline-block h-5 w-5 ml-2 animate-spin text-white/70" />
-                )}
-              </h1>
-              <div className="flex flex-wrap gap-4 items-center">
-                {series.author && (
-                  <p className="text-white/90">{series.author}</p>
-                )}
-                <div className="flex items-center gap-1">
-                  <span className="text-white/80">{seriesBooks.length} books</span>
-                  <span className="text-white/50 px-1">•</span>
-                  <span className="text-white/80">{completionPercentage}% complete</span>
-                </div>
-              </div>
+      <PageHeader
+        title={series.name}
+        subtitle={series.author || ''}
+        backTo="/series"
+        backAriaLabel="Back to Series"
+        actions={
+          <>
+            <HeaderActionButton
+              icon={series.isTracked ? <Bell /> : <BellOff />}
+              label={series.isTracked ? "Stop tracking" : "Track series"}
+              onClick={handleToggleTracking}
+              variant="secondary"
+            />
+            <HeaderActionButton
+              icon={<Pencil />}
+              label="Edit series"
+              onClick={() => setIsEditDialogOpen(true)}
+              variant="secondary"
+            />
+            <HeaderActionButton
+              icon={<Trash2 />}
+              label="Delete series"
+              onClick={handleDeleteSeries}
+              variant="secondary"
+            />
+          </>
+        }
+        className="pb-0"
+      >
+        {/* Hero Header with Cover Image */}
+        <div className="relative h-64 rounded-lg overflow-hidden mb-6 -mt-4">
+          {series.coverImage ? (
+            <img 
+              src={series.coverImage} 
+              alt={series.name}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div className="w-full h-full bg-gradient-to-r from-muted/60 via-muted to-muted/60 flex items-center justify-center">
+              <BookOpen className="h-24 w-24 text-muted-foreground/30" />
             </div>
-            
-            <div className="flex items-center gap-2">
-              <Button 
-                variant="outline" 
-                size="icon"
-                className="border-white/30 text-white hover:bg-white/20"
-                onClick={handleToggleTracking}
-                title={series.isTracked ? "Stop tracking" : "Track series"}
-              >
-                {series.isTracked ? (
-                  <Bell className="h-4 w-4" />
-                ) : (
-                  <BellOff className="h-4 w-4" />
-                )}
-              </Button>
-              
-              <Button
-                variant="outline"
-                size="icon"
-                className="border-white/30 text-white hover:bg-white/20"
-                title="Edit series"
-                onClick={() => setIsEditDialogOpen(true)}
-              >
-                <Pencil className="h-4 w-4" />
-              </Button>
-              
-              <Button
-                variant="outline"
-                size="icon"
-                className="border-white/30 text-white hover:bg-white/20"
-                title="Delete series"
-                onClick={handleDeleteSeries}
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
+          )}
+          
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent"></div>
+          
+          <div className="absolute bottom-0 left-0 right-0 p-6 text-white">
+            <div className="flex items-center">
+              {isRefreshing && (
+                <Loader2 className="h-5 w-5 mr-2 animate-spin text-white/70" />
+              )}
+              <div className="flex items-center gap-1">
+                <span className="text-white/80">{seriesBooks.length} books</span>
+                <span className="text-white/50 px-1">•</span>
+                <span className="text-white/80">{completionPercentage}% complete</span>
+              </div>
             </div>
           </div>
         </div>
-      </div>
       
       {/* Progress bar */}
       <div className="mb-6">
@@ -426,6 +397,7 @@ const SeriesDetailPage = () => {
           <UpcomingReleasesTab seriesId={series.id} seriesName={series.name} author={series.author} />
         </TabsContent>
       </Tabs>
+      </PageHeader>
       
       {/* Series Edit Dialog */}
       {series && (
@@ -434,7 +406,14 @@ const SeriesDetailPage = () => {
           isOpen={isEditDialogOpen}
           onClose={() => setIsEditDialogOpen(false)}
           onSave={(updatedSeries) => {
-            setSeries(updatedSeries);
+            // Use type assertion since the type definitions might be out of sync
+            // with the actual implementation across the app
+            setSeries({
+              ...updatedSeries,
+              // Ensure these fields are present
+              createdAt: (updatedSeries as any).createdAt || series.createdAt || new Date(),
+              updatedAt: new Date(),
+            } as Series);
             setIsEditDialogOpen(false);
           }}
         />

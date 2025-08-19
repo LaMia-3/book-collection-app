@@ -5,7 +5,8 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { ArrowLeft, Database, AlertCircle, Trash2, RefreshCw, Settings, Server, CheckCircle2, Wrench, Zap, UserCircle } from "lucide-react";
+import { Database, AlertCircle, Trash2, RefreshCw, Settings, Server, CheckCircle2, Wrench, Zap, UserCircle } from "lucide-react";
+import { PageHeader, HeaderActionButton } from '@/components/ui/page-header';
 import { useToast } from '@/hooks/use-toast';
 
 // Import components and utilities
@@ -194,35 +195,13 @@ export default function AdminPage() {
 
   return (
     <div className="container py-8 max-w-7xl">
-      <div className="flex justify-between items-center mb-8">
-        <div className="flex items-center">
-          <Button 
-            variant="ghost" 
-            size="icon"
-            className="mr-2"
-            onClick={() => navigate(-1)}
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div>
-            <h1 className="text-2xl font-bold">Admin Dashboard</h1>
-            <p className="text-muted-foreground">
-              Manage your database and storage
-            </p>
-          </div>
-        </div>
-        
-        <div className="flex items-center gap-3">
-          <Button 
-            variant="outline" 
-            className="flex items-center gap-2"
-            onClick={() => navigate('/')}
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back to Library
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        title="Admin Dashboard"
+        subtitle="Manage your database and storage"
+        backTo="/"
+        backAriaLabel="Back to Library"
+        className="mb-8"
+      >
       
       <Tabs defaultValue={activeTab} onValueChange={setActiveTab}>
         <TabsList className="flex w-full mb-8">
@@ -677,6 +656,7 @@ export default function AdminPage() {
 
         {/* Workflow Test is now the last tab */}
       </Tabs>
+      </PageHeader>
     </div>
   );
 }

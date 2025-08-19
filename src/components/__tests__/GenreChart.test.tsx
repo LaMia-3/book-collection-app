@@ -26,18 +26,33 @@ jest.mock('@/utils/loggingUtils', () => ({
 // Mock the recharts components to avoid test issues with SVG rendering
 jest.mock('recharts', () => ({
   PieChart: ({ children }: { children: React.ReactNode }) => <div data-testid="pie-chart">{children}</div>,
-  Pie: ({ data }: { data: any[] }) => (
-    <div data-testid="pie">
-      {data.map(item => (
-        <div key={item.name} data-testid={`pie-item-${item.name}`}>
-          {item.name}: {item.value}
-        </div>
-      ))}
-    </div>
-  ),
+  Pie: ({ data, label }: { data: any[], label: any }) => {
+    // Capture the label function to test it
+    const labelFn = label as Function;
+    return (
+      <div data-testid="pie">
+        {data.map(item => {
+          // Apply the label function to each item
+          const labelText = labelFn ? labelFn({
+            name: item.name,
+            value: item.value,
+            percent: item.value / data.reduce((sum, i) => sum + i.value, 0)
+          }) : null;
+          
+          return (
+            <div key={item.name} data-testid={`pie-item-${item.name}`}>
+              <span data-testid={`pie-item-original-${item.name}`}>{item.name}: {item.value}</span>
+              {labelText && <span data-testid={`pie-item-label-${item.name}`}>{labelText}</span>}
+            </div>
+          );
+        })}
+      </div>
+    );
+  },
   Cell: () => <div data-testid="cell" />,
   Tooltip: () => <div data-testid="tooltip" />,
-  Legend: () => <div data-testid="legend" />,
+  // Legend component removed
+  Legend: () => <div data-testid="legend-removed">Legend Removed</div>,
   ResponsiveContainer: ({ children }: { children: React.ReactNode }) => <div data-testid="responsive-container">{children}</div>
 }));
 
@@ -91,11 +106,10 @@ describe('GenreChart', () => {
     expect(screen.getByTestId('pie-chart')).toBeInTheDocument();
     expect(screen.getByTestId('pie')).toBeInTheDocument();
     expect(screen.getByTestId('tooltip')).toBeInTheDocument();
-    // Legend removed from component
+    // Legend has been removed
     
     // Check for title
     expect(screen.getByText('Books by Genre')).toBeInTheDocument();
-    // Info tooltip moved to InsightsView
   });
 
   // Book count information test removed as this content was moved to InsightsView
@@ -118,6 +132,61 @@ describe('GenreChart', () => {
     expect(statisticsUtils.getTopGenresWithOthers).toHaveBeenCalledWith(mockGenreCounts, 2);
   });
 
+  it('should truncate long genre names in labels', () => {
+    // Arrange
+    const booksWithLongGenres = [
+      {
+        id: '1',
+        title: 'Book with Long Genre',
+        author: 'Author',
+        genre: ['Very Long Genre Name That Should Be Truncated'],
+        spineColor: 1,
+        addedDate: '2023-01-01'
+      }
+    ];
+    
+    const longGenreCounts = [
+      { name: 'Very Long Genre Name That Should Be Truncated', value: 1, percentage: 100 }
+    ];
+    
+    (statisticsUtils.calculateGenreStatistics as jest.Mock).mockReturnValue(longGenreCounts);
+    (statisticsUtils.getTopGenresWithOthers as jest.Mock).mockReturnValue(longGenreCounts);
+    
+    // Act
+    render(<GenreChart books={booksWithLongGenres} />);
+    
+    // Assert - should find the item with the long genre name
+    expect(screen.getByTestId('pie-item-Very Long Genre Name That Should Be Truncated')).toBeInTheDocument();
+    
+    // Check if the label text includes the truncated version
+    const labelElement = screen.getByTestId('pie-item-label-Very Long Genre Name That Should Be Truncated');
+    expect(labelElement.textContent).toContain('Very Long Ge');
+    expect(labelElement.textContent).toContain('...');
+    expect(labelElement.textContent).not.toEqual('Very Long Genre Name That Should Be Truncated: 1');
+  });
+  
+  it('should hide labels for small segments', () => {
+    // Arrange
+    // Create a dataset with one large and one very small genre (less than 5%)
+    const mixedSizeGenres = [
+      { name: 'Major Genre', value: 96, percentage: 96 },
+      { name: 'Minor Genre', value: 4, percentage: 4 }
+    ];
+    
+    (statisticsUtils.calculateGenreStatistics as jest.Mock).mockReturnValue(mixedSizeGenres);
+    (statisticsUtils.getTopGenresWithOthers as jest.Mock).mockReturnValue(mixedSizeGenres);
+    
+    // Act
+    render(<GenreChart books={mockBooks} />);
+    
+    // Assert
+    // The small segment with less than 5% should not have a visible label
+    expect(screen.getByTestId('pie-item-label-Major Genre')).toBeInTheDocument();
+    // No label should be rendered for small segments
+    const minorGenreItem = screen.getByTestId('pie-item-Minor Genre');
+    expect(minorGenreItem.querySelector('[data-testid="pie-item-label-Minor Genre"]')).toBeNull();
+  });
+
   it('should show message when chart data is empty but books exist', () => {
     // Arrange
     (statisticsUtils.calculateGenreStatistics as jest.Mock).mockReturnValue([]);
@@ -129,4 +198,6 @@ describe('GenreChart', () => {
     // Assert
     expect(screen.getByText('No genre data available')).toBeInTheDocument();
   });
+  
+  // Removed legend truncation test as legend has been removed
 });

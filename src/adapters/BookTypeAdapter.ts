@@ -134,14 +134,17 @@ function mapDbStatusToUiStatus(status?: string): UIBook['status'] {
   // Convert DB status to UI status
   switch (status.toLowerCase()) {
     case 'reading':
-    case 'reading':
       return 'reading';
-    case 'completed':
     case 'completed':
       return 'completed';
     case 'to_read':
     case 'want-to-read':
       return 'want-to-read';
+    case 'dnf':
+      return 'dnf';
+    case 'on_hold':
+    case 'on-hold':
+      return 'on-hold';
     default:
       return 'want-to-read'; // Default status
   }
@@ -154,7 +157,12 @@ function mapUiStatusToDbStatus(status?: UIBook['status']): string {
   if (!status) return 'want-to-read';
   
   // Convert UI status to DB status
-  return status;
+  switch (status) {
+    case 'on-hold':
+      return 'on_hold';
+    default:
+      return status;
+  }
 }
 
 /**

@@ -1,3 +1,4 @@
+import React from "react";
 import { Book } from "@/types/book";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -5,6 +6,8 @@ import { Star } from "lucide-react";
 import { usePalette } from "@/contexts/PaletteContext";
 import { useState, useEffect } from "react";
 import { useTheme } from "@/components/ui-common/ThemeProvider";
+import { TruncatedText } from "@/components/common/TruncatedText";
+import { GenreCollapsible } from "@/components/common/GenreCollapsible";
 
 interface BookCoverViewProps {
   books: Book[];
@@ -93,9 +96,9 @@ export const BookCoverView = ({ books, onBookClick }: BookCoverViewProps) => {
                         ? getContrastTextColor(getPlaceholderColor(book.spineColor)) 
                         : '#FFFFFF'
                     }}
-                    className="font-serif text-center px-4 line-clamp-3 transition-colors"
+                    className="font-serif text-center px-4 transition-colors"
                   >
-                    {book.title}
+                    <TruncatedText text={book.title} lineClamp={3} />
                   </p>
                 </div>
               )}
@@ -109,6 +112,16 @@ export const BookCoverView = ({ books, onBookClick }: BookCoverViewProps) => {
                   Read
                 </Badge>
               )}
+              {book.status === 'dnf' && (
+                <Badge className="absolute top-2 right-2 bg-gradient-to-r from-red-500 to-red-700 text-white">
+                  Did Not Finish
+                </Badge>
+              )}
+              {book.status === 'on-hold' && (
+                <Badge className="absolute top-2 right-2 bg-gradient-amber text-white">
+                  On Hold
+                </Badge>
+              )}
               {(book.status === 'reading' || (!book.status && !book.completedDate && book.status !== 'want-to-read')) && (
                 <Badge className="absolute top-2 right-2 bg-gradient-warm text-white">
                   Reading
@@ -116,11 +129,11 @@ export const BookCoverView = ({ books, onBookClick }: BookCoverViewProps) => {
               )}
             </div>
             <div className="p-3">
-              <h3 className="font-serif font-medium text-sm leading-tight mb-1 line-clamp-2">
-                {book.title}
+              <h3 className="font-serif font-medium text-sm leading-tight mb-1">
+                <TruncatedText text={book.title} lineClamp={2} />
               </h3>
               <p className="text-xs text-muted-foreground mb-1">
-                {book.author}
+                <TruncatedText text={book.author} maxLength={25} />
               </p>
               {book.rating && (
                 <div className="flex">

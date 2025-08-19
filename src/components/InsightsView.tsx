@@ -3,7 +3,7 @@ import { usePalette } from '@/contexts/PaletteContext';
 import { InfoTooltip } from '@/components/InfoTooltip';
 import { 
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
-  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer 
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer 
 } from 'recharts';
 import { Book } from '@/types/book';
 import { Book as ModelBook, ReadingStatus } from '@/types/models/Book';
@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils';
 import { SeriesInsights } from '@/components/insights/SeriesInsights';
 import { GenreChart } from '@/components/GenreChart';
 import { createLogger } from '@/utils/loggingUtils';
+import { calculateReadingStatusStatistics, getReadingStatusChartData } from '@/utils/statisticsUtils';
 
 // Create a logger for the InsightsView component
 const log = createLogger('InsightsView');
@@ -30,15 +31,18 @@ const mapToModelBook = (book: Book): ModelBook => {
     // Map status values to ReadingStatus enum
     status: book.status === 'reading' ? ReadingStatus.READING :
             book.status === 'completed' ? ReadingStatus.COMPLETED :
-            book.status === 'want-to-read' ? ReadingStatus.TO_READ : undefined,
+            book.status === 'want-to-read' ? ReadingStatus.TO_READ :
+            book.status === 'dnf' ? ReadingStatus.DNF :
+            book.status === 'on-hold' ? ReadingStatus.ON_HOLD : undefined,
   } as ModelBook;
 };
 
 interface InsightsViewProps {
   books: Book[];
+  onBookClick?: (book: Book) => void;
 }
 
-export const InsightsView: React.FC<InsightsViewProps> = ({ books }) => {
+export const InsightsView: React.FC<InsightsViewProps> = ({ books, onBookClick }) => {
   // Get the selected palette for theme colors
   const { selectedPalette } = usePalette();
   // Tabs for switching between different insight sections
@@ -353,15 +357,31 @@ export const InsightsView: React.FC<InsightsViewProps> = ({ books }) => {
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart
                       data={booksPerMonth}
-                      margin={{ top: 5, right: 30, left: 0, bottom: 5 }}
+                      margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
                     >
                       <CartesianGrid strokeDasharray="3 3" opacity={0.1} />
-                      <XAxis dataKey="name" />
-                      <YAxis allowDecimals={false} />
+                      <XAxis 
+                        dataKey="name" 
+                        tick={{ fontSize: 12 }}
+                        angle={window.innerWidth < 500 ? -45 : 0}
+                        textAnchor={window.innerWidth < 500 ? "end" : "middle"}
+                        height={window.innerWidth < 500 ? 60 : 30}
+                      />
+                      <YAxis 
+                        allowDecimals={false} 
+                        tick={{ fontSize: 12 }}
+                        width={35}
+                      />
                       <Tooltip 
                         formatter={(value) => [`${value} books`, 'Completed']}
-                        contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.8)', borderRadius: '6px' }}
+                        contentStyle={{ 
+                          backgroundColor: 'rgba(255, 255, 255, 0.95)', 
+                          borderRadius: '6px',
+                          padding: '8px',
+                          fontSize: '12px'
+                        }}
                       />
+                      {/* Legend removed */}
                       <Bar dataKey="books" fill="#ff9f7f" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
@@ -380,22 +400,39 @@ export const InsightsView: React.FC<InsightsViewProps> = ({ books }) => {
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart
                       data={pagesPerMonth}
-                      margin={{ top: 5, right: 30, left: 0, bottom: 5 }}
+                      margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
                     >
                       <CartesianGrid strokeDasharray="3 3" opacity={0.1} />
-                      <XAxis dataKey="name" />
-                      <YAxis />
+                      <XAxis 
+                        dataKey="name" 
+                        tick={{ fontSize: 12 }}
+                        angle={window.innerWidth < 500 ? -45 : 0}
+                        textAnchor={window.innerWidth < 500 ? "end" : "middle"}
+                        height={window.innerWidth < 500 ? 60 : 30}
+                      />
+                      <YAxis 
+                        tick={{ fontSize: 12 }} 
+                        width={35}
+                        tickFormatter={(value) => value >= 1000 ? `${(value/1000).toFixed(1)}k` : value}
+                      />
                       <Tooltip 
                         formatter={(value) => [`${value} pages`, 'Read']}
-                        contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.8)', borderRadius: '6px' }}
+                        labelFormatter={(label) => `Month: ${label}`}
+                        contentStyle={{ 
+                          backgroundColor: 'rgba(255, 255, 255, 0.95)', 
+                          borderRadius: '6px',
+                          padding: '8px',
+                          fontSize: '12px'
+                        }}
                       />
+                      {/* Legend removed */}
                       <Line 
                         type="monotone" 
                         dataKey="pages" 
                         stroke="#7fd4ff" 
                         strokeWidth={2}
                         dot={{ fill: '#7fd4ff', strokeWidth: 2 }}
-                        activeDot={{ r: 6 }}
+                        activeDot={{ r: 6, stroke: '#7fd4ff', strokeWidth: 2 }}
                       />
                     </LineChart>
                   </ResponsiveContainer>
@@ -452,15 +489,28 @@ export const InsightsView: React.FC<InsightsViewProps> = ({ books }) => {
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart
                       data={ratingsData}
-                      margin={{ top: 5, right: 30, left: 0, bottom: 5 }}
+                      margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
                     >
                       <CartesianGrid strokeDasharray="3 3" opacity={0.1} />
-                      <XAxis dataKey="name" />
-                      <YAxis allowDecimals={false} />
+                      <XAxis 
+                        dataKey="name" 
+                        tick={{ fontSize: 12 }}
+                      />
+                      <YAxis 
+                        allowDecimals={false} 
+                        tick={{ fontSize: 12 }}
+                        width={35}
+                      />
                       <Tooltip
                         formatter={(value) => [`${value} books`, 'Rated']}
-                        contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.8)', borderRadius: '6px' }}
+                        contentStyle={{ 
+                          backgroundColor: 'rgba(255, 255, 255, 0.95)', 
+                          borderRadius: '6px',
+                          padding: '8px',
+                          fontSize: '12px'
+                        }}
                       />
+                      {/* Legend removed */}
                       <Bar dataKey="books" radius={[4, 4, 0, 0]}>
                         {ratingsData.map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={`hsl(${index * 10 + 25}, 70%, 60%)`} />
@@ -581,7 +631,23 @@ export const InsightsView: React.FC<InsightsViewProps> = ({ books }) => {
                   {[...filteredBooks]
                     .sort((a, b) => new Date(a.completedDate!).getTime() - new Date(b.completedDate!).getTime())
                     .map(book => (
-                      <div key={book.id} className="flex flex-col sm:flex-row gap-4 border-b pb-4 last:border-0">
+                      <div 
+  key={book.id} 
+  className={cn(
+    "flex flex-col sm:flex-row gap-4 border-b pb-4 last:border-0",
+    onBookClick ? "cursor-pointer hover:bg-accent/10 rounded transition-colors" : ""
+  )}
+  onClick={() => onBookClick?.(book)}
+  role={onBookClick ? "button" : undefined}
+  tabIndex={onBookClick ? 0 : undefined}
+  onKeyDown={(e) => {
+    if (onBookClick && (e.key === "Enter" || e.key === " ")) {
+      e.preventDefault();
+      onBookClick(book);
+    }
+  }}
+  aria-label={onBookClick ? `View details for ${book.title}` : undefined}
+>
                         <div className="flex-shrink-0 w-16 h-24">
                           {book.thumbnail ? (
                             <img 

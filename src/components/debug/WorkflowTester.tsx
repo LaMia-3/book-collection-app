@@ -477,14 +477,20 @@ export function WorkflowTester() {
           )
         );
       
-        // Assign reading status based on index (for 300 books total - 5 reading, 270 completed, 25 want-to-read)
+        // Assign reading status based on index (for 300 books total - 5 reading, 20 dnf, 5 on-hold, 245 completed, 25 want-to-read)
         // First 3 books as reading (3 out of 5 total reading books)
+        // Next 12 books as dnf (12 out of 20 total dnf books)
+        // Next 3 books as on-hold (3 out of 5 total on-hold books)
         // Last 15 as want-to-read (15 out of 25 total want-to-read books)
         // All others as completed
-        let status: 'reading' | 'completed' | 'want-to-read' = 'completed';
+        let status: 'reading' | 'completed' | 'want-to-read' | 'dnf' | 'on-hold' = 'completed';
         
         if (i < 3) {
           status = 'reading';
+        } else if (i >= 3 && i < 15) {
+          status = 'dnf';
+        } else if (i >= 15 && i < 18) {
+          status = 'on-hold';
         } else if (i >= GOOGLE_BOOK_SEARCHES.length - 15) {
           status = 'want-to-read';
         }
@@ -599,14 +605,20 @@ export function WorkflowTester() {
           )
         );
         
-        // Assign reading status based on index (for 300 books total - 5 reading, 270 completed, 25 want-to-read)
+        // Assign reading status based on index (for 300 books total - 5 reading, 20 dnf, 5 on-hold, 245 completed, 25 want-to-read)
         // Next 2 books as reading (2 out of 5 total reading books, with 3 from Google Books)
+        // Next 8 books as dnf (8 out of 20 total dnf books, with 12 from Google Books)
+        // Next 2 books as on-hold (2 out of 5 total on-hold books, with 3 from Google Books)
         // Last 10 as want-to-read (10 out of 25 total want-to-read books, with 15 from Google Books)
         // All others as completed
-        let status: 'reading' | 'completed' | 'want-to-read' = 'completed';
+        let status: 'reading' | 'completed' | 'want-to-read' | 'dnf' | 'on-hold' = 'completed';
         
         if (i < 2) {
           status = 'reading';
+        } else if (i >= 2 && i < 10) {
+          status = 'dnf';
+        } else if (i >= 10 && i < 12) {
+          status = 'on-hold';
         } else if (i >= OPEN_LIBRARY_BOOK_SEARCHES.length - 10) {
           status = 'want-to-read';
         }

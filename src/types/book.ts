@@ -19,7 +19,7 @@ export interface Book {
   isbn13?: string[];
   
   // User tracking fields
-  status?: 'reading' | 'completed' | 'want-to-read'; // Track reading status
+  status?: 'reading' | 'completed' | 'want-to-read' | 'dnf' | 'on-hold'; // Track reading status
   completedDate?: string;
   rating?: number; // 1-5 stars
   notes?: string;

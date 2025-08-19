@@ -13,6 +13,9 @@ export interface UserSettings {
     enabled: boolean;
     monthlyTarget: number;
   };
+  displayOptions?: {
+    groupSpecialStatuses: boolean; // true to group DNF/On Hold with Completed books, false to show separately
+  };
 }
 
 // Default settings values
@@ -26,6 +29,9 @@ export const defaultSettings: UserSettings = {
   goals: {
     enabled: false,
     monthlyTarget: 4, // Default to 4 books per month
+  },
+  displayOptions: {
+    groupSpecialStatuses: false, // Default to showing DNF/On Hold books separately
   },
 };
 

@@ -89,11 +89,11 @@ describe('BookTypeAdapter', () => {
     it('should handle all reading status values correctly', () => {
       // Test each status conversion
       // Using strings for DB status fields instead of enums
-      expect(convertUiBookToDbBook({ status: 'to-read' } as any).status).toEqual('to-read');
+      expect(convertUiBookToDbBook({ status: 'want-to-read' } as any).status).toEqual('want-to-read');
       expect(convertUiBookToDbBook({ status: 'reading' } as any).status).toEqual('reading');
       expect(convertUiBookToDbBook({ status: 'completed' } as any).status).toEqual('completed');
-      expect(convertUiBookToDbBook({ status: 'on-hold' } as any).status).toEqual('on-hold');
-      expect(convertUiBookToDbBook({ status: 'dropped' } as any).status).toEqual('dropped');
+      expect(convertUiBookToDbBook({ status: 'on-hold' } as any).status).toEqual('on_hold');
+      expect(convertUiBookToDbBook({ status: 'dnf' } as any).status).toEqual('dnf');
     });
   });
 
@@ -163,10 +163,10 @@ describe('BookTypeAdapter', () => {
       expect(convertDbBookToUiBook({ status: ReadingStatus.TO_READ } as any).status).toEqual('want-to-read');
       expect(convertDbBookToUiBook({ status: ReadingStatus.READING } as any).status).toEqual('reading');
       expect(convertDbBookToUiBook({ status: ReadingStatus.COMPLETED } as any).status).toEqual('completed');
-      // It seems ON_HOLD maps to 'want-to-read' in the implementation
-      expect(convertDbBookToUiBook({ status: ReadingStatus.ON_HOLD } as any).status).toEqual('want-to-read');
-      // It seems DNF also maps to 'want-to-read' in the implementation
-      expect(convertDbBookToUiBook({ status: ReadingStatus.DNF } as any).status).toEqual('want-to-read');
+      // ON_HOLD status maps to 'on-hold'
+      expect(convertDbBookToUiBook({ status: ReadingStatus.ON_HOLD } as any).status).toEqual('on-hold');
+      // DNF status maps to 'dnf'
+      expect(convertDbBookToUiBook({ status: ReadingStatus.DNF } as any).status).toEqual('dnf');
     });
 
     it('should handle genre as a string', () => {

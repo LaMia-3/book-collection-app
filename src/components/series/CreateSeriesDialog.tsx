@@ -80,7 +80,7 @@ export const CreateSeriesDialog = ({
         // Add required Book fields
         isPartOfSeries: false,
         spineColor: book.spineColor || '#6366f1',
-        addedDate: book.dateAdded,
+        addedDate: book.addedDate || new Date().toISOString(),
         status: book.status || 'toread',
         // Add empty strings for optional fields to avoid null/undefined issues
         description: book.description || '',
@@ -129,6 +129,7 @@ export const CreateSeriesDialog = ({
         .map(([id]) => id);
       
       // Create a new series with proper IndexedDB fields
+      const now = new Date();
       const newSeries = {
         id: `series-${Date.now()}`,
         name: seriesData.name,
@@ -140,8 +141,11 @@ export const CreateSeriesDialog = ({
         readingProgress: 0,
         readingOrder: 'publication' as 'publication' | 'chronological' | 'custom', // Use type assertion for enum
         isTracked: seriesData.isTracked,
-        dateAdded: new Date().toISOString(),
-        lastModified: new Date().toISOString()
+        dateAdded: now.toISOString(),
+        lastModified: now.toISOString(),
+        // Add required Series fields
+        createdAt: now,
+        updatedAt: now
       };
       
       // Save to IndexedDB
@@ -152,7 +156,8 @@ export const CreateSeriesDialog = ({
         const book = await enhancedStorageService.getBookById(bookId);
         if (book) {
           book.seriesId = newSeries.id;
-          book.lastModified = new Date().toISOString();
+          // Update the book with timestamp
+          // Skip setting lastModified as it doesn't exist on the Book type
           await enhancedStorageService.saveBook(book);
         }
       }

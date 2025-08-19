@@ -4,6 +4,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Star, ChevronUp, ChevronDown } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
+import { TruncatedText } from "@/components/common/TruncatedText";
+import { GenreCollapsible } from "@/components/common/GenreCollapsible";
 
 // Define sort fields for the BookListView
 type SortField = 'title' | 'author' | 'genre' | 'status' | 'rating' | 'addedDate';
@@ -116,15 +118,17 @@ export const BookListView = ({ books, onBookClick }: BookListViewProps) => {
               onClick={() => onBookClick(book)}
             >
               <TableCell className="font-medium font-serif">
-                {book.title}
+                <div className="break-words pr-2">{book.title}</div>
                 {book.isPartOfSeries && (
                   <Badge variant="outline" className="ml-2">Series</Badge>
                 )}
               </TableCell>
-              <TableCell>{book.author}</TableCell>
+              <TableCell><TruncatedText text={book.author} maxLength={30} /></TableCell>
               <TableCell>
                 {book.genre 
-                  ? (Array.isArray(book.genre) ? book.genre.join(' / ') : book.genre) 
+                  ? (Array.isArray(book.genre) 
+                    ? <GenreCollapsible genres={book.genre} limit={2} /> 
+                    : <TruncatedText text={book.genre} maxLength={30} />) 
                   : '-'}
               </TableCell>
               <TableCell>
@@ -134,14 +138,22 @@ export const BookListView = ({ books, onBookClick }: BookListViewProps) => {
                       ? "bg-gradient-cool text-white"
                       : book.status === 'completed' || (!book.status && book.completedDate)
                         ? "bg-gradient-success text-white" 
-                        : "bg-gradient-warm text-white"
+                        : book.status === 'dnf'
+                          ? "bg-gradient-danger text-white"
+                          : book.status === 'on-hold'
+                            ? "bg-gradient-amber text-white"
+                            : "bg-gradient-warm text-white"
                   }
                 >
                   {book.status === 'want-to-read'
                     ? "Want to Read"
                     : book.status === 'completed' || (!book.status && book.completedDate)
                       ? "Read" 
-                      : "Reading"
+                      : book.status === 'dnf'
+                        ? "Did Not Finish"
+                        : book.status === 'on-hold'
+                          ? "On Hold"
+                          : "Reading"
                   }
                 </Badge>
               </TableCell>
