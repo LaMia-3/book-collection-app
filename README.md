@@ -30,12 +30,41 @@ Book Collection App is a modern web application for tracking and managing your p
 
 ## Technology Stack
 
-- **Frontend**: React with TypeScript
-- **UI Components**: shadcn/ui with Tailwind CSS
-- **State Management**: React Context API
-- **Storage**: IndexedDB for offline-capable persistence
-- **External APIs**: Google Books API and Open Library API
-- **Build Tool**: Vite
+### Core
+- **Frontend Framework**: React 18 with TypeScript 5
+- **Build Tool**: Vite 5.x with hot module replacement
+- **Package Manager**: npm
+- **Language**: TypeScript 5.x
+
+### UI Layer
+- **Component Library**: shadcn/ui (customizable UI components)
+- **Styling**: Tailwind CSS 3.x with custom animations and transitions
+- **Icons**: Lucide React icons
+- **Theming**: Dark/Light mode support with theme customization
+- **Responsive Design**: Mobile-first approach with adaptive layouts
+
+### State Management
+- **Global State**: React Context API with custom providers
+- **Local State**: React hooks (useState, useReducer)
+- **Form Management**: React Hook Form
+
+### Data & Storage
+- **Client-side Database**: IndexedDB for offline-capable persistence
+- **Data Fetching**: Custom fetch hooks with caching
+- **External APIs**: 
+  - Google Books API for book search and metadata
+  - Open Library API for additional book information
+
+### Performance Optimizations
+- **Code Splitting**: Dynamic imports for route-based code splitting
+- **Memoization**: React.memo, useMemo, and useCallback for performance
+- **Virtualization**: For efficient rendering of large book collections
+
+### Development Tools
+- **Linting**: ESLint with TypeScript rules
+- **Formatting**: Prettier
+- **Testing**: Jest and React Testing Library
+- **Type Checking**: TypeScript with strict mode enabled
 
 ## Development Setup
 

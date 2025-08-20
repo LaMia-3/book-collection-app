@@ -1,6 +1,7 @@
 import { Book } from "@/types/book";
 import { cn } from "@/lib/utils";
 import { usePalette } from "@/contexts/PaletteContext";
+import { useSettings } from "@/contexts/SettingsContext";
 import { useMemo } from "react";
 import { useTheme } from "@/components/ui-common/ThemeProvider";
 
@@ -11,6 +12,8 @@ interface BookSpineProps {
 
 export const BookSpine = ({ book, onClick }: BookSpineProps) => {
   const { selectedPalette } = usePalette();
+  const { settings } = useSettings();
+  const disableHoverEffect = settings.displayOptions?.disableHoverEffect || false;
   // Generate a pseudo-random number between min and max based on book ID
   // This ensures consistent but varied sizes for each book
   const getRandomForBook = (min: number, max: number, offsetFactor = 0) => {
@@ -199,22 +202,27 @@ export const BookSpine = ({ book, onClick }: BookSpineProps) => {
     <div
       className={cn(
         "relative cursor-pointer group",
-        "rounded-sm shadow-book hover:shadow-elegant"
+        "rounded-sm shadow-book hover:shadow-elegant",
+        "transition-all duration-300 ease-in-out",
+        !disableHoverEffect && "transform hover:translate-y-[-10px] hover:translate-z-0 hover:scale-[1.03]"
       )}
       style={{ 
         height: `${spineHeight}px`, 
         width: spineWidth,
         minWidth: '36px',
-        maxWidth: '120px'
+        maxWidth: '120px',
+        transformStyle: 'preserve-3d',
+        perspective: '1000px'
       }}
       onClick={onClick}
     >
       {/* Book spine background */}
       <div
         className={cn(
-          "absolute inset-0 rounded-sm transition-colors duration-300",
+          "absolute inset-0 rounded-sm transition-all duration-300",
           spineColorClass,
-          "group-hover:brightness-110"
+          !disableHoverEffect && "group-hover:brightness-110",
+          !disableHoverEffect && "group-hover:shadow-[2px_2px_10px_rgba(0,0,0,0.25)]"
         )}
         style={spineColor ? { backgroundColor: spineColor } : undefined}
       >
@@ -251,7 +259,14 @@ export const BookSpine = ({ book, onClick }: BookSpineProps) => {
       </div>
 
       {/* Hover glow effect */}
-      <div className="absolute -inset-1 bg-primary/20 rounded-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300 blur-sm -z-10"></div>
+      {!disableHoverEffect && (
+        <>
+          <div className="absolute -inset-1 bg-primary/20 rounded-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300 blur-sm -z-10"></div>
+          
+          {/* Enhanced hover shadow for depth perception */}
+          <div className="absolute inset-0 shadow-lg opacity-0 group-hover:opacity-100 transition-all duration-300 -z-10 group-hover:shadow-xl"></div>
+        </>
+      )}
     </div>
   );
 };

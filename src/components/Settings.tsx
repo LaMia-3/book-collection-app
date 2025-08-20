@@ -22,7 +22,7 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Card } from '@/components/ui/card';
 import { ImportExportView } from './ImportExportView';
-import { Settings as SettingsIcon, Trash2, AlertTriangle, Palette, Trophy } from 'lucide-react';
+import { Settings as SettingsIcon, Trash2, AlertTriangle, Palette, Trophy, BookOpen } from 'lucide-react';
 import { useSettings } from '@/contexts/SettingsContext';
 import { PaletteSelector } from '@/components/PaletteSelector';
 import { GoalsTab } from '@/components/GoalsTab';
@@ -60,6 +60,7 @@ export const Settings: React.FC<SettingsProps> = ({
   const [defaultApi, setDefaultApi] = useState<string>('google');
   const [defaultStatus, setDefaultStatus] = useState<string>('want-to-read');
   const [groupSpecialStatuses, setGroupSpecialStatuses] = useState(false);
+  const [disableHoverEffect, setDisableHoverEffect] = useState(false);
   
   // Initialize form state from settings
   useEffect(() => {
@@ -71,6 +72,7 @@ export const Settings: React.FC<SettingsProps> = ({
       setDefaultApi(settings.defaultApi || 'google');
       setDefaultStatus(settings.defaultStatus || 'want-to-read');
       setGroupSpecialStatuses(settings.displayOptions?.groupSpecialStatuses ?? false);
+      setDisableHoverEffect(settings.displayOptions?.disableHoverEffect ?? false);
     }
   }, [isLoading, settings]);
   
@@ -115,6 +117,16 @@ export const Settings: React.FC<SettingsProps> = ({
     });
   };
 
+  const handleDisableHoverEffectChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setDisableHoverEffect(e.target.checked);
+    updateSettings({ 
+      displayOptions: {
+        ...settings.displayOptions,
+        disableHoverEffect: e.target.checked 
+      }
+    });
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
@@ -136,6 +148,15 @@ export const Settings: React.FC<SettingsProps> = ({
                 className="justify-start w-40 data-[state=active]:bg-muted"
               >
                 General
+              </TabsTrigger>
+              <TabsTrigger 
+                value="bookshelf-view" 
+                className="justify-start w-40 data-[state=active]:bg-muted"
+              >
+                <span className="flex items-center gap-2">
+                  <BookOpen className="h-4 w-4 text-primary" />
+                  Bookshelf View
+                </span>
               </TabsTrigger>
               <TabsTrigger 
                 value="goals" 
@@ -269,8 +290,25 @@ export const Settings: React.FC<SettingsProps> = ({
                         <p className="text-xs text-muted-foreground">Status assigned to newly added books</p>
                       </div>
 
+                    </div>
+                  </div>
+                </div>
+              </TabsContent>
+              
+              <TabsContent value="bookshelf-view" className="mt-0">
+                <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
+                  <BookOpen className="h-5 w-5 text-primary" />
+                  Bookshelf View Settings
+                </h3>
+                <p className="text-muted-foreground mb-6">
+                  Customize how your bookshelf is displayed and organized.
+                </p>
+
+                <div className="space-y-6">
+                  <div>
+                    <h4 className="text-md font-medium mb-3">Bookshelf View Organization</h4>
+                    <div className="space-y-4">
                       <div className="grid gap-2">
-                        <label htmlFor="group-special-statuses" className="text-sm font-medium">Library View Organization</label>
                         <div className="flex items-center space-x-2 mt-1">
                           <input
                             type="checkbox"
@@ -285,9 +323,30 @@ export const Settings: React.FC<SettingsProps> = ({
                       </div>
                     </div>
                   </div>
+
+                  <Separator />
+
+                  <div>
+                    <h4 className="text-md font-medium mb-3">Interactive Features</h4>
+                    <div className="space-y-4">
+                      <div className="grid gap-2">
+                        <div className="flex items-center space-x-2 mt-1">
+                          <input
+                            type="checkbox"
+                            id="disable-hover-effect"
+                            className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                            checked={disableHoverEffect}
+                            onChange={handleDisableHoverEffectChange}
+                          />
+                          <label htmlFor="disable-hover-effect" className="text-sm">Disable book hover animation effects</label>
+                        </div>
+                        <p className="text-xs text-muted-foreground">When enabled, books will not pop out when hovered over</p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </TabsContent>
-              
+
               <TabsContent value="goals" className="mt-0">
                 <GoalsTab />
               </TabsContent>
