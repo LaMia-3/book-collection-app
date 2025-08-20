@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Dialog, 
   DialogContent,
@@ -22,7 +22,7 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Card } from '@/components/ui/card';
 import { ImportExportView } from './ImportExportView';
-import { Settings as SettingsIcon, Trash2, AlertTriangle, Palette, Trophy, BookOpen } from 'lucide-react';
+import { Settings as SettingsIcon, Trash2, AlertTriangle, Palette, Trophy, BookOpen, ArrowUp, ArrowDown, ListOrdered } from 'lucide-react';
 import { useSettings } from '@/contexts/SettingsContext';
 import { PaletteSelector } from '@/components/PaletteSelector';
 import { GoalsTab } from '@/components/GoalsTab';
@@ -61,6 +61,7 @@ export const Settings: React.FC<SettingsProps> = ({
   const [defaultStatus, setDefaultStatus] = useState<string>('want-to-read');
   const [groupSpecialStatuses, setGroupSpecialStatuses] = useState(false);
   const [disableHoverEffect, setDisableHoverEffect] = useState(false);
+  const [shelfOrder, setShelfOrder] = useState<string[]>(['reading', 'want-to-read', 'completed', 'on-hold', 'dnf']);
   
   // Initialize form state from settings
   useEffect(() => {
@@ -73,6 +74,10 @@ export const Settings: React.FC<SettingsProps> = ({
       setDefaultStatus(settings.defaultStatus || 'want-to-read');
       setGroupSpecialStatuses(settings.displayOptions?.groupSpecialStatuses ?? false);
       setDisableHoverEffect(settings.displayOptions?.disableHoverEffect ?? false);
+      
+      // Initialize shelf order from settings or use default
+      const defaultOrder = ['reading', 'want-to-read', 'completed', 'on-hold', 'dnf'];
+      setShelfOrder(settings.displayOptions?.shelfOrder || defaultOrder);
     }
   }, [isLoading, settings]);
   
@@ -125,6 +130,41 @@ export const Settings: React.FC<SettingsProps> = ({
         disableHoverEffect: e.target.checked 
       }
     });
+  };
+  
+  const moveShelf = useCallback((index: number, direction: 'up' | 'down') => {
+    setShelfOrder(prevOrder => {
+      const newOrder = [...prevOrder];
+      if (direction === 'up' && index > 0) {
+        // Swap with previous item
+        [newOrder[index], newOrder[index - 1]] = [newOrder[index - 1], newOrder[index]];
+      } else if (direction === 'down' && index < newOrder.length - 1) {
+        // Swap with next item
+        [newOrder[index], newOrder[index + 1]] = [newOrder[index + 1], newOrder[index]];
+      }
+      
+      // Save the new order to settings
+      updateSettings({
+        displayOptions: {
+          ...settings.displayOptions,
+          shelfOrder: newOrder
+        }
+      });
+      
+      return newOrder;
+    });
+  }, [settings.displayOptions, updateSettings]);
+  
+  // Function to get display name for shelf status
+  const getShelfDisplayName = (status: string) => {
+    switch(status) {
+      case 'reading': return 'Currently Reading';
+      case 'want-to-read': return 'Want to Read';
+      case 'completed': return 'Completed';
+      case 'on-hold': return 'On Hold';
+      case 'dnf': return 'Did Not Finish';
+      default: return status;
+    }
   };
 
   return (
@@ -308,7 +348,7 @@ export const Settings: React.FC<SettingsProps> = ({
                   <div>
                     <h4 className="text-md font-medium mb-3">Bookshelf View Organization</h4>
                     <div className="space-y-4">
-                      <div className="grid gap-2">
+                      <div className="grid gap-2 mb-5">
                         <div className="flex items-center space-x-2 mt-1">
                           <input
                             type="checkbox"
@@ -320,6 +360,65 @@ export const Settings: React.FC<SettingsProps> = ({
                           <label htmlFor="group-special-statuses" className="text-sm">Group "Did Not Finish" and "On Hold" books with Completed books</label>
                         </div>
                         <p className="text-xs text-muted-foreground">When enabled, DNF and On Hold books appear on the same shelf as Completed books</p>
+                      </div>
+                      
+                      <div className="grid gap-2">
+                        <div className="flex items-center gap-2 mb-1">
+                          <ListOrdered className="h-4 w-4 text-muted-foreground" />
+                          <p className="text-sm font-medium">Shelf Order</p>
+                        </div>
+                        <p className="text-xs text-muted-foreground mb-3">Use the up and down arrows to arrange bookshelves in your preferred order</p>
+                        
+                        <div className="space-y-2">
+                          {shelfOrder.map((shelf, index) => {
+                            // If groupSpecialStatuses is enabled, don't show on-hold and dnf in the list
+                            if (groupSpecialStatuses && (shelf === 'on-hold' || shelf === 'dnf')) {
+                              return null;
+                            }
+                            
+                            return (
+                              <div 
+                                key={shelf}
+                                className="flex items-center justify-between p-3 bg-muted/50 rounded-md border shadow-sm"
+                              >
+                                <div className="flex items-center gap-2">
+                                  <span className="font-medium">{getShelfDisplayName(shelf)}</span>
+                                  
+                                  {/* Show note for completed if grouping is enabled */}
+                                  {shelf === 'completed' && groupSpecialStatuses && (
+                                    <span className="text-xs text-muted-foreground ml-2">
+                                      (includes DNF and On Hold)
+                                    </span>
+                                  )}
+                                </div>
+                                
+                                <div className="flex gap-1">
+                                  <button
+                                    type="button"
+                                    disabled={index === 0}
+                                    onClick={() => moveShelf(index, 'up')}
+                                    className="p-1 rounded-sm hover:bg-accent disabled:opacity-50 disabled:pointer-events-none"
+                                    aria-label="Move up"
+                                  >
+                                    <ArrowUp className="h-4 w-4" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={index === (shelfOrder.filter(s => !groupSpecialStatuses || (s !== 'on-hold' && s !== 'dnf')).length - 1)}
+                                    onClick={() => moveShelf(index, 'down')}
+                                    className="p-1 rounded-sm hover:bg-accent disabled:opacity-50 disabled:pointer-events-none"
+                                    aria-label="Move down"
+                                  >
+                                    <ArrowDown className="h-4 w-4" />
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-2">
+                          Changes to shelf order are saved automatically
+                        </p>
                       </div>
                     </div>
                   </div>
@@ -344,6 +443,7 @@ export const Settings: React.FC<SettingsProps> = ({
                       </div>
                     </div>
                   </div>
+                  
                 </div>
               </TabsContent>
 

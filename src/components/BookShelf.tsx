@@ -19,6 +19,7 @@ export const BookShelf = ({ books, onBookClick }: BookShelfProps) => {
   // Get settings to check display preferences
   const { settings } = useSettings();
   const groupSpecialStatuses = settings.displayOptions?.groupSpecialStatuses || false;
+  const customShelfOrder = settings.displayOptions?.shelfOrder || ['reading', 'want-to-read', 'completed', 'on-hold', 'dnf'];
 
   if (books.length === 0) {
     return (
@@ -219,128 +220,107 @@ export const BookShelf = ({ books, onBookClick }: BookShelfProps) => {
     );
   };
 
+  // Function to get shelf title from status
+  const getShelfTitle = (status: string) => {
+    switch(status) {
+      case 'reading': return 'Currently Reading';
+      case 'want-to-read': return 'Want to Read';
+      case 'completed': return 'Completed';
+      case 'on-hold': return 'On Hold';
+      case 'dnf': return 'Did Not Finish';
+      default: return status;
+    }
+  };
+
+  // Helper to get the relevant shelf books array based on status
+  const getShelfBooks = (status: string) => {
+    switch(status) {
+      case 'reading': return currentlyReadingShelves;
+      case 'want-to-read': return wantToReadShelves;
+      case 'completed': return completedShelves;
+      case 'on-hold': return onHoldShelves;
+      case 'dnf': return dnfShelves;
+      default: return [];
+    }
+  };
+
+  // Calculate the shelf index offset for proper shelf rendering 
+  const calculateShelfIndexOffset = (statusIndex: number) => {
+    let offset = 0;
+    
+    // We need to count all previous shelves to get the correct index
+    for (let i = 0; i < statusIndex; i++) {
+      const status = customShelfOrder[i];
+      
+      // Skip if this shelf should be hidden due to grouping
+      if (groupSpecialStatuses && (status === 'on-hold' || status === 'dnf')) {
+        continue;
+      }
+      
+      offset += getShelfBooks(status).length;
+    }
+    
+    return offset;
+  };
+
   return (
     <div className="space-y-8">
-      {/* Currently Reading Section */}
-      {currentlyReadingShelves.length > 0 && (
-        <div>
-          <h3 className="text-lg font-serif text-foreground mb-3 px-2">Currently Reading</h3>
-          <div className="flex flex-col">
-            {currentlyReadingShelves.map((shelfBooks, shelfIndex) => {
-              const isFirst = shelfIndex === 0;
-              const isLast = shelfIndex === currentlyReadingShelves.length - 1;
-              return (
-                <div key={`reading-${shelfIndex}`}>
-                  {renderShelf(shelfBooks, isFirst, isLast, shelfIndex)}
-                </div>
-              );
-            })}
+      {/* Render shelves in custom order */}
+      {customShelfOrder.map((status, orderIndex) => {
+        // Skip if this shelf should be hidden due to grouping
+        if (groupSpecialStatuses && (status === 'on-hold' || status === 'dnf')) {
+          return null;
+        }
+        
+        const shelvesForStatus = getShelfBooks(status);
+        
+        // Skip if there are no books for this shelf
+        if (shelvesForStatus.length === 0) {
+          return null;
+        }
+        
+        // Calculate the cumulative shelf index for proper rendering
+        const shelfIndexOffset = calculateShelfIndexOffset(orderIndex);
+        
+        return (
+          <div key={status}>
+            <h3 className="text-lg font-serif text-foreground mb-3 px-2 flex items-center gap-1">
+              {getShelfTitle(status)}
+              {/* Add tooltip for completed shelf when grouping is enabled */}
+              {status === 'completed' && groupSpecialStatuses && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span>
+                        <InfoIcon className="h-4 w-4 text-muted-foreground cursor-help" />
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Includes DNF and On Hold books</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
+            </h3>
+            <div className="flex flex-col">
+              {shelvesForStatus.map((shelfBooks, shelfIndex) => {
+                const isFirst = shelfIndex === 0;
+                const isLast = shelfIndex === shelvesForStatus.length - 1;
+                return (
+                  <div key={`${status}-${shelfIndex}`}>
+                    {renderShelf(
+                      shelfBooks,
+                      isFirst,
+                      isLast,
+                      shelfIndex + (shelfIndexOffset - shelvesForStatus.length)
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
-        </div>
-      )}
-
-      {/* On Hold Books Section */}
-      {onHoldShelves.length > 0 && (
-        <div>
-          <h3 className="text-lg font-serif text-foreground mb-3 px-2">On Hold</h3>
-          <div className="flex flex-col">
-            {onHoldShelves.map((shelfBooks, shelfIndex) => {
-              const isFirst = shelfIndex === 0;
-              const isLast = shelfIndex === onHoldShelves.length - 1;
-              return (
-                <div key={`on-hold-${shelfIndex}`}>
-                  {renderShelf(
-                    shelfBooks, 
-                    isFirst, 
-                    isLast, 
-                    shelfIndex + currentlyReadingShelves.length
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Completed Books Section */}
-      {completedShelves.length > 0 && (
-        <div>
-          <h3 className="text-lg font-serif text-foreground mb-3 px-2 flex items-center gap-1">
-            Completed
-            {groupSpecialStatuses && (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span>
-                      <InfoIcon className="h-4 w-4 text-muted-foreground cursor-help" />
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Includes DNF and On Hold books</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            )}
-          </h3>
-          <div className="flex flex-col">
-            {completedShelves.map((shelfBooks, shelfIndex) => {
-              const isFirst = shelfIndex === 0;
-              const isLast = shelfIndex === completedShelves.length - 1;
-              return (
-                <div key={`completed-${shelfIndex}`}>
-                  {renderShelf(shelfBooks, isFirst, isLast, shelfIndex + currentlyReadingShelves.length)}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-      
-      {/* Want to Read Books Section */}
-      {wantToReadShelves.length > 0 && (
-        <div>
-          <h3 className="text-lg font-serif text-foreground mb-3 px-2">Want to Read</h3>
-          <div className="flex flex-col">
-            {wantToReadShelves.map((shelfBooks, shelfIndex) => {
-              const isFirst = shelfIndex === 0;
-              const isLast = shelfIndex === wantToReadShelves.length - 1;
-              return (
-                <div key={`want-to-read-${shelfIndex}`}>
-                  {renderShelf(
-                    shelfBooks, 
-                    isFirst, 
-                    isLast, 
-                    shelfIndex + currentlyReadingShelves.length + onHoldShelves.length + completedShelves.length
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Did Not Finish Books Section */}
-      {dnfShelves.length > 0 && (
-        <div>
-          <h3 className="text-lg font-serif text-foreground mb-3 px-2">Did Not Finish</h3>
-          <div className="flex flex-col">
-            {dnfShelves.map((shelfBooks, shelfIndex) => {
-              const isFirst = shelfIndex === 0;
-              const isLast = shelfIndex === dnfShelves.length - 1;
-              return (
-                <div key={`dnf-${shelfIndex}`}>
-                  {renderShelf(
-                    shelfBooks,
-                    isFirst,
-                    isLast,
-                    shelfIndex + currentlyReadingShelves.length + onHoldShelves.length + completedShelves.length + wantToReadShelves.length
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
+        );
+      })}
     </div>
   );
 };
