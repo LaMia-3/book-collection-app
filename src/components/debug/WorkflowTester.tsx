@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createLogger } from '@/utils/loggingUtils';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -403,6 +404,9 @@ export function WorkflowTester() {
   const [progress, setProgress] = useState(0);
   const [allBooks, setAllBooks] = useState<Book[]>([]);
   const [seriesMap, setSeriesMap] = useState<Record<string, string[]>>({});
+  
+  // Create logger
+  const log = createLogger('WorkflowTester');
 
   // Helper to add test result
   const addResult = (step: string, success: boolean, message: string) => {
@@ -736,6 +740,200 @@ export function WorkflowTester() {
     }
   }
   
+  /**
+   * Unified function to import books from multiple API providers
+   * with alternating requests to reduce rate limiting issues
+   */
+  async function importBooksFromMultipleAPIs() {
+    addResult("API Import", true, "Starting import from multiple API providers...");
+    const books: Book[] = [];
+    
+    // Fallback queries to try if the original query fails
+    const fallbackQueries = [
+      "Harry Potter", "The Hunger Games", "Dune", "Pride and Prejudice",
+      "1984", "To Kill a Mockingbird", "The Great Gatsby", "Lord of the Rings",
+      "Crime and Punishment", "Anna Karenina", "Don Quixote", "The Odyssey",
+      "Les Misérables", "The Brothers Karamazov", "Wuthering Heights", "Catch-22"
+    ];
+    
+    // Combine search queries from both API providers
+    // We'll alternate between them to distribute the load
+    const combinedSearches: Array<{ query: string; type: string; provider: 'google' | 'openlib' }> = [];
+    
+    // Add Google Books searches
+    GOOGLE_BOOK_SEARCHES.forEach((search, index) => {
+      combinedSearches.push({ ...search, provider: 'google' });
+    });
+    
+    // Add Open Library searches
+    OPEN_LIBRARY_BOOK_SEARCHES.forEach((search, index) => {
+      combinedSearches.push({ ...search, provider: 'openlib' });
+    });
+    
+    // Total book count for progress calculation
+    const totalBooks = combinedSearches.length;
+    const googleBooksCount = GOOGLE_BOOK_SEARCHES.length;
+    const openLibraryCount = OPEN_LIBRARY_BOOK_SEARCHES.length;
+    
+    // Function to handle status assignment for books
+    const assignBookStatus = (index: number, isGoogleBooks: boolean) => {
+      let status: 'reading' | 'completed' | 'want-to-read' | 'dnf' | 'on-hold' = 'completed';
+      
+      if (isGoogleBooks) {
+        // Google Books status distribution
+        if (index < 3) {
+          status = 'reading';
+        } else if (index >= 3 && index < 15) {
+          status = 'dnf';
+        } else if (index >= 15 && index < 18) {
+          status = 'on-hold';
+        } else if (index >= googleBooksCount - 15) {
+          status = 'want-to-read';
+        }
+      } else {
+        // Open Library status distribution
+        if (index < 2) {
+          status = 'reading';
+        } else if (index >= 2 && index < 10) {
+          status = 'dnf';
+        } else if (index >= 10 && index < 12) {
+          status = 'on-hold';
+        } else if (index >= openLibraryCount - 10) {
+          status = 'want-to-read';
+        }
+      }
+      
+      return status;
+    };
+    
+    // Sleep function for additional throttling if needed
+    const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+    
+    // Process each book search query with alternating APIs
+    for (let i = 0; i < combinedSearches.length; i++) {
+      try {
+        const { query, type, provider } = combinedSearches[i];
+        const isGoogleBooks = provider === 'google';
+        const apiProvider = isGoogleBooks ? googleBooksProvider : openLibraryProvider;
+        const providerName = isGoogleBooks ? 'Google Books' : 'Open Library';
+        const providerIndex = isGoogleBooks 
+          ? GOOGLE_BOOK_SEARCHES.findIndex(s => s.query === query && s.type === type)
+          : OPEN_LIBRARY_BOOK_SEARCHES.findIndex(s => s.query === query && s.type === type);
+        
+        log.info(`Processing ${providerName} search ${providerIndex + 1}: "${query}"`);
+        
+        let foundBook = false;
+        let attempt = 0;
+        let currentQuery = query;
+        let searchResult;
+        
+        // Try original query and fallbacks if needed
+        while (!foundBook && attempt < 3) {
+          try {
+            // Search for the book
+            searchResult = await apiProvider.searchBooks({
+              query: currentQuery, 
+              type: type as 'title' | 'author' | 'isbn',
+              limit: 1
+            });
+            
+            if (searchResult.books.length > 0) {
+              foundBook = true;
+              break;
+            }
+            
+            // Try a fallback query if available
+            attempt++;
+            if (attempt < 3) {
+              // Use a fallback query
+              currentQuery = `${fallbackQueries[i % fallbackQueries.length]} ${attempt === 1 ? 'book' : 'novel'}`;
+              log.info(`Trying fallback query for ${query}: ${currentQuery}`);
+            }
+          } catch (err) {
+            log.error(`Search attempt ${attempt + 1} failed for ${currentQuery}:`, err);
+            attempt++;
+            // Try a different fallback on error
+            if (attempt < 3) {
+              currentQuery = `${fallbackQueries[(i + attempt) % fallbackQueries.length]}`;
+              // Add extra delay on error
+              await sleep(1000);
+            }
+          }
+        }
+        
+        if (!foundBook || !searchResult || searchResult.books.length === 0) {
+          addResult(`${providerName} Book ${providerIndex + 1}`, false, `No results found for "${query}" or fallbacks`);
+          continue;
+        }
+        
+        // Get the first book's details
+        const bookItem = searchResult.books[0];
+        const bookDetails = await apiProvider.getBookDetails(bookItem.id);
+        
+        // Mark as part of series if applicable
+        bookDetails.isPartOfSeries = SERIES_DEFINITIONS.some(series => 
+          series.searchTerms.some(term => 
+            bookDetails.title.toLowerCase().includes(term.toLowerCase())
+          )
+        );
+      
+        // Assign reading status based on provider and index
+        const status = assignBookStatus(providerIndex, isGoogleBooks);
+        const completedDate = status === 'completed' ? getRandomCompletionDate() : undefined;
+        let rating: number | undefined;
+        
+        if (status === 'completed') {
+          rating = Math.floor(Math.random() * 5) + 1;
+        } else if (status === 'reading') {
+          if (Math.random() > 0.5) {
+            rating = Math.floor(Math.random() * 5) + 1;
+          }
+        }
+
+        // Ensure required fields are set with correct types
+        const bookToSave = {
+          ...bookDetails,
+          status,
+          completedDate,
+          rating,
+          isPartOfSeries: bookDetails.isPartOfSeries || false,
+          spineColor: bookDetails.spineColor || Math.floor(Math.random() * 8) + 1,
+          addedDate: bookDetails.addedDate || new Date().toISOString()
+        };
+        
+        // Save to IndexedDB
+        const bookId = await enhancedStorageService.saveBook(bookToSave);
+        const addedBook = { ...bookToSave, id: bookId };
+        books.push(addedBook);
+        
+        addResult(`${providerName} Book ${providerIndex + 1}`, true, `Added "${addedBook.title}" by ${addedBook.author}`);
+        
+        // Update progress - scale between 5% and 90%
+        setProgress(5 + (i + 1) * (85 / totalBooks));
+        
+        // Add a small random delay between requests to further reduce rate limiting chances
+        // This is in addition to the built-in rate limiting in the API providers
+        await sleep(Math.random() * 200 + 100);
+        
+      } catch (error) {
+        const { provider, query } = combinedSearches[i];
+        const providerName = provider === 'google' ? 'Google Books' : 'Open Library';
+        const providerIndex = provider === 'google' 
+          ? GOOGLE_BOOK_SEARCHES.findIndex(s => s.query === query && s.type === combinedSearches[i].type)
+          : OPEN_LIBRARY_BOOK_SEARCHES.findIndex(s => s.query === query && s.type === combinedSearches[i].type);
+        
+        log.error(`Error adding ${providerName} book ${providerIndex + 1}:`, error);
+        addResult(`${providerName} Book ${providerIndex + 1}`, false, `Failed: ${error instanceof Error ? error.message : String(error)}`);
+        
+        // Add a longer delay after errors to recover
+        await sleep(2000);
+      }
+    }
+    
+    setAllBooks(prev => [...prev, ...books]);
+    return books;
+  }
+
   // Run the complete workflow test
   async function runWorkflowTest() {
     setRunning(true);
@@ -764,15 +962,11 @@ export function WorkflowTester() {
       // Initialize storage
       addResult("Initialization", true, "Starting workflow test...");
       
-      // Step 1: Add books from Google Books API
+      // Step 1: Import books from multiple API providers with alternating requests
       setProgress(5);
-      await addBooksFromGoogleAPI();
+      await importBooksFromMultipleAPIs();
       
-      // Step 2: Add books from Open Library API
-      setProgress(50);
-      await addBooksFromOpenLibrary();
-      
-      // Step 3: Create series and assign books
+      // Step 2: Create series and assign books
       setProgress(90);
       await createAndAssignSeries();
       
@@ -785,6 +979,7 @@ export function WorkflowTester() {
       
     } catch (error) {
       console.error("Workflow test failed:", error);
+      log.error("Workflow test failed:", error);
       addResult("Error", false, `Test failed: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setRunning(false);

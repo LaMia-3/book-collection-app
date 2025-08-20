@@ -15,6 +15,8 @@ export interface UserSettings {
   };
   displayOptions?: {
     groupSpecialStatuses: boolean; // true to group DNF/On Hold with Completed books, false to show separately
+    disableHoverEffect: boolean; // true to disable book spine hover animations, false to enable
+    shelfOrder: string[]; // custom order for shelves in bookshelf view
   };
 }
 
@@ -32,6 +34,8 @@ export const defaultSettings: UserSettings = {
   },
   displayOptions: {
     groupSpecialStatuses: false, // Default to showing DNF/On Hold books separately
+    disableHoverEffect: false, // Default to enabling hover effects
+    shelfOrder: ['reading', 'want-to-read', 'completed', 'on-hold', 'dnf'], // Default shelf order
   },
 };
 

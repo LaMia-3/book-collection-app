@@ -5,6 +5,7 @@ import {
   SearchResult, 
   BookSearchItem 
 } from '@/types/api/BookApiProvider';
+import { createLogger } from '@/utils/loggingUtils';
 
 /**
  * Provider implementation for the Google Books API
@@ -14,7 +15,82 @@ export class GoogleBooksProvider implements BookApiProvider {
   readonly name = 'Google Books';
 
   private readonly baseUrl = 'https://www.googleapis.com/books/v1';
+  private readonly log = createLogger('GoogleBooksProvider');
   
+  // Rate limiting configuration
+  private lastRequestTime = 0;
+  private readonly minRequestInterval = 1000; // Minimum 1 second between requests
+  private readonly maxRetries = 3;
+  private readonly initialBackoffDelay = 2000; // Start with 2 seconds
+  
+  /**
+   * Sleep/delay function
+   * @param ms Milliseconds to delay
+   */
+  private async delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+  
+  /**
+   * Ensures we don't send requests too quickly
+   */
+  private async enforceRateLimit(): Promise<void> {
+    const now = Date.now();
+    const elapsed = now - this.lastRequestTime;
+    
+    if (elapsed < this.minRequestInterval) {
+      const delayTime = this.minRequestInterval - elapsed;
+      this.log.debug(`Rate limiting: Waiting ${delayTime}ms before next request`);
+      await this.delay(delayTime);
+    }
+    
+    this.lastRequestTime = Date.now();
+  }
+  
+  /**
+   * Makes an API request with retry logic for rate limits
+   * @param url The URL to request
+   * @returns Response
+   */
+  private async makeRequest(url: string): Promise<Response> {
+    let retries = 0;
+    let backoffDelay = this.initialBackoffDelay;
+    
+    while (true) {
+      try {
+        // Enforce rate limiting before each request
+        await this.enforceRateLimit();
+        
+        const response = await fetch(url);
+        
+        // Handle rate limiting with exponential backoff
+        if (response.status === 429) {
+          if (retries >= this.maxRetries) {
+            this.log.error(`Rate limit exceeded after ${retries} retries`);
+            throw new Error(`Google Books API rate limit exceeded after ${retries} retries`);
+          }
+          
+          retries++;
+          this.log.warn(`Rate limited (429). Retry ${retries}/${this.maxRetries} after ${backoffDelay}ms`);
+          await this.delay(backoffDelay);
+          backoffDelay *= 2; // Exponential backoff
+          continue;
+        }
+        
+        return response;
+      } catch (error) {
+        if (retries >= this.maxRetries) {
+          throw error;
+        }
+        
+        retries++;
+        this.log.warn(`Request failed. Retry ${retries}/${this.maxRetries} after ${backoffDelay}ms`, error);
+        await this.delay(backoffDelay);
+        backoffDelay *= 2; // Exponential backoff
+      }
+    }
+  }
+
   /**
    * Search for books using the Google Books API
    * @param params Search parameters
@@ -38,10 +114,9 @@ export class GoogleBooksProvider implements BookApiProvider {
       searchQuery = `${fieldMapping[type]}${query}`;
     }
     
-    // Make API request
-    const response = await fetch(
-      `${this.baseUrl}/volumes?q=${encodeURIComponent(searchQuery)}&startIndex=${startIndex}&maxResults=${limit}`
-    );
+    // Make API request with retry logic
+    const url = `${this.baseUrl}/volumes?q=${encodeURIComponent(searchQuery)}&startIndex=${startIndex}&maxResults=${limit}`;
+    const response = await this.makeRequest(url);
     
     if (!response.ok) {
       throw new Error(`Google Books API error: ${response.status} ${response.statusText}`);
@@ -73,7 +148,8 @@ export class GoogleBooksProvider implements BookApiProvider {
    * @returns Book details
    */
   async getBookDetails(id: string): Promise<Book> {
-    const response = await fetch(`${this.baseUrl}/volumes/${id}`);
+    // Make API request with retry logic
+    const response = await this.makeRequest(`${this.baseUrl}/volumes/${id}`);
     
     if (!response.ok) {
       throw new Error(`Google Books API error: ${response.status} ${response.statusText}`);
@@ -124,6 +200,8 @@ export class GoogleBooksProvider implements BookApiProvider {
   async isAvailable(): Promise<boolean> {
     try {
       // Make a simple query to check if the API is responding
+      // We don't use makeRequest here to avoid retry loops when checking availability
+      await this.enforceRateLimit();
       const response = await fetch(`${this.baseUrl}/volumes?q=test&maxResults=1`);
       return response.ok;
     } catch {
