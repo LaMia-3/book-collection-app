@@ -46,6 +46,7 @@ import {
 import { SeriesInfoPanel } from '@/components/series/SeriesInfoPanel';
 import { SeriesAssignmentDialog } from '@/components/dialogs/SeriesAssignmentDialog';
 import { CreateSeriesDialog } from '@/components/series/CreateSeriesDialog';
+import BookCollectionAssignment from '@/components/BookCollectionAssignment';
 import { cn } from "@/lib/utils";
 import { cleanHtml } from "@/utils/textUtils";
 import { format, parse, isValid } from "date-fns";
@@ -120,6 +121,7 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
   const [showCreateSeriesDialog, setShowCreateSeriesDialog] = useState(false);
   const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
   const [showMetadataInfo, setShowMetadataInfo] = useState(false);
+  const [showCollectionsInfo, setShowCollectionsInfo] = useState(true);
   const [seriesDetectionResult, setSeriesDetectionResult] = useState<any>(null);
   // Format date for HTML date input (YYYY-MM-DD)
   const formatDateForInput = (dateString?: string): string => {
@@ -1579,15 +1581,25 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
           {/* Notes */}
           <div>
             <Label htmlFor="notes">Notes</Label>
-            <Textarea
-              id="notes"
-              placeholder="Your thoughts about this book..."
-              value={editedBook.notes || ""}
-              onChange={(e) =>
-                setEditedBook({ ...editedBook, notes: e.target.value })
-              }
-              className="min-h-[100px]"
-            />
+            {isViewMode ? (
+              <div className="text-sm mt-1 p-3 bg-muted rounded leading-relaxed min-h-[100px] overflow-y-auto scrollbar-thin scrollbar-thumb-rounded scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent">
+                {editedBook.notes ? (
+                  <div className="whitespace-pre-line">{editedBook.notes}</div>
+                ) : (
+                  <div className="text-muted-foreground italic">No notes available.</div>
+                )}
+              </div>
+            ) : (
+              <Textarea
+                id="notes"
+                placeholder="Your thoughts about this book..."
+                value={editedBook.notes || ""}
+                onChange={(e) =>
+                  setEditedBook({ ...editedBook, notes: e.target.value })
+                }
+                className="min-h-[100px]"
+              />
+            )}
           </div>
 
           {/* Description */}
@@ -1832,6 +1844,45 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
                   type="hidden" 
                   value={editedBook._legacyNextBookExpectedYear || ''}
                 />
+              </div>
+            )}
+          </div>
+
+          {/* Collections */}
+          <div className="space-y-3 mt-4">
+            <div 
+              className="flex items-center justify-between cursor-pointer"
+              onClick={() => setShowCollectionsInfo(!showCollectionsInfo)}
+            >
+              <div className="flex items-center gap-2">
+                <BookmarkIcon className="h-5 w-5 text-primary" />
+                <h3 className="text-base font-medium">Collections</h3>
+              </div>
+              <Button variant="ghost" size="sm" className="p-1 h-8 w-8">
+                {showCollectionsInfo ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </Button>
+            </div>
+            
+            {showCollectionsInfo && (
+              <div className="bg-muted/30 p-4 rounded-md border">
+                {/* Only allow collection management in edit mode */}
+                {isViewMode ? (
+                  <BookCollectionAssignment 
+                    book={book} 
+                    onCollectionsUpdated={() => {
+                      // Refresh the book data after collections are updated
+                      onUpdate(editedBook);
+                    }}
+                  />
+                ) : (
+                  <BookCollectionAssignment 
+                    book={editedBook} 
+                    onCollectionsUpdated={() => {
+                      // Refresh the book data after collections are updated
+                      setEditedBook({...editedBook});
+                    }}
+                  />
+                )}
               </div>
             )}
           </div>

@@ -31,10 +31,8 @@ const BookCollectionAssignment: React.FC<BookCollectionAssignmentProps> = ({
   
   // Load collections when component mounts or dialog opens
   useEffect(() => {
-    if (isDialogOpen) {
-      loadCollections();
-    }
-  }, [isDialogOpen]);
+    loadCollections();
+  }, []);
   
   // Load all collections and determine which ones contain this book
   const loadCollections = async () => {
