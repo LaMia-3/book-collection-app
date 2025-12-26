@@ -1,8 +1,8 @@
-import { LayoutGrid, List, Bookmark, BarChart, LibrarySquare } from "lucide-react";
+import { LayoutGrid, List, Bookmark, BarChart, LibrarySquare, FolderOpen } from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
-export type ViewMode = 'shelf' | 'list' | 'cover' | 'insights' | 'series';
+export type ViewMode = 'shelf' | 'list' | 'cover' | 'insights' | 'series' | 'collections';
 
 interface ViewToggleProps {
   viewMode: ViewMode;
@@ -92,6 +92,21 @@ export const ViewToggle = ({ viewMode, onChange }: ViewToggleProps) => {
           </TooltipTrigger>
           <TooltipContent>
             <p>Series View</p>
+          </TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <ToggleGroupItem 
+              value="collections" 
+              aria-label="Collections View"
+              className="data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+            >
+              <FolderOpen className="h-4 w-4" />
+            </ToggleGroupItem>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Collections View</p>
           </TooltipContent>
         </Tooltip>
       </ToggleGroup>

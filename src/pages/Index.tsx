@@ -387,6 +387,8 @@ const Index = () => {
               onChange={(newViewMode) => {
                 if (newViewMode === 'series') {
                   navigate('/series');
+                } else if (newViewMode === 'collections') {
+                  navigate('/collections');
                 } else {
                   setViewMode(newViewMode);
                 }

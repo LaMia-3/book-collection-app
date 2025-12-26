@@ -15,7 +15,8 @@ export enum StoreNames {
   SERIES = 'series',
   UPCOMING_BOOKS = 'upcomingBooks',
   NOTIFICATIONS = 'notifications',
-  SETTINGS = 'settings'
+  SETTINGS = 'settings',
+  COLLECTIONS = 'collections'
 }
 
 /**
@@ -23,5 +24,5 @@ export enum StoreNames {
  */
 export const DB_CONFIG = {
   NAME: 'book-collection-db',
-  VERSION: 1
+  VERSION: 3
 };

@@ -31,6 +31,9 @@ export interface Book {
   volumeNumber?: number; // Position in the series (legacy)
   seriesPosition?: number; // Position in the series (used by enhanced storage)
   
+  // Collection fields
+  collectionIds?: string[]; // Books can belong to multiple collections (no limit)
+  
   // Legacy series fields - maintained for data migration
   _legacySeriesName?: string; // Renamed from seriesName
   _legacyNextBookTitle?: string; // Renamed from nextBookTitle

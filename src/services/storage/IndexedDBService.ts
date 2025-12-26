@@ -1,7 +1,7 @@
 /**
  * Enhanced IndexedDB service with improved schema and indices
  */
-import { openDB, IDBPDatabase, StoreNames as IDBStoreNames } from 'idb';
+import { openDB, deleteDB, IDBPDatabase, StoreNames as IDBStoreNames } from 'idb';
 import { Book, BookSummary } from '@/types/indexeddb/Book';
 import { Series, SeriesMetadata } from '@/types/indexeddb/Series';
 import { UpcomingBook } from '@/types/indexeddb/UpcomingBook';
@@ -40,12 +40,31 @@ export class IndexedDBService {
   }
 
   /**
+   * Get the current version of the database
+   */
+  private async getCurrentDatabaseVersion(): Promise<number> {
+    try {
+      // Open the database without specifying a version to get the current version
+      const tempDb = await openDB(DB_CONFIG.NAME, undefined, {
+        blocking: () => {}
+      });
+      const currentVersion = tempDb.version;
+      tempDb.close();
+      return currentVersion;
+    } catch (error) {
+      // If the database doesn't exist yet, return 0
+      return 0;
+    }
+  }
+
+  /**
    * Initialize the database connection with enhanced schema, indices, and error handling
    * 
    * Features:
    * - Connection retry with exponential backoff
    * - Error classification and recovery
    * - Telemetry for tracking connection issues
+   * - Version mismatch detection and handling
    */
   async initDb(): Promise<IDBPDatabase> {
     log.debug('Initializing IndexedDB connection');
@@ -61,10 +80,20 @@ export class IndexedDBService {
     this.isInitializing = true;
     
     try {
+      // Check current database version to avoid version mismatch errors
+      const currentVersion = await this.getCurrentDatabaseVersion();
+      
+      // If the database exists and has a higher version than our config, use that version
+      const versionToUse = currentVersion > DB_CONFIG.VERSION ? currentVersion : DB_CONFIG.VERSION;
+      
+      if (currentVersion > DB_CONFIG.VERSION) {
+        log.warn(`Database version mismatch: Config version ${DB_CONFIG.VERSION} is less than existing version ${currentVersion}. Using existing version.`);
+      }
+      
       // Use retry mechanism for database initialization
       this.initPromise = withRetry(
         async () => {
-          const db = await openDB(DB_CONFIG.NAME, DB_CONFIG.VERSION, {
+          const db = await openDB(DB_CONFIG.NAME, versionToUse, {
             upgrade: (db, oldVersion, newVersion) => {
               log.info(`Upgrading database`, { fromVersion: oldVersion, toVersion: newVersion });
               try {
@@ -126,15 +155,42 @@ export class IndexedDBService {
 
   /**
    * Apply database migrations based on version changes
+   * This method handles all database schema migrations in a robust way
    */
   private applyMigrations(db: IDBPDatabase, oldVersion: number, newVersion: number): void {
-    // Migrations are cumulative, so each case falls through to the next one
-    switch (oldVersion) {
-      case 0:
-        // Initial database creation
-        this.createInitialSchema(db);
-        break;
+    log.info(`Applying migrations from version ${oldVersion} to ${newVersion}`);
+    
+    // Migrations are applied incrementally based on the oldVersion
+    // Each case falls through to ensure all migrations are applied in sequence
+    
+    // Version 0 to 1: Initial schema creation
+    if (oldVersion < 1) {
+      log.info('Creating initial database schema (v1)');
+      this.createInitialSchema(db);
     }
+    
+    // Version 1 to 2: Add collections store
+    if (oldVersion < 2 && newVersion >= 2) {
+      log.info('Applying migration to v2: Adding collections store');
+      if (!db.objectStoreNames.contains(StoreNames.COLLECTIONS)) {
+        const collectionsStore = db.createObjectStore(StoreNames.COLLECTIONS, { keyPath: 'id' });
+        collectionsStore.createIndex('name', 'name', { unique: false });
+        collectionsStore.createIndex('dateAdded', 'dateAdded', { unique: false });
+        collectionsStore.createIndex('lastModified', 'lastModified', { unique: false });
+        log.info('Created collections store in migration to v2');
+      } else {
+        log.info('Collections store already exists, skipping creation');
+      }
+    }
+    
+    // Version 2 to 3: Future migrations would go here
+    if (oldVersion < 3 && newVersion >= 3) {
+      log.info('Applying migration to v3: No schema changes needed');
+      // No schema changes in v3, just version bump to handle existing databases
+    }
+    
+    // Add future migrations here with the same pattern
+    // if (oldVersion < 4 && newVersion >= 4) { ... }
   }
 
   /**
@@ -187,6 +243,14 @@ export class IndexedDBService {
     // Settings store (minimal, as most UI settings will remain in localStorage)
     if (!db.objectStoreNames.contains(StoreNames.SETTINGS)) {
       db.createObjectStore(StoreNames.SETTINGS, { keyPath: 'id' });
+    }
+
+    // Collections store with indices
+    if (!db.objectStoreNames.contains(StoreNames.COLLECTIONS)) {
+      const collectionsStore = db.createObjectStore(StoreNames.COLLECTIONS, { keyPath: 'id' });
+      collectionsStore.createIndex('name', 'name', { unique: false });
+      collectionsStore.createIndex('dateAdded', 'dateAdded', { unique: false });
+      collectionsStore.createIndex('lastModified', 'lastModified', { unique: false });
     }
   }
 
@@ -426,6 +490,82 @@ export class IndexedDBService {
   }
 
   // This method was removed as part of migration away from localStorage
+
+  /**
+   * Reset the database if needed
+   * This is a nuclear option for when the database schema is corrupted
+   */
+  async resetDatabase(): Promise<void> {
+    log.warn('Attempting to reset the database');
+    try {
+      // Close any existing connection
+      if (this.db) {
+        this.db.close();
+        this.db = null;
+      }
+      
+      // Delete the database
+      await deleteDB(DB_CONFIG.NAME);
+      log.info('Database deleted successfully');
+      
+      // Reinitialize with the current version
+      this.isInitializing = false;
+      this.initPromise = null;
+      await this.initDb();
+      log.info('Database reinitialized successfully');
+      
+      this.showUserNotification('Database has been reset. Please refresh the page.', 'info');
+    } catch (error) {
+      log.error('Failed to reset database', { error: String(error) });
+      this.showUserNotification('Failed to reset database. Please try refreshing the page.');
+    }
+  }
+
+  /**
+   * Ensure the collections store exists
+   * This is a helper method to make sure the collections store is available
+   */
+  async ensureCollectionsStore(): Promise<void> {
+    log.debug('Ensuring collections store exists');
+    try {
+      // Check current database version
+      const currentVersion = await this.getCurrentDatabaseVersion();
+      
+      // Get a database connection
+      const db = await this.initDb();
+      
+      // Check if the collections store exists
+      if (!db.objectStoreNames.contains(StoreNames.COLLECTIONS)) {
+        log.warn('Collections store not found, attempting to create it');
+        
+        // Need to close and reopen with a higher version to create a new store
+        db.close();
+        this.db = null;
+        
+        // Use a version higher than both the config version and current version
+        const newVersion = Math.max(currentVersion, DB_CONFIG.VERSION) + 1;
+        log.info(`Upgrading database to version ${newVersion} to add collections store`);
+        
+        // Open with a version upgrade to create the store
+        const upgradedDb = await openDB(DB_CONFIG.NAME, newVersion, {
+          upgrade: (db) => {
+            const collectionsStore = db.createObjectStore(StoreNames.COLLECTIONS, { keyPath: 'id' });
+            collectionsStore.createIndex('name', 'name', { unique: false });
+            collectionsStore.createIndex('dateAdded', 'dateAdded', { unique: false });
+            collectionsStore.createIndex('lastModified', 'lastModified', { unique: false });
+            log.info('Created collections store in emergency recovery');
+          }
+        });
+        
+        // Update our db reference
+        this.db = upgradedDb;
+        log.info('Collections store created successfully');
+      }
+    } catch (error) {
+      log.error('Failed to ensure collections store exists', { error: String(error) });
+      this.showUserNotification('Failed to create collections store. Collection features may not work correctly.');
+    }
+  }
 
   /**
    * Close the database connection

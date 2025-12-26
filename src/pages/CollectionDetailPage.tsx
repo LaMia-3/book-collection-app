@@ -1,0 +1,998 @@
+import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
+import { Edit, Trash2, Plus, Search, Filter, SortAsc, SortDesc, Grid, List, BookOpen, Pencil, FolderOpen } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { PageHeader, HeaderActionButton } from '@/components/ui/page-header';
+import { useToast } from '@/components/ui/use-toast';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Badge } from '@/components/ui/badge';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Collection } from '@/types/collection';
+import { Book } from '@/types/book';
+import { collectionRepository } from '@/repositories/CollectionRepository';
+import { enhancedStorageService } from '@/services/storage/EnhancedStorageService';
+
+const CollectionDetailPage: React.FC = () => {
+  const { collectionId } = useParams<{ collectionId: string }>();
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  
+  // State for collection and books
+  const [collection, setCollection] = useState<Collection | null>(null);
+  const [books, setBooks] = useState<Book[]>([]);
+  const [filteredBooks, setFilteredBooks] = useState<Book[]>([]);
+  const [allBooks, setAllBooks] = useState<Book[]>([]);
+  
+  // UI state
+  const [isLoading, setIsLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortOrder, setSortOrder] = useState<'alphabetical' | 'author' | 'recent'>('alphabetical');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isAddBooksDialogOpen, setIsAddBooksDialogOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<string>('books');
+  const [selectedBookForDetails, setSelectedBookForDetails] = useState<Book | null>(null);
+  const [isBookDetailsOpen, setIsBookDetailsOpen] = useState(false);
+  
+  // Form state for editing collection
+  const [formData, setFormData] = useState({
+    name: '',
+    description: '',
+    color: '#3b82f6',
+    imageUrl: ''
+  });
+  
+  // Load collection and its books
+  useEffect(() => {
+    if (!collectionId) return;
+    
+    const loadCollectionAndBooks = async () => {
+      setIsLoading(true);
+      try {
+        // Initialize storage service
+        await enhancedStorageService.initialize();
+        
+        // Load collection
+        const collectionData = await collectionRepository.getById(collectionId);
+        if (!collectionData) {
+          toast({
+            title: 'Collection not found',
+            description: 'The requested collection could not be found.',
+            variant: 'destructive'
+          });
+          navigate('/collections');
+          return;
+        }
+        
+        setCollection(collectionData);
+        setFormData({
+          name: collectionData.name,
+          description: collectionData.description || '',
+          color: collectionData.color || '#3b82f6',
+          imageUrl: collectionData.imageUrl || ''
+        });
+        
+        // Load all books for reference
+        const allBooksData = await enhancedStorageService.getBooks();
+        setAllBooks(allBooksData);
+        
+        // Load books in this collection
+        const booksInCollection = await collectionRepository.getBooksInCollection(collectionId);
+        setBooks(booksInCollection);
+        setFilteredBooks(booksInCollection);
+      } catch (error) {
+        console.error('Error loading collection details:', error);
+        toast({
+          title: 'Error loading collection',
+          description: 'There was a problem loading the collection data.',
+          variant: 'destructive'
+        });
+        navigate('/collections');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    loadCollectionAndBooks();
+  }, [collectionId, navigate, toast]);
+  
+  // Filter and sort books when books, searchQuery, or sortOrder changes
+  useEffect(() => {
+    if (!books.length) return;
+    
+    let filtered = [...books];
+    
+    // Apply search filter if query exists
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(book => 
+        book.title.toLowerCase().includes(query) || 
+        book.author.toLowerCase().includes(query)
+      );
+    }
+    
+    // Apply sorting
+    if (sortOrder === 'alphabetical') {
+      filtered.sort((a, b) => a.title.localeCompare(b.title));
+    } else if (sortOrder === 'author') {
+      filtered.sort((a, b) => a.author.localeCompare(b.author));
+    } else if (sortOrder === 'recent') {
+      // Sort by title as a fallback since we don't have date fields on Book
+      filtered.sort((a, b) => a.title.localeCompare(b.title));
+    }
+    
+    setFilteredBooks(filtered);
+  }, [books, searchQuery, sortOrder]);
+  
+  // Handle editing a collection
+  const handleEditCollection = async () => {
+    if (!collection || !formData.name.trim()) {
+      toast({
+        title: 'Validation Error',
+        description: 'Collection name is required',
+        variant: 'destructive'
+      });
+      return;
+    }
+    
+    try {
+      await collectionRepository.update(collection.id, {
+        name: formData.name.trim(),
+        description: formData.description.trim() || undefined,
+        color: formData.color,
+        imageUrl: formData.imageUrl.trim() || undefined
+      });
+      
+      toast({
+        title: 'Success',
+        description: 'Collection updated successfully!'
+      });
+      
+      // Update local state
+      setCollection({
+        ...collection,
+        name: formData.name.trim(),
+        description: formData.description.trim() || undefined,
+        color: formData.color,
+        imageUrl: formData.imageUrl.trim() || undefined
+      });
+      
+      setIsEditDialogOpen(false);
+    } catch (error) {
+      console.error('Error updating collection:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to update collection',
+        variant: 'destructive'
+      });
+    }
+  };
+  
+  // Handle deleting a collection
+  const handleDeleteCollection = async () => {
+    if (!collection) return;
+    
+    try {
+      await collectionRepository.delete(collection.id);
+      
+      toast({
+        title: 'Success',
+        description: 'Collection deleted successfully!'
+      });
+      
+      navigate('/collections');
+    } catch (error) {
+      console.error('Error deleting collection:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to delete collection',
+        variant: 'destructive'
+      });
+    }
+  };
+  
+  // Handle removing a book from the collection
+  const handleRemoveBook = async (bookId: string) => {
+    if (!collection) return;
+    
+    try {
+      await collectionRepository.removeBookFromCollection(collection.id, bookId);
+      
+      toast({
+        title: 'Success',
+        description: 'Book removed from collection'
+      });
+      
+      // Update local state
+      const updatedBooks = books.filter(book => book.id !== bookId);
+      setBooks(updatedBooks);
+    } catch (error) {
+      console.error('Error removing book from collection:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to remove book from collection',
+        variant: 'destructive'
+      });
+    }
+  };
+  
+  // Get series name for a book
+  const getSeriesForBook = (book: Book) => {
+    if (!book.seriesId) return null;
+    
+    // Find series in all books that match this book's seriesId
+    const series = allBooks.find(b => b.seriesId === book.seriesId);
+    if (series) {
+      return { id: book.seriesId, name: series.title };
+    }
+    return null;
+  };
+  
+  // Handle opening book details
+  const handleOpenBookDetails = (book: Book) => {
+    setSelectedBookForDetails(book);
+    setIsBookDetailsOpen(true);
+  };
+  
+  // Handle updating a book
+  const handleUpdateBook = async (updatedBook: Book) => {
+    try {
+      await enhancedStorageService.saveBook(updatedBook);
+      
+      // Update local state
+      setBooks(prevBooks => 
+        prevBooks.map(book => book.id === updatedBook.id ? updatedBook : book)
+      );
+      
+      toast({
+        title: "Book updated",
+        description: "Book details have been updated successfully."
+      });
+      
+      setIsBookDetailsOpen(false);
+    } catch (error) {
+      console.error("Error updating book:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update book details.",
+        variant: "destructive"
+      });
+    }
+  };
+  
+  // Render book card with remove option
+  const renderBookCard = (book: Book) => {
+    const seriesInfo = book.isPartOfSeries ? getSeriesForBook(book) : null;
+    
+    return (
+      <div key={book.id} className="relative group cursor-pointer" onClick={() => handleOpenBookDetails(book)}>
+        <div className="rounded-lg overflow-hidden border border-border hover:shadow-md transition-shadow">
+          {book.thumbnail ? (
+            <img 
+              src={book.thumbnail} 
+              alt={`${book.title} cover`}
+              className="w-full h-48 object-cover"
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = '/placeholder.svg';
+              }}
+            />
+          ) : (
+            <div className="w-full h-48 bg-muted flex items-center justify-center">
+              <span className="text-muted-foreground">No Cover</span>
+            </div>
+          )}
+          <div className="p-3">
+            <h3 className="font-medium truncate">{book.title}</h3>
+            <p className="text-sm text-muted-foreground truncate">{book.author}</p>
+            
+            {/* Series info */}
+            {seriesInfo && (
+              <div className="mt-1">
+                <Badge variant="outline" className="text-xs">
+                  Series: {seriesInfo.name}
+                </Badge>
+              </div>
+            )}
+            
+            {/* Status badge */}
+            {book.status && (
+              <div className="mt-1">
+                <Badge variant={book.status === 'completed' ? 'default' : 
+                        book.status === 'reading' ? 'secondary' : 'outline'} 
+                       className="text-xs">
+                  {book.status}
+                </Badge>
+              </div>
+            )}
+            
+            {/* Notes indicator */}
+            {book.notes && (
+              <div className="mt-1 text-xs text-muted-foreground truncate">
+                Notes: {book.notes.substring(0, 20)}{book.notes.length > 20 ? '...' : ''}
+              </div>
+            )}
+          </div>
+        </div>
+        
+        {/* Remove button */}
+        <Button
+          variant="destructive"
+          size="icon"
+          className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+          onClick={(e) => {
+            e.stopPropagation();
+            handleRemoveBook(book.id);
+          }}
+        >
+          <Trash2 size={16} />
+        </Button>
+      </div>
+    );
+  };
+  
+  // Render book list item with remove option
+  const renderBookListItem = (book: Book) => {
+    const seriesInfo = book.isPartOfSeries ? getSeriesForBook(book) : null;
+    
+    return (
+      <div 
+        key={book.id} 
+        className="relative group border-b py-3 px-4 hover:bg-accent/10 cursor-pointer flex items-center"
+        onClick={() => handleOpenBookDetails(book)}
+      >
+        <div className="flex-grow">
+          <h3 className="font-medium">{book.title}</h3>
+          <p className="text-sm text-muted-foreground">{book.author}</p>
+          
+          <div className="flex flex-wrap gap-2 mt-1">
+            {/* Series info */}
+            {seriesInfo && (
+              <Badge variant="outline" className="text-xs">
+                Series: {seriesInfo.name}
+              </Badge>
+            )}
+            
+            {/* Status badge */}
+            {book.status && (
+              <Badge variant={book.status === 'completed' ? 'default' : 
+                      book.status === 'reading' ? 'secondary' : 'outline'} 
+                     className="text-xs">
+                {book.status}
+              </Badge>
+            )}
+          </div>
+          
+          {/* Notes preview */}
+          {book.notes && (
+            <p className="text-xs text-muted-foreground mt-1 truncate">
+              Notes: {book.notes.substring(0, 40)}{book.notes.length > 40 ? '...' : ''}
+            </p>
+          )}
+        </div>
+        
+        {/* Remove button */}
+        <Button
+          variant="destructive"
+          size="icon"
+          className="opacity-0 group-hover:opacity-100 transition-opacity ml-2"
+          onClick={(e) => {
+            e.stopPropagation();
+            handleRemoveBook(book.id);
+          }}
+        >
+          <Trash2 size={16} />
+        </Button>
+      </div>
+    );
+  };
+  
+  // Check if this is the default Favorites collection
+  const isFavorites = collection?.name.toLowerCase() === 'favorites';
+  
+  return (
+    <div className="container mx-auto px-4 py-6">
+      {isLoading ? (
+        <div className="animate-pulse">
+          <div className="h-64 bg-muted rounded-lg mb-6"></div>
+          <div className="h-8 bg-muted rounded w-1/3 mb-4"></div>
+          <div className="h-4 bg-muted rounded w-1/2 mb-6"></div>
+          <div className="h-12 bg-muted rounded mb-6"></div>
+          <div className="grid grid-cols-1 gap-4">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="h-24 bg-muted rounded"></div>
+            ))}
+          </div>
+        </div>
+      ) : collection ? (
+        <>
+          <PageHeader
+            title={collection.name}
+            subtitle={collection.description || 'Collection'}
+            backTo="/collections"
+            backAriaLabel="Back to Collections"
+            actions={
+              <>
+                <HeaderActionButton
+                  icon={<Plus />}
+                  label="Add Books"
+                  onClick={() => setIsAddBooksDialogOpen(true)}
+                  variant="secondary"
+                />
+                <HeaderActionButton
+                  icon={<Pencil />}
+                  label="Edit collection"
+                  onClick={() => setIsEditDialogOpen(true)}
+                  variant="secondary"
+                />
+                {!isFavorites && (
+                  <HeaderActionButton
+                    icon={<Trash2 />}
+                    label="Delete collection"
+                    onClick={() => setIsDeleteDialogOpen(true)}
+                    variant="secondary"
+                  />
+                )}
+              </>
+            }
+            className="pb-0"
+          >
+            {/* Hero Header with Cover Image */}
+            <div className="relative h-64 rounded-lg overflow-hidden mb-6 -mt-4">
+              {collection.imageUrl ? (
+                <img 
+                  src={collection.imageUrl} 
+                  alt={collection.name}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="w-full h-full bg-gradient-to-r from-muted/60 via-muted to-muted/60 flex items-center justify-center"
+                  style={{ backgroundColor: collection.color || '#3b82f6' }}
+                >
+                  <FolderOpen className="h-24 w-24 text-white/30" />
+                </div>
+              )}
+              
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent"></div>
+              
+              <div className="absolute bottom-0 left-0 right-0 p-6 text-white">
+                <div className="flex items-center gap-1">
+                  <span className="text-white/80">{books.length} books</span>
+                </div>
+              </div>
+            </div>
+          
+            {/* Tabs */}
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+              <TabsList>
+                <TabsTrigger value="books">Books</TabsTrigger>
+                <TabsTrigger value="info">Collection Info</TabsTrigger>
+              </TabsList>
+              
+              <TabsContent value="books" className="space-y-4">
+                {/* Search and filter controls */}
+                <div className="flex flex-col md:flex-row gap-4 mb-6">
+                  <div className="relative flex-grow">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" size={18} />
+                    <Input
+                      placeholder="Search books..."
+                      className="pl-10"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                    />
+                  </div>
+                  
+                  <div className="flex gap-2">
+                    <Select
+                      value={sortOrder}
+                      onValueChange={(value) => setSortOrder(value as 'alphabetical' | 'author' | 'recent')}
+                    >
+                      <SelectTrigger className="w-[180px]">
+                        <SelectValue placeholder="Sort by" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="alphabetical">Title (A-Z)</SelectItem>
+                        <SelectItem value="author">Author (A-Z)</SelectItem>
+                        <SelectItem value="recent">Recently Added</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    
+                    <div className="flex border rounded-md">
+                      <Button
+                        variant={viewMode === 'grid' ? 'default' : 'ghost'}
+                        size="icon"
+                        onClick={() => setViewMode('grid')}
+                        className="rounded-r-none"
+                      >
+                        <Grid size={18} />
+                      </Button>
+                      <Button
+                        variant={viewMode === 'list' ? 'default' : 'ghost'}
+                        size="icon"
+                        onClick={() => setViewMode('list')}
+                        className="rounded-l-none"
+                      >
+                        <List size={18} />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Books display */}
+                {filteredBooks.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 border-2 border-dashed border-muted-foreground/20 rounded-lg">
+                    <BookOpen className="h-16 w-16 text-muted-foreground/40 mb-4" />
+                    <h2 className="text-xl font-medium mb-2">No Books Yet</h2>
+                    <p className="text-muted-foreground text-center max-w-md mb-6">
+                      {searchQuery ? 'Try a different search term' : 'This collection doesn\'t have any books yet. Add books to get started.'}
+                    </p>
+                    <Button onClick={() => setIsAddBooksDialogOpen(true)}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Books
+                    </Button>
+                  </div>
+                ) : (
+                  <div className={viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6' : 'space-y-2'}>
+                    {filteredBooks.map(book => 
+                      viewMode === 'grid' 
+                        ? renderBookCard(book) 
+                        : renderBookListItem(book)
+                    )}
+                  </div>
+                )}
+              </TabsContent>
+              
+              <TabsContent value="info" className="space-y-4">
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="space-y-4">
+                      <div>
+                        <h3 className="text-lg font-medium mb-2">About this Collection</h3>
+                        <p className="text-muted-foreground">
+                          {collection.description || 'No description provided.'}
+                        </p>
+                      </div>
+                      
+                      <div>
+                        <h4 className="font-medium mb-1">Created</h4>
+                        <p className="text-muted-foreground">
+                          {new Date(collection.createdAt).toLocaleDateString()}
+                        </p>
+                      </div>
+                      
+                      <div>
+                        <h4 className="font-medium mb-1">Last Updated</h4>
+                        <p className="text-muted-foreground">
+                          {new Date(collection.updatedAt).toLocaleDateString()}
+                        </p>
+                      </div>
+                      
+                      <div>
+                        <h4 className="font-medium mb-1">Collection Color</h4>
+                        <div className="flex items-center gap-2">
+                          <div 
+                            className="w-6 h-6 rounded-full" 
+                            style={{ backgroundColor: collection.color || '#3b82f6' }}
+                          ></div>
+                          <span className="text-muted-foreground">
+                            {collection.color || '#3b82f6'}
+                          </span>
+                        </div>
+                      </div>
+                      
+                      <div className="pt-2">
+                        <Button variant="outline" onClick={() => setIsEditDialogOpen(true)}>
+                          <Pencil className="h-4 w-4 mr-2" />
+                          Edit Collection Details
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </Tabs>
+          </PageHeader>
+          
+          {/* Edit Collection Dialog */}
+          <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Edit Collection</DialogTitle>
+              </DialogHeader>
+              
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-name">Name</Label>
+                  <Input
+                    id="edit-name"
+                    placeholder="Collection name"
+                    value={formData.name}
+                    onChange={(e) => setFormData({...formData, name: e.target.value})}
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="edit-description">Description (optional)</Label>
+                  <Textarea
+                    id="edit-description"
+                    placeholder="Describe your collection"
+                    value={formData.description}
+                    onChange={(e) => setFormData({...formData, description: e.target.value})}
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="edit-color">Color</Label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      id="edit-color"
+                      value={formData.color}
+                      onChange={(e) => setFormData({...formData, color: e.target.value})}
+                      className="w-10 h-10 rounded cursor-pointer"
+                    />
+                    <Input
+                      value={formData.color}
+                      onChange={(e) => setFormData({...formData, color: e.target.value})}
+                      className="flex-grow"
+                    />
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="edit-imageUrl">Image URL (optional)</Label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      id="edit-imageUrl"
+                      placeholder="https://example.com/image.jpg"
+                      value={formData.imageUrl}
+                      onChange={(e) => setFormData({...formData, imageUrl: e.target.value})}
+                    />
+                    {formData.imageUrl && (
+                      <div className="w-10 h-10 rounded overflow-hidden flex-shrink-0">
+                        <img 
+                          src={formData.imageUrl} 
+                          alt="Preview" 
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = 'https://via.placeholder.com/40?text=Error';
+                          }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+              
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>Cancel</Button>
+                <Button onClick={handleEditCollection}>Save Changes</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+          
+          {/* Delete Confirmation Dialog */}
+          <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Delete Collection</DialogTitle>
+              </DialogHeader>
+              
+              <div className="py-4">
+                <p>Are you sure you want to delete "{collection.name}"?</p>
+                <p className="text-sm text-gray-500 mt-2">
+                  This action cannot be undone. Books in this collection will not be deleted.
+                </p>
+              </div>
+              
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>Cancel</Button>
+                <Button variant="destructive" onClick={handleDeleteCollection}>Delete Collection</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+          
+          {/* Add Books Dialog */}
+          <Dialog open={isAddBooksDialogOpen} onOpenChange={setIsAddBooksDialogOpen}>
+            <DialogContent className="max-w-3xl">
+              <DialogHeader>
+                <DialogTitle>Add Books to Collection</DialogTitle>
+              </DialogHeader>
+              
+              <div className="py-4">
+                {allBooks.length === 0 ? (
+                  <div className="text-center py-6">
+                    <p>No books available to add.</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="mb-4">
+                      <Label htmlFor="search-books">Search Books</Label>
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" size={16} />
+                        <Input
+                          id="search-books"
+                          placeholder="Search by title or author"
+                          className="pl-10"
+                        />
+                      </div>
+                    </div>
+                    
+                    <ScrollArea className="h-[400px]">
+                      <div className="space-y-2">
+                        {allBooks
+                          .filter(book => !books.some(b => b.id === book.id))
+                          .map(book => (
+                          <Card key={book.id} className="cursor-pointer hover:bg-accent/5">
+                            <CardContent className="p-4 flex items-center">
+                              <div className="flex-grow">
+                                <h3 className="font-medium">{book.title}</h3>
+                                <p className="text-sm text-muted-foreground">{book.author}</p>
+                                {book.isPartOfSeries && book.seriesId && (
+                                  <Badge variant="outline" className="mt-1 text-xs">
+                                    Series: {getSeriesForBook(book)?.name || 'Unknown Series'}
+                                  </Badge>
+                                )}
+                              </div>
+                              <Button
+                                onClick={async () => {
+                                  try {
+                                    await collectionRepository.addBook(collection!.id, book.id);
+                                    // Refresh books in collection
+                                    const updatedBooks = await collectionRepository.getBooksInCollection(collection!.id);
+                                    setBooks(updatedBooks);
+                                    setFilteredBooks(updatedBooks);
+                                    toast({
+                                      title: "Book added",
+                                      description: `${book.title} has been added to the collection.`
+                                    });
+                                  } catch (error) {
+                                    console.error("Error adding book to collection:", error);
+                                    toast({
+                                      title: "Error",
+                                      description: "Failed to add book to collection.",
+                                      variant: "destructive"
+                                    });
+                                  }
+                                }}
+                              >
+                                <Plus size={16} className="mr-2" />
+                                Add
+                              </Button>
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  </>
+                )}
+              </div>
+              
+              <DialogFooter>
+                <Button onClick={() => setIsAddBooksDialogOpen(false)}>Close</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+          
+          {/* Book Details Dialog */}
+          <Dialog open={isBookDetailsOpen} onOpenChange={setIsBookDetailsOpen}>
+            <DialogContent className="max-w-3xl">
+              {selectedBookForDetails && (
+                <>
+                  <DialogHeader>
+                    <DialogTitle>Book Details</DialogTitle>
+                  </DialogHeader>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 py-4">
+                    {/* Left column - Cover image */}
+                    <div className="flex flex-col items-center">
+                      {selectedBookForDetails.thumbnail ? (
+                        <img 
+                          src={selectedBookForDetails.thumbnail} 
+                          alt={`${selectedBookForDetails.title} cover`}
+                          className="w-full max-w-[200px] object-cover rounded-md shadow-md"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = '/placeholder.svg';
+                          }}
+                        />
+                      ) : (
+                        <div className="w-full h-[280px] max-w-[200px] bg-muted flex items-center justify-center rounded-md">
+                          <span className="text-muted-foreground">No Cover</span>
+                        </div>
+                      )}
+                      
+                      {/* Status badges */}
+                      <div className="mt-4 flex flex-col gap-2 w-full">
+                        <Select
+                          value={selectedBookForDetails.status || ''}
+                          onValueChange={(value) => {
+                            setSelectedBookForDetails(prev => 
+                              prev ? { ...prev, status: value as any } : null
+                            );
+                          }}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Reading Status" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="">Not Set</SelectItem>
+                            <SelectItem value="reading">Currently Reading</SelectItem>
+                            <SelectItem value="completed">Completed</SelectItem>
+                            <SelectItem value="want-to-read">Want to Read</SelectItem>
+                            <SelectItem value="dnf">Did Not Finish</SelectItem>
+                            <SelectItem value="on-hold">On Hold</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        
+                        {/* Rating */}
+                        <Select
+                          value={selectedBookForDetails.rating?.toString() || ''}
+                          onValueChange={(value) => {
+                            setSelectedBookForDetails(prev => 
+                              prev ? { ...prev, rating: parseInt(value) || undefined } : null
+                            );
+                          }}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Rating" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="">No Rating</SelectItem>
+                            <SelectItem value="1">★ - Poor</SelectItem>
+                            <SelectItem value="2">★★ - Fair</SelectItem>
+                            <SelectItem value="3">★★★ - Good</SelectItem>
+                            <SelectItem value="4">★★★★ - Very Good</SelectItem>
+                            <SelectItem value="5">★★★★★ - Excellent</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    
+                    {/* Right column - Book details */}
+                    <div className="md:col-span-2 space-y-4">
+                      {/* Title */}
+                      <div>
+                        <Label htmlFor="book-title">Title</Label>
+                        <Input 
+                          id="book-title" 
+                          value={selectedBookForDetails.title} 
+                          onChange={(e) => {
+                            setSelectedBookForDetails(prev => 
+                              prev ? { ...prev, title: e.target.value } : null
+                            );
+                          }}
+                        />
+                      </div>
+                      
+                      {/* Author */}
+                      <div>
+                        <Label htmlFor="book-author">Author</Label>
+                        <Input 
+                          id="book-author" 
+                          value={selectedBookForDetails.author} 
+                          onChange={(e) => {
+                            setSelectedBookForDetails(prev => 
+                              prev ? { ...prev, author: e.target.value } : null
+                            );
+                          }}
+                        />
+                      </div>
+                      
+                      {/* Series info */}
+                      <div>
+                        <Label>Series</Label>
+                        {selectedBookForDetails.isPartOfSeries ? (
+                          <div className="flex items-center gap-2">
+                            <Badge>
+                              {getSeriesForBook(selectedBookForDetails)?.name || 'Unknown Series'}
+                            </Badge>
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                              onClick={() => {
+                                if (selectedBookForDetails.seriesId) {
+                                  navigate(`/series/${selectedBookForDetails.seriesId}`);
+                                }
+                              }}
+                            >
+                              View Series
+                            </Button>
+                          </div>
+                        ) : (
+                          <p className="text-sm text-muted-foreground">Not part of a series</p>
+                        )}
+                      </div>
+                      
+                      {/* Description */}
+                      <div>
+                        <Label htmlFor="book-description">Description</Label>
+                        <Textarea 
+                          id="book-description" 
+                          value={selectedBookForDetails.description || ''} 
+                          onChange={(e) => {
+                            setSelectedBookForDetails(prev => 
+                              prev ? { ...prev, description: e.target.value } : null
+                            );
+                          }}
+                          className="h-24"
+                        />
+                      </div>
+                      
+                      {/* Notes */}
+                      <div>
+                        <Label htmlFor="book-notes">Your Notes</Label>
+                        <Textarea 
+                          id="book-notes" 
+                          value={selectedBookForDetails.notes || ''} 
+                          onChange={(e) => {
+                            setSelectedBookForDetails(prev => 
+                              prev ? { ...prev, notes: e.target.value } : null
+                            );
+                          }}
+                          className="h-24"
+                          placeholder="Add your personal notes about this book..."
+                        />
+                      </div>
+                      
+                      {/* Page count */}
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="book-pages">Page Count</Label>
+                          <Input 
+                            id="book-pages" 
+                            type="number" 
+                            value={selectedBookForDetails.pageCount?.toString() || ''} 
+                            onChange={(e) => {
+                              setSelectedBookForDetails(prev => 
+                                prev ? { ...prev, pageCount: parseInt(e.target.value) || undefined } : null
+                              );
+                            }}
+                          />
+                        </div>
+                        
+                        {/* Published date */}
+                        <div>
+                          <Label htmlFor="book-published">Published Date</Label>
+                          <Input 
+                            id="book-published" 
+                            type="date" 
+                            value={selectedBookForDetails.publishedDate ? new Date(selectedBookForDetails.publishedDate).toISOString().split('T')[0] : ''} 
+                            onChange={(e) => {
+                              setSelectedBookForDetails(prev => 
+                                prev ? { ...prev, publishedDate: e.target.value } : null
+                              );
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setIsBookDetailsOpen(false)}>Cancel</Button>
+                    <Button onClick={() => selectedBookForDetails && handleUpdateBook(selectedBookForDetails)}>Save Changes</Button>
+                  </DialogFooter>
+                </>
+              )}
+            </DialogContent>
+          </Dialog>
+        </>
+      ) : (
+        <div className="text-center py-12">
+          <h3 className="text-lg font-medium text-gray-600 mb-2">Collection not found</h3>
+          <Button className="mt-4" onClick={() => navigate('/collections')}>
+            Back to Collections
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default CollectionDetailPage;

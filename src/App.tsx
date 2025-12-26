@@ -12,6 +12,8 @@ import { DatabasePreloader } from "./components/DatabasePreloader";
 import Index from "./pages/Index";
 import SeriesPage from "./pages/SeriesPage";
 import SeriesDetailPage from "./pages/SeriesDetailPage";
+import CollectionsPage from "./pages/CollectionsPage";
+import CollectionDetailPage from "./pages/CollectionDetailPage";
 // TestBackendPage has been integrated into AdminPage as a tab
 import AdminPage from "./pages/AdminPage";
 // StatisticsPage removed - functionality moved to Reading Insights tab
@@ -37,6 +39,8 @@ const App = () => (
                   <Route path="/" element={<Index />} />
                   <Route path="/series" element={<SeriesPage />} />
                   <Route path="/series/:seriesId" element={<SeriesDetailPage />} />
+                  <Route path="/collections" element={<CollectionsPage />} />
+                  <Route path="/collections/:collectionId" element={<CollectionDetailPage />} />
                   {/* Statistics page route removed - functionality moved to Reading Insights tab */}
                   <Route path="/test-backend" element={<Navigate to="/admin?tab=backend-test" replace />} />
                   <Route path="/admin" element={<AdminPage />} />
