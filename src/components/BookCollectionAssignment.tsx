@@ -180,7 +180,7 @@ const BookCollectionAssignment: React.FC<BookCollectionAssignmentProps> = ({
             {bookCollections.map(collection => (
               <div 
                 key={collection.id}
-                className="flex items-center gap-1 px-3 py-1 rounded-full text-sm"
+                className="flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-medium shadow-sm"
                 style={{ 
                   backgroundColor: collection.color || '#3b82f6',
                   color: 'white'
@@ -205,9 +205,9 @@ const BookCollectionAssignment: React.FC<BookCollectionAssignmentProps> = ({
       
       {/* Collection Assignment Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md bg-background border-2 border-border">
           <DialogHeader>
-            <DialogTitle>Manage Collections</DialogTitle>
+            <DialogTitle className="text-xl font-bold">Manage Collections</DialogTitle>
           </DialogHeader>
           
           <div className="py-4">
@@ -222,6 +222,7 @@ const BookCollectionAssignment: React.FC<BookCollectionAssignmentProps> = ({
                 variant="outline"
                 size="icon"
                 onClick={() => setIsCreateDialogOpen(true)}
+                title="Create new collection"
               >
                 <Plus size={16} />
               </Button>
@@ -250,22 +251,20 @@ const BookCollectionAssignment: React.FC<BookCollectionAssignmentProps> = ({
                     return (
                       <div 
                         key={collection.id}
-                        className={`flex items-center justify-between p-3 rounded-md cursor-pointer hover:bg-gray-100 ${
-                          isInCollection ? 'bg-gray-50' : ''
+                        className={`flex items-center justify-between p-3 rounded-md cursor-pointer hover:bg-accent/10 ${
+                          isInCollection ? 'bg-accent/20 border border-accent/30' : 'border border-transparent'
                         }`}
                         onClick={() => toggleCollection(collection)}
                       >
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-3 flex-grow">
                           <div 
-                            className="w-4 h-4 rounded-full"
+                            className="min-w-8 h-8 rounded-full flex items-center justify-center shadow-sm"
                             style={{ backgroundColor: collection.color || '#3b82f6' }}
-                          ></div>
-                          <span>{collection.name}</span>
+                          >
+                            {isInCollection && <Check size={16} className="text-white" />}
+                          </div>
+                          <span className="font-medium text-base">{collection.name}</span>
                         </div>
-                        
-                        {isInCollection && (
-                          <Check size={16} className="text-primary" />
-                        )}
                       </div>
                     );
                   })}

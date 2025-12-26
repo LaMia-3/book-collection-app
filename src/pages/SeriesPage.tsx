@@ -99,8 +99,8 @@ const SeriesPage = () => {
   
   // Get the personalized library name
   const libraryName = settings.preferredName 
-    ? `${settings.preferredName}'s Series Collection`
-    : "My Series Collection";
+    ? `${settings.preferredName}'s Series`
+    : "My Series";
     
   // Load books and series from IndexedDB as the sole source of truth
   useEffect(() => {
