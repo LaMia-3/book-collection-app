@@ -272,52 +272,57 @@ const CollectionDetailPage: React.FC = () => {
     const seriesInfo = book.isPartOfSeries ? getSeriesForBook(book) : null;
     
     return (
-      <div key={book.id} className="relative group cursor-pointer" onClick={() => handleOpenBookDetails(book)}>
-        <div className="rounded-lg overflow-hidden border border-border hover:shadow-md transition-shadow">
-          {book.thumbnail ? (
-            <img 
-              src={book.thumbnail} 
-              alt={`${book.title} cover`}
-              className="w-full h-48 object-cover"
-              onError={(e) => {
-                (e.target as HTMLImageElement).src = '/placeholder.svg';
-              }}
-            />
-          ) : (
-            <div className="w-full h-48 bg-muted flex items-center justify-center">
-              <span className="text-muted-foreground">No Cover</span>
-            </div>
-          )}
-          <div className="p-3">
-            <h3 className="font-medium truncate">{book.title}</h3>
-            <p className="text-sm text-muted-foreground truncate">{book.author}</p>
-            
-            {/* Series info */}
-            {seriesInfo && (
-              <div className="mt-1">
-                <Badge variant="outline" className="text-xs">
-                  Series: {seriesInfo.name}
-                </Badge>
+      <div key={book.id} className="relative group cursor-pointer h-full" onClick={() => handleOpenBookDetails(book)}>
+        <div className="rounded-lg overflow-hidden border border-border hover:shadow-md transition-all h-full flex flex-col bg-card hover:border-primary/30">
+          <div className="relative aspect-[2/3] overflow-hidden">
+            {book.thumbnail ? (
+              <img 
+                src={book.thumbnail} 
+                alt={`${book.title} cover`}
+                className="w-full h-full object-cover transition-transform group-hover:scale-105"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = '/placeholder.svg';
+                }}
+              />
+            ) : (
+              <div className="w-full h-full bg-muted flex items-center justify-center">
+                <BookOpen className="h-12 w-12 text-muted-foreground/50" />
               </div>
             )}
             
-            {/* Status badge */}
+            {/* Status badge - positioned on the cover */}
             {book.status && (
-              <div className="mt-1">
+              <div className="absolute top-2 left-2">
                 <Badge variant={book.status === 'completed' ? 'default' : 
                         book.status === 'reading' ? 'secondary' : 'outline'} 
-                       className="text-xs">
+                       className="text-xs shadow-sm">
                   {book.status}
                 </Badge>
               </div>
             )}
+          </div>
+          
+          <div className="p-3 flex-grow flex flex-col">
+            <h3 className="font-medium truncate">{book.title}</h3>
+            <p className="text-sm text-muted-foreground truncate">{book.author}</p>
             
-            {/* Notes indicator */}
-            {book.notes && (
-              <div className="mt-1 text-xs text-muted-foreground truncate">
-                Notes: {book.notes.substring(0, 20)}{book.notes.length > 20 ? '...' : ''}
-              </div>
-            )}
+            <div className="mt-auto pt-2 space-y-1.5">
+              {/* Series info */}
+              {seriesInfo && (
+                <div>
+                  <Badge variant="outline" className="text-xs w-full justify-start overflow-hidden text-ellipsis">
+                    <span className="truncate">Series: {seriesInfo.name}</span>
+                  </Badge>
+                </div>
+              )}
+              
+              {/* Notes indicator */}
+              {book.notes && (
+                <div className="text-xs text-muted-foreground truncate">
+                  <span className="font-medium">Notes:</span> {book.notes.substring(0, 20)}{book.notes.length > 20 ? '...' : ''}
+                </div>
+              )}
+            </div>
           </div>
         </div>
         
@@ -325,7 +330,7 @@ const CollectionDetailPage: React.FC = () => {
         <Button
           variant="destructive"
           size="icon"
-          className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+          className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity shadow-md z-10"
           onClick={(e) => {
             e.stopPropagation();
             handleRemoveBook(book.id);
@@ -344,21 +349,33 @@ const CollectionDetailPage: React.FC = () => {
     return (
       <div 
         key={book.id} 
-        className="relative group border-b py-3 px-4 hover:bg-accent/10 cursor-pointer flex items-center"
+        className="relative group border-b py-4 px-4 hover:bg-accent/5 cursor-pointer flex items-center gap-4 transition-colors"
         onClick={() => handleOpenBookDetails(book)}
       >
-        <div className="flex-grow">
-          <h3 className="font-medium">{book.title}</h3>
-          <p className="text-sm text-muted-foreground">{book.author}</p>
+        {/* Book thumbnail */}
+        <div className="flex-shrink-0 w-12 h-16 md:w-16 md:h-20 overflow-hidden rounded-md border border-border">
+          {book.thumbnail ? (
+            <img 
+              src={book.thumbnail} 
+              alt={`${book.title} cover`}
+              className="w-full h-full object-cover"
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = '/placeholder.svg';
+              }}
+            />
+          ) : (
+            <div className="w-full h-full bg-muted flex items-center justify-center">
+              <BookOpen className="h-6 w-6 text-muted-foreground/50" />
+            </div>
+          )}
+        </div>
+        
+        {/* Book details */}
+        <div className="flex-grow min-w-0"> {/* min-w-0 ensures text truncation works */}
+          <h3 className="font-medium truncate">{book.title}</h3>
+          <p className="text-sm text-muted-foreground truncate">{book.author}</p>
           
-          <div className="flex flex-wrap gap-2 mt-1">
-            {/* Series info */}
-            {seriesInfo && (
-              <Badge variant="outline" className="text-xs">
-                Series: {seriesInfo.name}
-              </Badge>
-            )}
-            
+          <div className="flex flex-wrap gap-2 mt-2">
             {/* Status badge */}
             {book.status && (
               <Badge variant={book.status === 'completed' ? 'default' : 
@@ -367,12 +384,19 @@ const CollectionDetailPage: React.FC = () => {
                 {book.status}
               </Badge>
             )}
+            
+            {/* Series info */}
+            {seriesInfo && (
+              <Badge variant="outline" className="text-xs">
+                Series: {seriesInfo.name}
+              </Badge>
+            )}
           </div>
           
           {/* Notes preview */}
           {book.notes && (
-            <p className="text-xs text-muted-foreground mt-1 truncate">
-              Notes: {book.notes.substring(0, 40)}{book.notes.length > 40 ? '...' : ''}
+            <p className="text-xs text-muted-foreground mt-2 truncate">
+              <span className="font-medium">Notes:</span> {book.notes.substring(0, 60)}{book.notes.length > 60 ? '...' : ''}
             </p>
           )}
         </div>
@@ -381,7 +405,7 @@ const CollectionDetailPage: React.FC = () => {
         <Button
           variant="destructive"
           size="icon"
-          className="opacity-0 group-hover:opacity-100 transition-opacity ml-2"
+          className="opacity-0 group-hover:opacity-100 transition-opacity ml-2 flex-shrink-0"
           onClick={(e) => {
             e.stopPropagation();
             handleRemoveBook(book.id);
@@ -397,7 +421,7 @@ const CollectionDetailPage: React.FC = () => {
   const isFavorites = collection?.name.toLowerCase() === 'favorites';
   
   return (
-    <div className="container mx-auto px-4 py-6">
+    <div className="container max-w-7xl mx-auto px-4 py-6">
       {isLoading ? (
         <div className="animate-pulse">
           <div className="h-64 bg-muted rounded-lg mb-6"></div>
@@ -412,64 +436,69 @@ const CollectionDetailPage: React.FC = () => {
         </div>
       ) : collection ? (
         <>
-          <PageHeader
-            title={collection.name}
-            subtitle={collection.description || 'Collection'}
-            backTo="/collections"
-            backAriaLabel="Back to Collections"
-            actions={
-              <>
-                <HeaderActionButton
-                  icon={<Plus />}
-                  label="Add Books"
-                  onClick={() => setIsAddBooksDialogOpen(true)}
-                  variant="secondary"
-                />
-                <HeaderActionButton
-                  icon={<Pencil />}
-                  label="Edit collection"
-                  onClick={() => setIsEditDialogOpen(true)}
-                  variant="secondary"
-                />
-                {!isFavorites && (
+          {/* Page Header */}
+          <div className="mb-8">
+            <PageHeader
+              title={collection.name}
+              subtitle={collection.description || 'Collection'}
+              backTo="/collections"
+              backAriaLabel="Back to Collections"
+              actions={
+                <>
                   <HeaderActionButton
-                    icon={<Trash2 />}
-                    label="Delete collection"
-                    onClick={() => setIsDeleteDialogOpen(true)}
+                    icon={<Plus />}
+                    label="Add Books"
+                    onClick={() => setIsAddBooksDialogOpen(true)}
                     variant="secondary"
                   />
-                )}
-              </>
-            }
-            className="pb-0"
-          >
-            {/* Hero Header with Cover Image */}
-            <div className="relative h-64 rounded-lg overflow-hidden mb-6 -mt-4">
-              {collection.imageUrl ? (
-                <img 
-                  src={collection.imageUrl} 
-                  alt={collection.name}
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <div className="w-full h-full bg-gradient-to-r from-muted/60 via-muted to-muted/60 flex items-center justify-center"
-                  style={{ backgroundColor: collection.color || '#3b82f6' }}
-                >
-                  <FolderOpen className="h-24 w-24 text-white/30" />
-                </div>
-              )}
-              
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent"></div>
-              
-              <div className="absolute bottom-0 left-0 right-0 p-6 text-white">
-                <div className="flex items-center gap-1">
-                  <span className="text-white/80">{books.length} books</span>
-                </div>
+                  <HeaderActionButton
+                    icon={<Pencil />}
+                    label="Edit collection"
+                    onClick={() => setIsEditDialogOpen(true)}
+                    variant="secondary"
+                  />
+                  {!isFavorites && (
+                    <HeaderActionButton
+                      icon={<Trash2 />}
+                      label="Delete collection"
+                      onClick={() => setIsDeleteDialogOpen(true)}
+                      variant="secondary"
+                    />
+                  )}
+                </>
+              }
+              className="pb-0"
+            />
+          </div>
+          
+          {/* Hero Header with Cover Image */}
+          <div className="relative h-64 w-full rounded-lg overflow-hidden mb-6 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20">
+            {collection.imageUrl ? (
+              <img 
+                src={collection.imageUrl} 
+                alt={collection.name}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center"
+                style={{ backgroundColor: collection.color || '#3b82f6' }}
+              >
+                <FolderOpen className="h-24 w-24 text-white/30" />
+              </div>
+            )}
+            
+            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent"></div>
+            
+            <div className="absolute bottom-0 left-0 right-0 p-0 pb-4 text-white">
+              <div className="flex flex-col gap-1 pl-4">
+                <h1 className="text-2xl font-bold text-white">{collection.name}</h1>
+                <span className="text-white/80 font-medium">{books.length} {books.length === 1 ? 'book' : 'books'}</span>
               </div>
             </div>
+          </div>
           
-            {/* Tabs */}
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+          {/* Tabs */}
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
               <TabsList>
                 <TabsTrigger value="books">Books</TabsTrigger>
                 <TabsTrigger value="info">Collection Info</TabsTrigger>
@@ -526,19 +555,19 @@ const CollectionDetailPage: React.FC = () => {
                 
                 {/* Books display */}
                 {filteredBooks.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-12 border-2 border-dashed border-muted-foreground/20 rounded-lg">
-                    <BookOpen className="h-16 w-16 text-muted-foreground/40 mb-4" />
-                    <h2 className="text-xl font-medium mb-2">No Books Yet</h2>
-                    <p className="text-muted-foreground text-center max-w-md mb-6">
+                  <div className="flex flex-col items-center justify-center py-16 border-2 border-dashed border-muted-foreground/20 rounded-lg bg-muted/5">
+                    <BookOpen className="h-20 w-20 text-muted-foreground/30 mb-6" />
+                    <h2 className="text-2xl font-medium mb-3">No Books Yet</h2>
+                    <p className="text-muted-foreground text-center max-w-md mb-8">
                       {searchQuery ? 'Try a different search term' : 'This collection doesn\'t have any books yet. Add books to get started.'}
                     </p>
-                    <Button onClick={() => setIsAddBooksDialogOpen(true)}>
-                      <Plus className="h-4 w-4 mr-2" />
+                    <Button size="lg" onClick={() => setIsAddBooksDialogOpen(true)}>
+                      <Plus className="h-5 w-5 mr-2" />
                       Add Books
                     </Button>
                   </div>
                 ) : (
-                  <div className={viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6' : 'space-y-2'}>
+                  <div className={viewMode === 'grid' ? 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 md:gap-6' : 'space-y-2 divide-y divide-border'}>
                     {filteredBooks.map(book => 
                       viewMode === 'grid' 
                         ? renderBookCard(book) 
@@ -597,7 +626,6 @@ const CollectionDetailPage: React.FC = () => {
                 </Card>
               </TabsContent>
             </Tabs>
-          </PageHeader>
           
           {/* Edit Collection Dialog */}
           <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
@@ -810,18 +838,25 @@ const CollectionDetailPage: React.FC = () => {
                       {/* Status badges */}
                       <div className="mt-4 flex flex-col gap-2 w-full">
                         <Select
-                          value={selectedBookForDetails.status || ''}
+                          value={selectedBookForDetails.status || 'not-set'}
                           onValueChange={(value) => {
-                            setSelectedBookForDetails(prev => 
-                              prev ? { ...prev, status: value as any } : null
-                            );
+                            setSelectedBookForDetails(prev => {
+                              if (!prev) return null;
+                              return { 
+                                ...prev, 
+                                status: value === 'not-set' ? undefined : 
+                                       (value === 'reading' || value === 'completed' || 
+                                        value === 'want-to-read' || value === 'dnf' || 
+                                        value === 'on-hold') ? value : undefined
+                              };
+                            });
                           }}
                         >
                           <SelectTrigger>
                             <SelectValue placeholder="Reading Status" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="">Not Set</SelectItem>
+                            <SelectItem value="not-set">Not Set</SelectItem>
                             <SelectItem value="reading">Currently Reading</SelectItem>
                             <SelectItem value="completed">Completed</SelectItem>
                             <SelectItem value="want-to-read">Want to Read</SelectItem>
@@ -832,18 +867,22 @@ const CollectionDetailPage: React.FC = () => {
                         
                         {/* Rating */}
                         <Select
-                          value={selectedBookForDetails.rating?.toString() || ''}
+                          value={selectedBookForDetails.rating?.toString() || 'no-rating'}
                           onValueChange={(value) => {
-                            setSelectedBookForDetails(prev => 
-                              prev ? { ...prev, rating: parseInt(value) || undefined } : null
-                            );
+                            setSelectedBookForDetails(prev => {
+                              if (!prev) return null;
+                              return { 
+                                ...prev, 
+                                rating: value === 'no-rating' ? undefined : parseInt(value) 
+                              };
+                            });
                           }}
                         >
                           <SelectTrigger>
                             <SelectValue placeholder="Rating" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="">No Rating</SelectItem>
+                            <SelectItem value="no-rating">No Rating</SelectItem>
                             <SelectItem value="1">★ - Poor</SelectItem>
                             <SelectItem value="2">★★ - Fair</SelectItem>
                             <SelectItem value="3">★★★ - Good</SelectItem>
