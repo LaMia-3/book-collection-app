@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from 'react';
+import { BookDetails } from '@/components/BookDetails';
 import { Series } from '@/types/series';
 import { Book } from '@/types/book';
 import { Button } from '@/components/ui/button';
@@ -16,17 +17,24 @@ interface SeriesBooksTabProps {
   series: Series;
   books: Book[];
   allBooks: Book[];
+  onUpdateBook?: (updatedBook: Book) => void;
 }
 
 /**
  * Tab for managing books in a series
  */
-export const SeriesBooksTab = ({ series, books, allBooks }: SeriesBooksTabProps) => {
+export const SeriesBooksTab = ({ series, books, allBooks, onUpdateBook }: SeriesBooksTabProps) => {
   const { toast } = useToast();
   const [readingOrder, setReadingOrder] = useState<'publication' | 'chronological' | 'custom'>(
     series.readingOrder || 'publication'
   );
   const [isAddingBooks, setIsAddingBooks] = useState(false);
+  const [selectedBook, setSelectedBook] = useState<Book | null>(null);
+  
+  // Handle book click to show details
+  const handleBookClick = (book: Book) => {
+    setSelectedBook(book);
+  };
   
   // For the add books functionality
   // Filter out books that are already in any series
@@ -232,9 +240,16 @@ export const SeriesBooksTab = ({ series, books, allBooks }: SeriesBooksTabProps)
         });
       }
     }
-  }
-;
+  };
   
+  // Handle book update
+  const handleBookUpdate = (updatedBook: Book) => {
+    if (onUpdateBook) {
+      onUpdateBook(updatedBook);
+    }
+    setSelectedBook(null);
+  };
+
   return (
     <div className="space-y-6">
       {!isAddingBooks ? (
@@ -290,7 +305,8 @@ export const SeriesBooksTab = ({ series, books, allBooks }: SeriesBooksTabProps)
                           <div
                             ref={provided.innerRef}
                             {...provided.draggableProps}
-                            className="flex items-center border rounded-md p-3 bg-background"
+                            className="flex items-center border rounded-md p-3 bg-background cursor-pointer"
+                            onClick={() => handleBookClick(book)}
                           >
                             <div 
                               {...provided.dragHandleProps}
@@ -318,7 +334,10 @@ export const SeriesBooksTab = ({ series, books, allBooks }: SeriesBooksTabProps)
                                 variant="ghost" 
                                 size="sm"
                                 className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                onClick={() => handleRemoveBook(book.id)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleRemoveBook(book.id);
+                                }}
                               >
                                 Remove
                               </Button>
@@ -337,7 +356,8 @@ export const SeriesBooksTab = ({ series, books, allBooks }: SeriesBooksTabProps)
               {orderedBooks.map((book) => (
                 <div
                   key={book.id}
-                  className="flex items-center border rounded-md p-3 bg-background"
+                  className="flex items-center border rounded-md p-3 bg-background cursor-pointer"
+                  onClick={() => handleBookClick(book)}
                 >
                   <div className="mr-3 text-muted-foreground">
                     {book.status === 'completed' ? (
@@ -366,7 +386,10 @@ export const SeriesBooksTab = ({ series, books, allBooks }: SeriesBooksTabProps)
                       variant="ghost" 
                       size="sm"
                       className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                      onClick={() => handleRemoveBook(book.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRemoveBook(book.id);
+                      }}
                     >
                       Remove
                     </Button>
@@ -442,6 +465,15 @@ export const SeriesBooksTab = ({ series, books, allBooks }: SeriesBooksTabProps)
             </>
           )}
         </div>
+      )}
+      
+      {/* Book Details Modal */}
+      {selectedBook && (
+        <BookDetails
+          book={selectedBook}
+          onUpdate={handleBookUpdate}
+          onClose={() => setSelectedBook(null)}
+        />
       )}
     </div>
   );

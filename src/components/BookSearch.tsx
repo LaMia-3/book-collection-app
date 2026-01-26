@@ -19,9 +19,10 @@ import { enhancedStorageService } from "@/services/storage/EnhancedStorageServic
 interface BookSearchProps {
   onAddBook: (book: Book) => void;
   existingBooks: Book[];
+  maxResultsHeight?: string;
 }
 
-export const BookSearch = ({ onAddBook, existingBooks }: BookSearchProps) => {
+export const BookSearch = ({ onAddBook, existingBooks, maxResultsHeight }: BookSearchProps) => {
   const { settings } = useSettings();
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<BookSearchItem[]>([]);
@@ -253,7 +254,7 @@ export const BookSearch = ({ onAddBook, existingBooks }: BookSearchProps) => {
         author: seriesData.author || book.author,
         books: [book.id],  // Include the book ID here
         coverImage: seriesData.coverImage || book.thumbnail,
-        genre: seriesData.genre || (book.genre ? [book.genre] : []),
+        genre: seriesData.genre || (book.genre ? (typeof book.genre === 'string' ? book.genre.split(',').map(g => g.trim()) : book.genre) : []),
         status: seriesData.status || 'ongoing',
         readingOrder: 'publication',
         totalBooks: seriesData.totalBooks,
@@ -359,9 +360,12 @@ export const BookSearch = ({ onAddBook, existingBooks }: BookSearchProps) => {
       {searchResults.length > 0 && (
         <div className="space-y-3">
           <h3 className="text-lg font-serif text-foreground">
-            Search Results
+            Search Results ({searchResults.length})
           </h3>
-          <div className="space-y-2">
+          <div 
+            className="space-y-2 overflow-y-auto pr-2"
+            style={{ maxHeight: maxResultsHeight || '400px' }}
+          >
             {searchResults.map((book) => (
               <Card key={book.id} className="relative overflow-hidden">
                 <CardContent className="p-4 flex items-start gap-4">

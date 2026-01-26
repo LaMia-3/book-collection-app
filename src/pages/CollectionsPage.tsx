@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { Settings } from '@/components/Settings';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, Filter, SortAsc, SortDesc, Grid, List, Trash2, Edit, Image, ChevronLeft } from 'lucide-react';
+import { Plus, Filter, SortAsc, SortDesc, Grid, List, Trash2, Edit, Image, ChevronLeft, Search, X, Grid3X3 } from 'lucide-react';
+import { SearchInput } from '@/components/SearchInput';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
@@ -12,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Collection } from '@/types/collection';
 import { collectionRepository } from '@/repositories/CollectionRepository';
 import { useToast } from '@/components/ui/use-toast';
-import { PageHeader, HeaderActionButton } from '@/components/ui/page-header';
+import { AppLayout } from '@/components/layout/AppLayout';
 
 const CollectionsPage: React.FC = () => {
   const [collections, setCollections] = useState<Collection[]>([]);
@@ -25,6 +27,7 @@ const CollectionsPage: React.FC = () => {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedCollection, setSelectedCollection] = useState<Collection | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [showSettings, setShowSettings] = useState(false);
   
   // Form state for creating/editing collections
   const [formData, setFormData] = useState({
@@ -295,10 +298,12 @@ const CollectionsPage: React.FC = () => {
             <Button 
               variant="ghost" 
               size="icon"
+              className="text-destructive hover:text-destructive hover:bg-destructive/10"
               onClick={(e) => {
                 e.stopPropagation();
                 openDeleteDialog(collection);
               }}
+              title="Delete collection"
             >
               <Trash2 size={16} />
             </Button>
@@ -377,94 +382,99 @@ const CollectionsPage: React.FC = () => {
   };
   
   return (
-    <div className="container mx-auto">
-      <PageHeader
-        title="My Collections"
-        subtitle="Organize your books into custom collections"
-        backTo="/"
-        backAriaLabel="Back to Library"
-        actions={
-          <Button onClick={() => setIsCreateDialogOpen(true)}>
-            <Plus size={16} className="mr-2" />
-            New Collection
-          </Button>
-        }
-      >
-        <div className="flex flex-col md:flex-row gap-4 mb-6 mt-4">
+    <AppLayout
+      onAddClick={() => setIsCreateDialogOpen(true)}
+      onSettingsClick={() => setShowSettings(true)}
+      addButtonLabel="Add Collection"
+      searchComponent={
+        <div className="flex items-center gap-2 w-full">
+          {/* Search input */}
           <div className="relative flex-grow">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
             <Input
-              placeholder="Search collections..."
-              className="pl-10"
+              type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search collections..."
+              className="pl-10 h-10 text-sm w-full"
             />
+            {searchQuery && (
+              <button
+                type="button"
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 flex items-center justify-center text-muted-foreground hover:text-foreground"
+                onClick={() => setSearchQuery('')}
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
           </div>
           
-          <div className="flex gap-2">
-            <Select
-              value={sortOrder}
-              onValueChange={(value) => setSortOrder(value as 'alphabetical' | 'recent')}
+          {/* Sort dropdown */}
+          <Select
+            value={sortOrder}
+            onValueChange={(value) => setSortOrder(value as 'alphabetical' | 'recent')}
+          >
+            <SelectTrigger className="w-[140px] h-10">
+              <SelectValue placeholder="Sort by" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="alphabetical">Alphabetical</SelectItem>
+              <SelectItem value="recent">Recently Updated</SelectItem>
+            </SelectContent>
+          </Select>
+          
+          {/* View Toggle Buttons */}
+          <div className="flex">
+            <Button
+              variant={viewMode === 'grid' ? 'default' : 'outline'}
+              size="icon"
+              onClick={() => setViewMode('grid')}
+              className="rounded-r-none h-10 w-10"
+              title="Grid view"
             >
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Sort by" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="alphabetical">Alphabetical</SelectItem>
-                <SelectItem value="recent">Recently Updated</SelectItem>
-              </SelectContent>
-            </Select>
-            
-            <div className="flex border rounded-md">
-              <Button
-                variant={viewMode === 'grid' ? 'default' : 'ghost'}
-                size="icon"
-                onClick={() => setViewMode('grid')}
-                className="rounded-r-none"
-              >
-                <Grid size={18} />
-              </Button>
-              <Button
-                variant={viewMode === 'list' ? 'default' : 'ghost'}
-                size="icon"
-                onClick={() => setViewMode('list')}
-                className="rounded-l-none"
-              >
-                <List size={18} />
-              </Button>
-            </div>
+              <Grid3X3 />
+            </Button>
+            <Button
+              variant={viewMode === 'list' ? 'default' : 'outline'}
+              size="icon"
+              onClick={() => setViewMode('list')}
+              className="rounded-l-none h-10 w-10"
+              title="List view"
+            >
+              <List />
+            </Button>
           </div>
         </div>
-        
-        <div className="py-4">
-          {isLoading ? (
-            <div className="flex justify-center items-center h-64">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-            </div>
-          ) : filteredCollections.length === 0 ? (
-            <div className="text-center py-12">
-              <h3 className="text-lg font-medium text-gray-600 mb-2">No collections found</h3>
-              <p className="text-gray-500">
-                {searchQuery ? 'Try a different search term' : 'Create your first collection to get started'}
-              </p>
-              {!searchQuery && (
-                <Button className="mt-4" onClick={() => setIsCreateDialogOpen(true)}>
-                  <Plus size={16} className="mr-2" />
-                  Create Collection
-                </Button>
-              )}
-            </div>
-          ) : (
-            <div className={viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6' : 'space-y-2'}>
-              {filteredCollections.map(collection => 
-                viewMode === 'grid' 
-                  ? renderCollectionCard(collection) 
-                  : renderCollectionRow(collection)
-              )}
-            </div>
-          )}
-        </div>
-      </PageHeader>
+      }
+    >
+      <div className="py-4">
+        {isLoading ? (
+          <div className="flex justify-center items-center h-64">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+          </div>
+        ) : filteredCollections.length === 0 ? (
+          <div className="text-center py-12">
+            <h3 className="text-lg font-medium text-gray-600 mb-2">No collections found</h3>
+            <p className="text-gray-500">
+              {searchQuery ? 'Try a different search term' : 'Create your first collection to get started'}
+            </p>
+            {!searchQuery && (
+              <Button className="mt-4" onClick={() => setIsCreateDialogOpen(true)}>
+                <Plus size={16} className="mr-2" />
+                Create Collection
+              </Button>
+            )}
+          </div>
+        ) : (
+          <div className={viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6' : 'space-y-2'}>
+            {filteredCollections.map(collection => 
+              viewMode === 'grid' 
+                ? renderCollectionCard(collection) 
+                : renderCollectionRow(collection)
+            )}
+          </div>
+        )}
+      </div>
       
       {/* Create Collection Dialog */}
       <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
@@ -642,7 +652,50 @@ const CollectionsPage: React.FC = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+      
+      {/* Settings Modal */}
+      <Settings
+        isOpen={showSettings}
+        onClose={() => setShowSettings(false)}
+        books={[]}
+        onDeleteLibrary={async () => {
+          try {
+            // Import required services
+            const { enhancedStorageService } = await import('@/services/storage/EnhancedStorageService');
+            
+            // Clear collections data
+            try {
+              // Get all collections and delete them one by one
+              const allCollections = await collectionRepository.getAll();
+              for (const collection of allCollections) {
+                await collectionRepository.delete(collection.id);
+              }
+              
+              // Update UI
+              setCollections([]);
+              setFilteredCollections([]);
+              
+              toast({
+                title: "Collections Deleted",
+                description: "All collections have been successfully deleted."
+              });
+            } catch (error) {
+              console.error('Error clearing collections:', error);
+              toast({
+                title: "Error",
+                description: `Failed to delete collections: ${error instanceof Error ? error.message : String(error)}`,
+                variant: "destructive"
+              });
+            }
+            
+            return Promise.resolve();
+          } catch (error) {
+            console.error('Error deleting collections:', error);
+            return Promise.reject(error);
+          }
+        }}
+      />
+    </AppLayout>
   );
 };
 

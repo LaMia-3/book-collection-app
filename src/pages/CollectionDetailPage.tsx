@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { BookDetails } from "@/components/BookDetails";
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Edit, Trash2, Plus, Search, Filter, SortAsc, SortDesc, Grid, List, BookOpen, Pencil, FolderOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -28,6 +29,7 @@ const CollectionDetailPage: React.FC = () => {
   const [books, setBooks] = useState<Book[]>([]);
   const [filteredBooks, setFilteredBooks] = useState<Book[]>([]);
   const [allBooks, setAllBooks] = useState<Book[]>([]);
+  const [selectedBook, setSelectedBook] = useState<Book | null>(null);
   
   // UI state
   const [isLoading, setIsLoading] = useState(true);
@@ -808,219 +810,14 @@ const CollectionDetailPage: React.FC = () => {
             </DialogContent>
           </Dialog>
           
-          {/* Book Details Dialog */}
-          <Dialog open={isBookDetailsOpen} onOpenChange={setIsBookDetailsOpen}>
-            <DialogContent className="max-w-3xl">
-              {selectedBookForDetails && (
-                <>
-                  <DialogHeader>
-                    <DialogTitle>Book Details</DialogTitle>
-                  </DialogHeader>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 py-4">
-                    {/* Left column - Cover image */}
-                    <div className="flex flex-col items-center">
-                      {selectedBookForDetails.thumbnail ? (
-                        <img 
-                          src={selectedBookForDetails.thumbnail} 
-                          alt={`${selectedBookForDetails.title} cover`}
-                          className="w-full max-w-[200px] object-cover rounded-md shadow-md"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).src = '/placeholder.svg';
-                          }}
-                        />
-                      ) : (
-                        <div className="w-full h-[280px] max-w-[200px] bg-muted flex items-center justify-center rounded-md">
-                          <span className="text-muted-foreground">No Cover</span>
-                        </div>
-                      )}
-                      
-                      {/* Status badges */}
-                      <div className="mt-4 flex flex-col gap-2 w-full">
-                        <Select
-                          value={selectedBookForDetails.status || 'not-set'}
-                          onValueChange={(value) => {
-                            setSelectedBookForDetails(prev => {
-                              if (!prev) return null;
-                              return { 
-                                ...prev, 
-                                status: value === 'not-set' ? undefined : 
-                                       (value === 'reading' || value === 'completed' || 
-                                        value === 'want-to-read' || value === 'dnf' || 
-                                        value === 'on-hold') ? value : undefined
-                              };
-                            });
-                          }}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Reading Status" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="not-set">Not Set</SelectItem>
-                            <SelectItem value="reading">Currently Reading</SelectItem>
-                            <SelectItem value="completed">Completed</SelectItem>
-                            <SelectItem value="want-to-read">Want to Read</SelectItem>
-                            <SelectItem value="dnf">Did Not Finish</SelectItem>
-                            <SelectItem value="on-hold">On Hold</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        
-                        {/* Rating */}
-                        <Select
-                          value={selectedBookForDetails.rating?.toString() || 'no-rating'}
-                          onValueChange={(value) => {
-                            setSelectedBookForDetails(prev => {
-                              if (!prev) return null;
-                              return { 
-                                ...prev, 
-                                rating: value === 'no-rating' ? undefined : parseInt(value) 
-                              };
-                            });
-                          }}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Rating" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="no-rating">No Rating</SelectItem>
-                            <SelectItem value="1">★ - Poor</SelectItem>
-                            <SelectItem value="2">★★ - Fair</SelectItem>
-                            <SelectItem value="3">★★★ - Good</SelectItem>
-                            <SelectItem value="4">★★★★ - Very Good</SelectItem>
-                            <SelectItem value="5">★★★★★ - Excellent</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                    
-                    {/* Right column - Book details */}
-                    <div className="md:col-span-2 space-y-4">
-                      {/* Title */}
-                      <div>
-                        <Label htmlFor="book-title">Title</Label>
-                        <Input 
-                          id="book-title" 
-                          value={selectedBookForDetails.title} 
-                          onChange={(e) => {
-                            setSelectedBookForDetails(prev => 
-                              prev ? { ...prev, title: e.target.value } : null
-                            );
-                          }}
-                        />
-                      </div>
-                      
-                      {/* Author */}
-                      <div>
-                        <Label htmlFor="book-author">Author</Label>
-                        <Input 
-                          id="book-author" 
-                          value={selectedBookForDetails.author} 
-                          onChange={(e) => {
-                            setSelectedBookForDetails(prev => 
-                              prev ? { ...prev, author: e.target.value } : null
-                            );
-                          }}
-                        />
-                      </div>
-                      
-                      {/* Series info */}
-                      <div>
-                        <Label>Series</Label>
-                        {selectedBookForDetails.isPartOfSeries ? (
-                          <div className="flex items-center gap-2">
-                            <Badge>
-                              {getSeriesForBook(selectedBookForDetails)?.name || 'Unknown Series'}
-                            </Badge>
-                            <Button 
-                              variant="ghost" 
-                              size="sm"
-                              onClick={() => {
-                                if (selectedBookForDetails.seriesId) {
-                                  navigate(`/series/${selectedBookForDetails.seriesId}`);
-                                }
-                              }}
-                            >
-                              View Series
-                            </Button>
-                          </div>
-                        ) : (
-                          <p className="text-sm text-muted-foreground">Not part of a series</p>
-                        )}
-                      </div>
-                      
-                      {/* Description */}
-                      <div>
-                        <Label htmlFor="book-description">Description</Label>
-                        <Textarea 
-                          id="book-description" 
-                          value={selectedBookForDetails.description || ''} 
-                          onChange={(e) => {
-                            setSelectedBookForDetails(prev => 
-                              prev ? { ...prev, description: e.target.value } : null
-                            );
-                          }}
-                          className="h-24"
-                        />
-                      </div>
-                      
-                      {/* Notes */}
-                      <div>
-                        <Label htmlFor="book-notes">Your Notes</Label>
-                        <Textarea 
-                          id="book-notes" 
-                          value={selectedBookForDetails.notes || ''} 
-                          onChange={(e) => {
-                            setSelectedBookForDetails(prev => 
-                              prev ? { ...prev, notes: e.target.value } : null
-                            );
-                          }}
-                          className="h-24"
-                          placeholder="Add your personal notes about this book..."
-                        />
-                      </div>
-                      
-                      {/* Page count */}
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <Label htmlFor="book-pages">Page Count</Label>
-                          <Input 
-                            id="book-pages" 
-                            type="number" 
-                            value={selectedBookForDetails.pageCount?.toString() || ''} 
-                            onChange={(e) => {
-                              setSelectedBookForDetails(prev => 
-                                prev ? { ...prev, pageCount: parseInt(e.target.value) || undefined } : null
-                              );
-                            }}
-                          />
-                        </div>
-                        
-                        {/* Published date */}
-                        <div>
-                          <Label htmlFor="book-published">Published Date</Label>
-                          <Input 
-                            id="book-published" 
-                            type="date" 
-                            value={selectedBookForDetails.publishedDate ? new Date(selectedBookForDetails.publishedDate).toISOString().split('T')[0] : ''} 
-                            onChange={(e) => {
-                              setSelectedBookForDetails(prev => 
-                                prev ? { ...prev, publishedDate: e.target.value } : null
-                              );
-                            }}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <DialogFooter>
-                    <Button variant="outline" onClick={() => setIsBookDetailsOpen(false)}>Cancel</Button>
-                    <Button onClick={() => selectedBookForDetails && handleUpdateBook(selectedBookForDetails)}>Save Changes</Button>
-                  </DialogFooter>
-                </>
-              )}
-            </DialogContent>
-          </Dialog>
+          {/* Book Details */}
+          {selectedBookForDetails && (
+            <BookDetails
+              book={selectedBookForDetails}
+              onUpdate={handleUpdateBook}
+              onClose={() => setSelectedBookForDetails(null)}
+            />
+          )}
         </>
       ) : (
         <div className="text-center py-12">

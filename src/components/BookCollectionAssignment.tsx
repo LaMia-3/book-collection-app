@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Check, Plus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -19,6 +20,7 @@ const BookCollectionAssignment: React.FC<BookCollectionAssignmentProps> = ({
   book,
   onCollectionsUpdated
 }) => {
+  const navigate = useNavigate();
   const [collections, setCollections] = useState<Collection[]>([]);
   const [bookCollections, setBookCollections] = useState<Collection[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -180,10 +182,14 @@ const BookCollectionAssignment: React.FC<BookCollectionAssignmentProps> = ({
             {bookCollections.map(collection => (
               <div 
                 key={collection.id}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-medium shadow-sm"
+                className="flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-medium shadow-sm cursor-pointer hover:opacity-90"
                 style={{ 
                   backgroundColor: collection.color || '#3b82f6',
                   color: 'white'
+                }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigate(`/collections/${collection.id}`);
                 }}
               >
                 {collection.name}
@@ -197,6 +203,7 @@ const BookCollectionAssignment: React.FC<BookCollectionAssignmentProps> = ({
         <Button 
           variant="outline" 
           size="sm"
+          className="w-[180px]"
           onClick={() => setIsDialogOpen(true)}
         >
           Manage Collections

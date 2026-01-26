@@ -1,18 +1,13 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { 
-  Collapsible, 
-  CollapsibleContent, 
-  CollapsibleTrigger 
-} from '@/components/ui/collapsible';
 import { 
   DropdownMenu, 
   DropdownMenuContent, 
   DropdownMenuItem,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
-import { Input } from '@/components/ui/input';
+import { SearchInput } from '@/components/SearchInput';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { 
@@ -21,7 +16,9 @@ import {
   ChevronDown, 
   CircleSlash,
   BookOpen,
-  CircleDot
+  CircleDot,
+  BookMarked,
+  Bell
 } from 'lucide-react';
 import { createLogger } from '@/utils/loggingUtils';
 
@@ -33,6 +30,8 @@ export interface SeriesFilter {
   genres?: string[];
   statuses?: ('ongoing' | 'completed' | 'cancelled')[];
   authors?: string[];
+  sortBy?: 'alphabetical' | 'recent';
+  tracked?: boolean;
 }
 
 interface SeriesFilterPanelProps {
@@ -41,6 +40,7 @@ interface SeriesFilterPanelProps {
   genres: string[];
   authors: string[];
   onClearFilters: () => void;
+  hideSearchInput?: boolean;
 }
 
 export const SeriesFilterPanel = ({
@@ -48,62 +48,35 @@ export const SeriesFilterPanel = ({
   onFilterChange,
   genres,
   authors,
-  onClearFilters
+  onClearFilters,
+  hideSearchInput = false
 }: SeriesFilterPanelProps) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState(filter.search || '');
-
-  // Log component initialization with available genre options
-  log.debug('SeriesFilterPanel initialized', { 
-    availableGenres: genres.length,
-    initialGenreFilters: filter.genres?.length || 0
-  });
-  
-  log.trace('Available genres for filtering', { genres });
-
   // Count active filters
   const activeFilterCount = 
     (filter.search ? 1 : 0) + 
     (filter.genres?.length || 0) + 
     (filter.statuses?.length || 0) + 
-    (filter.authors?.length || 0);
+    (filter.authors?.length || 0) + 
+    (filter.tracked ? 1 : 0);
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    log.debug('Search query submitted', { query: searchQuery });
-    onFilterChange({ ...filter, search: searchQuery });
+  // Update search results as user types
+  const handleSearchChange = (query: string) => {
+    log.debug('Search query updated', { query });
+    onFilterChange({ ...filter, search: query || undefined });
   };
 
   const toggleGenre = (genre: string) => {
     const currentGenres = filter.genres || [];
     const isRemoving = currentGenres.includes(genre);
     
-    log.debug('Toggling genre filter', {
-      genre,
-      action: isRemoving ? 'remove' : 'add',
-      currentGenresCount: currentGenres.length
-    });
-    
     if (isRemoving) {
       const newGenres = currentGenres.filter(g => g !== genre);
-      log.trace('Removing genre from filter', { 
-        genre, 
-        remainingGenres: newGenres,
-        count: newGenres.length 
-      });
-      
       onFilterChange({
         ...filter,
         genres: newGenres
       });
     } else {
       const newGenres = [...currentGenres, genre];
-      log.trace('Adding genre to filter', { 
-        genre, 
-        updatedGenres: newGenres,
-        count: newGenres.length 
-      });
-      
       onFilterChange({
         ...filter,
         genres: newGenres
@@ -166,187 +139,160 @@ export const SeriesFilterPanel = ({
 
   return (
     <div className="w-full mb-6">
-      {/* Search bar - Always visible */}
-      <div className="flex items-center gap-2 w-full">
-        <div className="relative flex-grow">
-          <form onSubmit={handleSearch} className="flex w-full">
-            <Input
+      {/* Search bar - Only shown if not hidden */}
+      {!hideSearchInput && (
+        <div className="flex items-center gap-2 w-full mb-4">
+          <div className="relative flex-grow">
+            <SearchInput
               placeholder="Search series..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pr-10"
+              initialValue={filter.search || ''}
+              onSearch={handleSearchChange}
+              className="w-full"
             />
-            {searchQuery && (
-              <button
-                type="button"
-                className="absolute right-10 top-0 bottom-0 flex items-center justify-center text-muted-foreground hover:text-foreground"
-                onClick={() => {
-                  setSearchQuery('');
-                  if (filter.search) {
-                    onFilterChange({ ...filter, search: undefined });
-                  }
-                }}
-              >
-                <X className="h-4 w-4" />
-              </button>
-            )}
-            <Button type="submit" className="ml-2">
-              Search
-            </Button>
-          </form>
+          </div>
         </div>
-        
-        <div className="relative">
-          <Button 
-            variant="outline" 
-            className="gap-1"
-            onClick={() => setIsOpen(!isOpen)}
-          >
-            <Filter className="h-4 w-4 mr-1" />
-            Filters
-            {activeFilterCount > 0 && (
-              <Badge
-                variant="secondary"
-                className="rounded-full h-5 min-w-[20px] p-0 flex items-center justify-center text-xs ml-1"
-              >
-                {activeFilterCount}
-              </Badge>
-            )}
-            <ChevronDown className="h-3.5 w-3.5 ml-1" />
-          </Button>
-          
-          {activeFilterCount > 0 && (
+      )}
+      
+      {/* Filter options */}
+      <div className="space-y-4 border rounded-md p-4 bg-card shadow-lg absolute z-50 top-full right-0 w-80 mt-2">
+        {/* Clear filters button */}
+        {activeFilterCount > 0 && (
+          <div className="flex justify-end">
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => {
-                log.info('Clearing all filters', {
-                  searchFilter: filter.search,
-                  genreFilters: filter.genres,
-                  statusFilters: filter.statuses,
-                  authorFilters: filter.authors
-                });
-                onClearFilters();
-              }}
-              className="ml-2 text-xs h-8"
+              onClick={onClearFilters}
+              className="text-xs h-8"
             >
               <CircleSlash className="h-3.5 w-3.5 mr-1" />
-              Clear
+              Clear all filters
             </Button>
+          </div>
+        )}
+        
+        {/* Genre Filter */}
+        <div>
+          <Label className="text-sm font-medium mb-2 block">Genre</Label>
+          <div className="flex flex-wrap gap-2 mt-1">
+            {genres.map((genre) => (
+              <Badge
+                key={genre}
+                variant={filter.genres?.includes(genre) ? "default" : "outline"}
+                className="cursor-pointer"
+                onClick={() => toggleGenre(genre)}
+              >
+                {genre}
+                {filter.genres?.includes(genre) && (
+                  <X className="h-3 w-3 ml-1" />
+                )}
+              </Badge>
+            ))}
+            {genres.length === 0 && (
+              <span className="text-sm text-muted-foreground">No genres available</span>
+            )}
+          </div>
+        </div>
+        
+        <Separator />
+        
+        {/* Tracked Series Filter */}
+        <div>
+          <Label className="text-sm font-medium mb-2 block">Tracking</Label>
+          <div className="flex items-center gap-2 mt-1">
+            <label className="flex items-center gap-2 cursor-pointer hover:text-accent-foreground">
+              <input 
+                type="checkbox" 
+                className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary" 
+                checked={filter.tracked} 
+                onChange={(e) => onFilterChange({...filter, tracked: e.target.checked})}
+              />
+              <BookMarked className="h-4 w-4" />
+              <span>Show tracked series only</span>
+            </label>
+          </div>
+        </div>
+        
+        <Separator />
+        
+        {/* Status Filter */}
+        <div>
+          <Label className="text-sm font-medium mb-2 block">Status</Label>
+          <div className="flex flex-wrap gap-2 mt-1">
+            {['ongoing', 'completed', 'cancelled'].map((status) => (
+              <Badge
+                key={status}
+                variant={filter.statuses?.includes(status as any) ? "default" : "outline"}
+                className={`cursor-pointer ${
+                  status === 'ongoing' ? 'border-blue-500/30 hover:border-blue-500/50' : 
+                  status === 'completed' ? 'border-green-500/30 hover:border-green-500/50' : 
+                  'border-orange-500/30 hover:border-orange-500/50'
+                }`}
+                onClick={() => toggleStatus(status as any)}
+              >
+                {getStatusIcon(status)}
+                <span className="ml-1">{getStatusLabel(status)}</span>
+              </Badge>
+            ))}
+          </div>
+        </div>
+        
+        <Separator />
+        
+        {/* Author Filter */}
+        <div>
+          <Label className="text-sm font-medium mb-2 block">Author</Label>
+          {authors.length > 0 ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="w-full justify-between">
+                  <span>
+                    {filter.authors?.length 
+                      ? `${filter.authors.length} selected` 
+                      : 'Select authors'}
+                  </span>
+                  <ChevronDown className="h-4 w-4 ml-2" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="w-56 max-h-[200px] overflow-auto">
+                {authors.map(author => (
+                  <DropdownMenuItem 
+                    key={author}
+                    className="flex items-center justify-between cursor-pointer"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      toggleAuthor(author);
+                    }}
+                  >
+                    {author}
+                    {filter.authors?.includes(author) && (
+                      <BookOpen className="h-4 w-4 ml-2" />
+                    )}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <div className="text-sm text-muted-foreground">
+              No authors available
+            </div>
           )}
           
-          {/* Expandable filters panel - Positioned as overlay */}
-          {isOpen && (
-            <div className="absolute z-50 top-full right-0 w-80 mt-2 p-4 border rounded-md shadow-md bg-card dark:bg-card">
-            <div className="space-y-4">
-              {/* Genre Filter */}
-              <div>
-                <Label className="text-sm font-medium mb-2 block">Genre</Label>
-                <div className="flex flex-wrap gap-2 mt-1">
-                  {genres.map((genre) => (
-                    <Badge
-                      key={genre}
-                      variant={filter.genres?.includes(genre) ? "default" : "outline"}
-                      className="cursor-pointer"
-                      onClick={() => toggleGenre(genre)}
-                    >
-                      {genre}
-                      {filter.genres?.includes(genre) && (
-                        <X className="h-3 w-3 ml-1" />
-                      )}
-                    </Badge>
-                  ))}
-                  {genres.length === 0 && (
-                    <span className="text-sm text-muted-foreground">No genres available</span>
-                  )}
-                </div>
-              </div>
-              
-              <Separator />
-              
-              {/* Status Filter */}
-              <div>
-                <Label className="text-sm font-medium mb-2 block">Status</Label>
-                <div className="flex flex-wrap gap-2 mt-1">
-                  {['ongoing', 'completed', 'cancelled'].map((status) => (
-                    <Badge
-                      key={status}
-                      variant={filter.statuses?.includes(status as any) ? "default" : "outline"}
-                      className={`cursor-pointer ${
-                        status === 'ongoing' ? 'border-blue-500/30 hover:border-blue-500/50' : 
-                        status === 'completed' ? 'border-green-500/30 hover:border-green-500/50' : 
-                        'border-orange-500/30 hover:border-orange-500/50'
-                      }`}
-                      onClick={() => toggleStatus(status as any)}
-                    >
-                      {getStatusIcon(status)}
-                      <span className="ml-1">{getStatusLabel(status)}</span>
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-              
-              <Separator />
-              
-              {/* Author Filter */}
-              <div>
-                <Label className="text-sm font-medium mb-2 block">Author</Label>
-                {authors.length > 0 ? (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="outline" className="w-full justify-between">
-                        <span>
-                          {filter.authors?.length 
-                            ? `${filter.authors.length} selected` 
-                            : 'Select authors'}
-                        </span>
-                        <ChevronDown className="h-4 w-4 ml-2" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent className="w-56 max-h-[200px] overflow-auto">
-                      {authors.map(author => (
-                        <DropdownMenuItem 
-                          key={author}
-                          className="flex items-center justify-between cursor-pointer"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            toggleAuthor(author);
-                          }}
-                        >
-                          {author}
-                          {filter.authors?.includes(author) && (
-                            <BookOpen className="h-4 w-4 ml-2" />
-                          )}
-                        </DropdownMenuItem>
-                      ))}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                ) : (
-                  <div className="text-sm text-muted-foreground">
-                    No authors available
-                  </div>
-                )}
-                
-                {/* Display selected authors */}
-                {filter.authors && filter.authors.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    {filter.authors.map(author => (
-                      <Badge key={author} variant="secondary" className="flex items-center gap-1">
-                        {author}
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => toggleAuthor(author)}
-                          className="h-4 w-4 p-0 ml-1 hover:bg-transparent"
-                        >
-                          <X className="h-3 w-3" />
-                        </Button>
-                      </Badge>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
+          {/* Display selected authors */}
+          {filter.authors && filter.authors.length > 0 && (
+            <div className="flex flex-wrap gap-2 mt-2">
+              {filter.authors.map(author => (
+                <Badge key={author} variant="secondary" className="flex items-center gap-1">
+                  {author}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => toggleAuthor(author)}
+                    className="h-4 w-4 p-0 ml-1 hover:bg-transparent"
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </Badge>
+              ))}
             </div>
           )}
         </div>
@@ -410,6 +356,20 @@ export const SeriesFilterPanel = ({
               </Button>
             </Badge>
           ))}
+          
+          {filter.tracked && (
+            <Badge variant="secondary" className="flex items-center gap-1">
+              Tracked Series Only
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onFilterChange({ ...filter, tracked: false })}
+                className="h-4 w-4 p-0 ml-1 hover:bg-transparent"
+              >
+                <X className="h-3 w-3" />
+              </Button>
+            </Badge>
+          )}
         </div>
       )}
     </div>
