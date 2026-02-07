@@ -22,10 +22,11 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Card } from '@/components/ui/card';
 import { ImportExportView } from './ImportExportView';
-import { Settings as SettingsIcon, Trash2, AlertTriangle, Palette, Trophy, BookOpen, ArrowUp, ArrowDown, ListOrdered } from 'lucide-react';
+import { Settings as SettingsIcon, Trash2, AlertTriangle, Palette, Trophy, BookOpen, ArrowUp, ArrowDown, ListOrdered, Wrench } from 'lucide-react';
 import { useSettings } from '@/contexts/SettingsContext';
 import { PaletteSelector } from '@/components/PaletteSelector';
 import { GoalsTab } from '@/components/GoalsTab';
+import { indexedDBService } from '@/services/storage/IndexedDBService';
 
 interface SettingsProps {
   isOpen: boolean;
@@ -50,6 +51,8 @@ export const Settings: React.FC<SettingsProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState('general');
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
+  const [isRepairing, setIsRepairing] = useState(false);
+  const [repairStatus, setRepairStatus] = useState<{success: boolean; message: string} | null>(null);
   const { settings, updateSettings, isLoading } = useSettings();
   
   // Local form state for settings
@@ -218,6 +221,15 @@ export const Settings: React.FC<SettingsProps> = ({
                 className="justify-start w-40 data-[state=active]:bg-muted"
               >
                 Import & Export
+              </TabsTrigger>
+              <TabsTrigger 
+                value="troubleshooting" 
+                className="justify-start w-40 data-[state=active]:bg-muted"
+              >
+                <span className="flex items-center gap-2">
+                  <Wrench className="h-4 w-4 text-blue-500" />
+                  Troubleshooting
+                </span>
               </TabsTrigger>
               <TabsTrigger 
                 value="delete-library" 
@@ -479,6 +491,83 @@ export const Settings: React.FC<SettingsProps> = ({
                   onCreateBackup={onCreateBackup}
                   onRestoreBackup={onRestoreBackup}
                 />
+              </TabsContent>
+              
+              <TabsContent value="troubleshooting" className="mt-0">
+                <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                  <Wrench className="h-5 w-5 text-blue-500" />
+                  Troubleshooting
+                </h3>
+                
+                <p className="text-muted-foreground mb-6">
+                  Tools to help resolve issues with the application and database.
+                </p>
+                
+                <Card className="p-6 mb-6">
+                  <h4 className="font-medium mb-4">Database Repair</h4>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    If you're experiencing issues with your book collection, such as missing data or errors when adding books, 
+                    you can try repairing the database. This will check for and fix common database issues.
+                  </p>
+                  
+                  {repairStatus && (
+                    <div className={`p-4 mb-4 rounded-md ${repairStatus.success ? 'bg-green-50 border border-green-200 text-green-700' : 'bg-red-50 border border-red-200 text-red-700'}`}>
+                      <p className="text-sm font-medium">{repairStatus.message}</p>
+                    </div>
+                  )}
+                  
+                  <Button 
+                    variant="outline" 
+                    className="flex items-center gap-2"
+                    onClick={async () => {
+                      setIsRepairing(true);
+                      setRepairStatus(null);
+                      try {
+                        const result = await indexedDBService.checkAndRepairDatabase();
+                        if (result) {
+                          setRepairStatus({
+                            success: true,
+                            message: "Database repair completed successfully. You may need to refresh the page to see changes."
+                          });
+                        } else {
+                          setRepairStatus({
+                            success: false,
+                            message: "Database repair failed. Please try again or contact support."
+                          });
+                        }
+                      } catch (error) {
+                        setRepairStatus({
+                          success: false,
+                          message: `Database repair failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+                        });
+                      } finally {
+                        setIsRepairing(false);
+                      }
+                    }}
+                    disabled={isRepairing}
+                  >
+                    {isRepairing ? (
+                      <>
+                        <span className="animate-spin mr-2">⟳</span>
+                        Repairing...
+                      </>
+                    ) : (
+                      <>
+                        <Wrench className="h-4 w-4" />
+                        Repair Database
+                      </>
+                    )}
+                  </Button>
+                  
+                  <div className="mt-4 text-xs text-muted-foreground">
+                    <p className="font-medium">What this does:</p>
+                    <ul className="list-disc pl-5 space-y-1 mt-1">
+                      <li>Checks for missing database stores</li>
+                      <li>Recreates any corrupted database structures</li>
+                      <li>Ensures proper database schema</li>
+                    </ul>
+                  </div>
+                </Card>
               </TabsContent>
               
               <TabsContent value="delete-library" className="mt-0">
