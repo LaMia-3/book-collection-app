@@ -777,6 +777,84 @@ const Index = () => {
                     await enhancedStorageService.saveBook(indexedDBBook);
                   }
                   
+                  // Process series data from the backup
+                  // First check if this is an enhanced backup with explicit series data
+                  if (restoreResult.isEnhancedFormat && restoreResult.series && restoreResult.series.length > 0) {
+                    console.log(`Restoring ${restoreResult.series.length} series from backup`);
+                    
+                    // Save each series to IndexedDB
+                    for (const series of restoreResult.series) {
+                      // Convert dates to Date objects for UI format
+                      const uiSeries = {
+                        ...series,
+                        createdAt: new Date(series.timestamps?.created || new Date().toISOString()),
+                        updatedAt: new Date(series.timestamps?.updated || new Date().toISOString())
+                      };
+                      
+                      // Save to IndexedDB
+                      await enhancedStorageService.saveSeries(uiSeries);
+                    }
+                  } 
+                  // For older backup format (v1.0.0), extract series from book references
+                  else {
+                    console.log('Extracting series from book references');
+                    
+                    // Map to collect series data from books
+                    const seriesMap = new Map();
+                    
+                    // Extract series data from books
+                    for (const book of restoreResult.books) {
+                      if (book.isPartOfSeries && book.seriesId) {
+                        // If this series ID hasn't been seen yet, create a new series entry
+                        if (!seriesMap.has(book.seriesId)) {
+                          // Create a new series with basic info
+                          seriesMap.set(book.seriesId, {
+                            id: book.seriesId,
+                            name: book._legacySeriesName || `Series ${seriesMap.size + 1}`,
+                            author: book.author || '',
+                            description: '',
+                            books: [],
+                            createdAt: new Date(),
+                            updatedAt: new Date(),
+                            genre: book.genre || [],
+                            status: 'ongoing',
+                            readingOrder: 'publication'
+                          });
+                        }
+                        
+                        // Add this book to the series
+                        const series = seriesMap.get(book.seriesId);
+                        if (!series.books.includes(book.id)) {
+                          series.books.push(book.id);
+                        }
+                      }
+                    }
+                    
+                    // Save all extracted series to IndexedDB
+                    console.log(`Extracted ${seriesMap.size} series from book references`);
+                    for (const series of seriesMap.values()) {
+                      await enhancedStorageService.saveSeries(series);
+                    }
+                  }
+                  
+                  // If this is an enhanced backup with collections, restore them
+                  if (restoreResult.isEnhancedFormat && restoreResult.collections && restoreResult.collections.length > 0) {
+                    console.log(`Restoring ${restoreResult.collections.length} collections from backup`);
+                    
+                    // Save each collection to IndexedDB
+                    for (const collection of restoreResult.collections) {
+                      // Convert dates to Date objects for UI format
+                      const uiCollection = {
+                        ...collection,
+                        createdAt: new Date(collection.createdAt || new Date().toISOString()),
+                        updatedAt: new Date(collection.updatedAt || new Date().toISOString())
+                      };
+                      
+                      // Save to IndexedDB
+                      await enhancedStorageService.saveCollection(uiCollection);
+                    }
+                  }
+                  
                   // Replace the current book collection with the restored books
                   setBooks(restoreResult.books);
                   
@@ -785,10 +863,10 @@ const Index = () => {
                     description: restoreResult.message
                   });
                 } catch (saveError) {
-                  console.error('Error saving restored books to IndexedDB:', saveError);
+                  console.error('Error saving restored data to IndexedDB:', saveError);
                   toast({
                     title: "Restore Partial Success",
-                    description: `Books restored but may not appear in all views. Please refresh the page. Error: ${saveError instanceof Error ? saveError.message : String(saveError)}`,
+                    description: `Data restored but may not appear in all views. Please refresh the page. Error: ${saveError instanceof Error ? saveError.message : String(saveError)}`,
                     variant: "destructive"
                   });
                 }
