@@ -480,7 +480,7 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
         <Card className="p-6">
           <h2 className="text-xl font-semibold mb-4">Export</h2>
           <p className="text-gray-600 mb-4">
-            Export your book collection to CSV or JSON format.
+            Export your library data (books, series, and collections) to CSV or JSON format.
           </p>
           
           <div className="flex flex-col gap-6">
@@ -488,7 +488,7 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
               <div>
                 <h3 className="text-lg font-medium">CSV Export</h3>
                 <p className="text-gray-600 text-sm">
-                  Export your collection to CSV format for use in spreadsheet applications.
+                  Export your books to CSV format for use in spreadsheet applications. Includes collection references.
                 </p>
               </div>
               <div className="mt-auto pt-4">
@@ -509,7 +509,7 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
               <div>
                 <h3 className="text-lg font-medium">JSON Export</h3>
                 <p className="text-gray-600 text-sm">
-                  Export your collection to JSON format for use in other applications.
+                  Export your collection to JSON format with complete series and collection data. Recommended for full backups.
                 </p>
               </div>
               <div className="mt-auto pt-4">
@@ -535,7 +535,7 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
             <ImportFormatHelp />
           </div>
           <p className="text-gray-600 mb-4">
-            Import books from CSV or JSON files.
+            Import books from CSV files or import complete library data (books, series, and collections) from JSON files.
           </p>
           
           <div className="flex flex-col gap-6">
@@ -583,7 +583,7 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
             <div className="space-y-4">
               <h3 className="text-lg font-medium">JSON Import</h3>
               <p className="text-gray-600 text-sm">
-                Import books from a JSON file.
+                Import books, series, and collections from a JSON file. Supports both simple book arrays and enhanced format with complete library data.
               </p>
               <input 
                 type="file" 
@@ -634,7 +634,7 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
             <div className="space-y-4">
               <h3 className="text-lg font-medium">Create Backup</h3>
               <p className="text-gray-600 text-sm">
-                Download a complete backup file of your book collection that you can restore later.
+                Download a complete backup file of your entire library, including books, series, and collections that you can restore later.
               </p>
               <Button 
                 onClick={handleCreateBackup}
@@ -650,14 +650,14 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
             <div className="space-y-4">
               <h3 className="text-lg font-medium">Restore Backup</h3>
               <p className="text-gray-600 text-sm">
-                Restore your collection from a previously created backup file.
-                <strong className="block text-red-600 mt-1">Warning:</strong> This will replace your current collection.
+                Restore your entire library (books, series, and collections) from a previously created backup file.
+                <strong className="block text-red-600 mt-1">Warning:</strong> This will replace your current library data.
               </p>
               <div>
                 <input 
                   type="file" 
                   ref={backupInputRef}
-                  accept=".mira" 
+                  accept=".mira,.json" 
                   className="hidden" 
                   onChange={handleBackupFileChange}
                 />

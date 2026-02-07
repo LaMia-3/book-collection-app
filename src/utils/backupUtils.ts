@@ -7,10 +7,15 @@ interface BackupData {
   version: string;
   timestamp: string;
   books: Book[];
+  series?: any[];
+  collections?: any[];
   metadata: {
     bookCount: number;
+    seriesCount?: number;
+    collectionCount?: number;
     appVersion: string;
-    creationDate: string;
+    creationDate?: string;
+    exportDate?: string;
   };
 }
 
@@ -79,9 +84,14 @@ export function createBackup(books: Book[]): void {
 export interface RestoreResult {
   success: boolean;
   books: Book[];
+  series?: any[];
+  collections?: any[];
   bookCount: number;
+  seriesCount?: number;
+  collectionCount?: number;
   backupDate: string;
   message: string;
+  isEnhancedFormat?: boolean;
 }
 
 /**
@@ -119,13 +129,25 @@ export async function restoreFromBackup(file: File): Promise<RestoreResult> {
           addedDate: book.addedDate || new Date().toISOString().split('T')[0], // Ensure added date
         }));
         
+        // Check if this is an enhanced format backup (with series and collections)
+        const isEnhancedFormat = backupData.series !== undefined || backupData.collections !== undefined;
+        const seriesCount = backupData.series?.length || 0;
+        const collectionCount = backupData.collections?.length || 0;
+        
         // Return successful result
         resolve({
           success: true,
           books: processedBooks,
+          series: backupData.series,
+          collections: backupData.collections,
           bookCount: processedBooks.length,
+          seriesCount: seriesCount,
+          collectionCount: collectionCount,
           backupDate: backupData.timestamp || 'Unknown',
-          message: `Successfully restored ${processedBooks.length} books from backup created on ${new Date(backupData.timestamp).toLocaleDateString()}.`
+          isEnhancedFormat: isEnhancedFormat,
+          message: isEnhancedFormat
+            ? `Successfully restored ${processedBooks.length} books, ${seriesCount} series, and ${collectionCount} collections from backup created on ${new Date(backupData.timestamp).toLocaleDateString()}.`
+            : `Successfully restored ${processedBooks.length} books from backup created on ${new Date(backupData.timestamp).toLocaleDateString()}.`
         });
       } catch (error) {
         reject(new Error(`Failed to restore backup: ${error instanceof Error ? error.message : String(error)}`));

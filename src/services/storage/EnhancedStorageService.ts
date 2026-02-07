@@ -17,6 +17,7 @@ import { ReadingStatus } from '@/types/models/Book';
 // Types for UI components
 import { Book as UIBook } from '@/types/book';
 import { Series as UISeries } from '@/types/series';
+import { Collection as UICollection } from '@/types/collection';
 // Type adapter imports for conversion between UI and DB types
 import { convertDbBookToUiBook, convertUiBookToDbBook, DBBook } from '@/adapters/BookTypeAdapter';
 import { convertDbSeriesToUiSeries, convertUiSeriesToDbSeries, DBSeries } from '@/adapters/SeriesTypeAdapter';
@@ -63,6 +64,11 @@ export class EnhancedStorageService {
       timestamp: number;
       invalidated: boolean;
     };
+    collections: {
+      data: UICollection[] | null;
+      timestamp: number;
+      invalidated: boolean;
+    };
     upcomingReleases: {
       data: Record<string, UpcomingBook[]> | null;
       timestamp: number;
@@ -81,6 +87,7 @@ export class EnhancedStorageService {
   } = {
     books: { data: null, timestamp: 0, invalidated: true },
     series: { data: null, timestamp: 0, invalidated: true },
+    collections: { data: null, timestamp: 0, invalidated: true },
     upcomingReleases: { data: null, timestamp: 0, invalidated: true },
     notifications: { data: null, timestamp: 0, invalidated: true },
     settings: { data: null, timestamp: 0, invalidated: true }
@@ -918,6 +925,170 @@ export class EnhancedStorageService {
     } catch (error) {
       console.error('Error saving series:', error);
       this.showUserNotification('Failed to save series. Please try again.');
+      throw error;
+    }
+  }
+
+  /**
+   * Get all collections from storage with caching and performance optimizations
+   */
+  public async getCollections(): Promise<UICollection[]> {
+    await this.ensureInitialized();
+    
+    // Try cache first for immediate response
+    if (this.isCacheValid('collections')) {
+      return this.cache.collections.data as UICollection[];
+    }
+    
+    // Start performance monitoring
+    const endTiming = PerformanceMonitoring.startTiming('getCollections');
+    
+    try {
+      // Ensure collections store exists
+      await this.db.ensureCollectionsStore();
+      
+      // Get database instance
+      const db = await this.db.initDb();
+      
+      // Get all collections from IndexedDB
+      const collections = await db.getAll(StoreNames.COLLECTIONS);
+      
+      // Convert dates from strings to Date objects for UI
+      const uiCollections = collections.map(collection => ({
+        ...collection,
+        createdAt: new Date(collection.dateAdded || new Date().toISOString()),
+        updatedAt: new Date(collection.lastModified || new Date().toISOString())
+      })) as UICollection[];
+      
+      // Update the cache
+      this.updateCache('collections', uiCollections);
+      
+      // End timing before returning
+      endTiming();
+      return uiCollections;
+    } catch (error) {
+      console.error('Error getting collections from IndexedDB:', error);
+      endTiming(); // Still end timing on error
+      return [];
+    }
+  }
+  
+  /**
+   * Get a collection by its ID
+   */
+  public async getCollectionById(id: string): Promise<UICollection | null> {
+    await this.ensureInitialized();
+    
+    // Try to find in cache first
+    if (this.isCacheValid('collections') && this.cache.collections.data) {
+      const cachedCollection = this.cache.collections.data.find(collection => collection.id === id);
+      if (cachedCollection) return cachedCollection;
+    }
+    
+    try {
+      // Ensure collections store exists
+      await this.db.ensureCollectionsStore();
+      
+      // Get from IndexedDB
+      const db = await this.db.initDb();
+      const collection = await db.get(StoreNames.COLLECTIONS, id);
+      
+      if (collection) {
+        // Convert dates for UI
+        const uiCollection = {
+          ...collection,
+          createdAt: new Date(collection.dateAdded || new Date().toISOString()),
+          updatedAt: new Date(collection.lastModified || new Date().toISOString())
+        } as UICollection;
+        
+        return uiCollection;
+      }
+      
+      return null;
+    } catch (error) {
+      console.error(`Error getting collection ${id}:`, error);
+      return null;
+    }
+  }
+  
+  /**
+   * Save a collection to storage
+   */
+  public async saveCollection(collection: UICollection): Promise<string> {
+    await this.ensureInitialized();
+    
+    try {
+      // Ensure collections store exists
+      await this.db.ensureCollectionsStore();
+      
+      // Prepare collection for IndexedDB storage
+      const dbCollection = {
+        ...collection,
+        dateAdded: collection.createdAt.toISOString(),
+        lastModified: collection.updatedAt.toISOString()
+      };
+      
+      // Save to IndexedDB
+      const db = await this.db.initDb();
+      await db.put(StoreNames.COLLECTIONS, dbCollection);
+      
+      // Invalidate the collections cache
+      this.invalidateCache('collections');
+      
+      return collection.id;
+    } catch (error) {
+      console.error('Error saving collection:', error);
+      this.showUserNotification('Failed to save collection. Please try again.');
+      throw error;
+    }
+  }
+  
+  /**
+   * Delete a collection from storage
+   */
+  public async deleteCollection(id: string): Promise<void> {
+    await this.ensureInitialized();
+    
+    try {
+      // Ensure collections store exists
+      await this.db.ensureCollectionsStore();
+      
+      // Get the collection first to check if it exists
+      const collection = await this.getCollectionById(id);
+      if (!collection) {
+        throw new Error(`Collection ${id} not found`);
+      }
+      
+      // Start a transaction to delete the collection and update books
+      const db = await this.db.initDb();
+      const tx = db.transaction([StoreNames.COLLECTIONS, StoreNames.BOOKS], 'readwrite');
+      
+      // Delete the collection
+      await tx.objectStore(StoreNames.COLLECTIONS).delete(id);
+      
+      // Update books that reference this collection
+      const books = await this.getBooks();
+      for (const book of books) {
+        if (book.collectionIds && book.collectionIds.includes(id)) {
+          // Remove this collection from the book's collections
+          book.collectionIds = book.collectionIds.filter(collId => collId !== id);
+          
+          // Convert to DB format and save
+          const dbBook = convertUiBookToDbBook(book);
+          await tx.objectStore(StoreNames.BOOKS).put(dbBook);
+        }
+      }
+      
+      // Complete the transaction
+      await tx.done;
+      
+      // Invalidate caches
+      this.invalidateCache('collections');
+      this.invalidateCache('books');
+      
+    } catch (error) {
+      console.error(`Error deleting collection ${id}:`, error);
+      this.showUserNotification('Failed to delete collection. Please try again.');
       throw error;
     }
   }

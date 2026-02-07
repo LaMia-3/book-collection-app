@@ -21,9 +21,63 @@ interface RawBookImport {
   notes?: string;
   genre?: string | string[];
   isPartOfSeries?: string | boolean;
+  seriesId?: string;
   seriesName?: string;
+  volumeNumber?: string | number;
   pageCount?: string | number;
   publishedDate?: string;
+  collectionIds?: string | string[];
+  collectionNames?: string | string[];
+  id?: string; // For enhanced imports that include IDs
+}
+
+/**
+ * Raw series data from an imported JSON file
+ */
+interface RawSeriesImport {
+  id: string;
+  name: string;
+  description?: string;
+  author?: string;
+  coverImage?: string;
+  books: string[];
+  totalBooks?: number;
+  readingOrder?: 'publication' | 'chronological' | 'custom';
+  customOrder?: string[];
+  status?: 'ongoing' | 'completed' | 'cancelled';
+  genre?: string[];
+  isTracked?: boolean;
+  hasUpcoming?: boolean;
+}
+
+/**
+ * Raw collection data from an imported JSON file
+ */
+interface RawCollectionImport {
+  id: string;
+  name: string;
+  description?: string;
+  bookIds: string[];
+  color?: string;
+  imageUrl?: string;
+}
+
+/**
+ * Enhanced backup format with books, series, and collections
+ */
+interface EnhancedBackupData {
+  version: string;
+  timestamp: string;
+  books: RawBookImport[];
+  series?: RawSeriesImport[];
+  collections?: RawCollectionImport[];
+  metadata?: {
+    bookCount: number;
+    seriesCount?: number;
+    collectionCount?: number;
+    appVersion: string;
+    exportDate: string;
+  };
 }
 
 /**
@@ -36,6 +90,28 @@ export interface ImportResult {
     reason: string;
   }[];
   total: number;
+}
+
+/**
+ * Result of a complete import operation including series and collections
+ */
+export interface CompleteImportResult extends ImportResult {
+  series?: {
+    successful: RawSeriesImport[];
+    failed: {
+      rawData: RawSeriesImport;
+      reason: string;
+    }[];
+    total: number;
+  };
+  collections?: {
+    successful: RawCollectionImport[];
+    failed: {
+      rawData: RawCollectionImport;
+      reason: string;
+    }[];
+    total: number;
+  };
 }
 
 /**
@@ -205,6 +281,8 @@ function convertRawToBook(rawBook: RawBookImport): Partial<Book> {
     googleBooksId: rawBook.googleBooksId || rawBook.isbn, // Use ISBN as googleBooksId if available
     genre: rawBook.genre ? standardizeGenreData(rawBook.genre) : undefined,
     notes: rawBook.notes,
+    // Preserve ID if provided (for enhanced imports)
+    id: rawBook.id || crypto.randomUUID(),
   };
   
   // Convert status to our internal format
@@ -280,9 +358,28 @@ function convertRawToBook(rawBook: RawBookImport): Partial<Book> {
     }
   }
   
-  // Add series name if book is part of series
-  if (book.isPartOfSeries && rawBook.seriesName) {
-    book._legacySeriesName = rawBook.seriesName;
+  // Handle series information
+  if (book.isPartOfSeries) {
+    // Use seriesId if available, otherwise use legacy series name
+    if (rawBook.seriesId) {
+      book.seriesId = rawBook.seriesId;
+    }
+    if (rawBook.seriesName) {
+      book._legacySeriesName = rawBook.seriesName;
+    }
+    if (rawBook.volumeNumber !== undefined && rawBook.volumeNumber !== '') {
+      book.volumeNumber = Number(rawBook.volumeNumber);
+    }
+  }
+  
+  // Handle collection references
+  if (rawBook.collectionIds) {
+    // Convert string to array if needed
+    const collectionIds = typeof rawBook.collectionIds === 'string' 
+      ? rawBook.collectionIds.split(';').map(id => id.trim()).filter(Boolean)
+      : rawBook.collectionIds;
+    
+    book.collectionIds = collectionIds;
   }
   
   // Add published date - supports both quoted and unquoted YYYY-MM-DD format
@@ -357,7 +454,7 @@ export async function importFromCSV(file: File): Promise<ImportResult> {
  * @param file The JSON file to process
  * @returns Result of the import operation
  */
-export async function importFromJSON(file: File): Promise<ImportResult> {
+export async function importFromJSON(file: File): Promise<ImportResult | CompleteImportResult> {
   return new Promise((resolve, reject) => {
     // Set up file reader
     const reader = new FileReader();
@@ -367,24 +464,36 @@ export async function importFromJSON(file: File): Promise<ImportResult> {
         const jsonString = e.target?.result as string;
         
         // Parse the JSON content
-        let rawBooks: RawBookImport[];
         try {
           const parsed = JSON.parse(jsonString);
-          if (!Array.isArray(parsed)) {
-            const errorMessage = 'JSON file must contain an array of book objects';
-          log.error(errorMessage, { parsed: typeof parsed });
-          throw new Error(errorMessage);
+          
+          // Check if this is an enhanced backup format with version field
+          if (parsed && typeof parsed === 'object' && 'version' in parsed) {
+            log.info('Detected enhanced backup format', { version: parsed.version });
+            const enhancedData = parsed as EnhancedBackupData;
+            
+            // Process the enhanced format
+            const result = await processEnhancedImport(enhancedData);
+            resolve(result);
+            return;
           }
-          rawBooks = parsed as RawBookImport[];
+          
+          // Standard format - array of books
+          if (!Array.isArray(parsed)) {
+            const errorMessage = 'JSON file must contain an array of book objects or be in enhanced backup format';
+            log.error(errorMessage, { parsed: typeof parsed });
+            throw new Error(errorMessage);
+          }
+          
+          const rawBooks = parsed as RawBookImport[];
+          // Process each book
+          const result = await processImportedBooks(rawBooks);
+          resolve(result);
         } catch (parseError) {
           const errorMessage = `Invalid JSON format: ${parseError instanceof Error ? parseError.message : String(parseError)}`;
           log.error(errorMessage);
           throw new Error(errorMessage);
         }
-        
-        // Process each book
-        const result = await processImportedBooks(rawBooks);
-        resolve(result);
       } catch (error) {
         const errorMessage = `Failed to parse JSON: ${error instanceof Error ? error.message : String(error)}`;
         log.error(errorMessage);
@@ -401,6 +510,93 @@ export async function importFromJSON(file: File): Promise<ImportResult> {
     // Start reading the file
     reader.readAsText(file);
   });
+}
+
+/**
+ * Process an enhanced backup import with books, series, and collections
+ * @param data The enhanced backup data
+ * @returns Result of the import operation
+ */
+async function processEnhancedImport(data: EnhancedBackupData): Promise<CompleteImportResult> {
+  log.info('Processing enhanced import', { 
+    bookCount: data.books?.length || 0,
+    seriesCount: data.series?.length || 0,
+    collectionCount: data.collections?.length || 0,
+    version: data.version
+  });
+  
+  const result: CompleteImportResult = {
+    successful: [],
+    failed: [],
+    total: data.books?.length || 0,
+    series: {
+      successful: [],
+      failed: [],
+      total: data.series?.length || 0
+    },
+    collections: {
+      successful: [],
+      failed: [],
+      total: data.collections?.length || 0
+    }
+  };
+  
+  // Process books
+  if (data.books && data.books.length > 0) {
+    const bookResult = await processImportedBooks(data.books);
+    result.successful = bookResult.successful;
+    result.failed = bookResult.failed;
+  }
+  
+  // Process series
+  if (data.series && data.series.length > 0) {
+    for (const rawSeries of data.series) {
+      try {
+        // Validate series
+        if (!rawSeries.id || !rawSeries.name) {
+          result.series.failed.push({
+            rawData: rawSeries,
+            reason: 'Missing required fields: id and name'
+          });
+          continue;
+        }
+        
+        // Add to successful imports
+        result.series.successful.push(rawSeries);
+      } catch (error) {
+        result.series.failed.push({
+          rawData: rawSeries,
+          reason: `Processing error: ${error instanceof Error ? error.message : String(error)}`
+        });
+      }
+    }
+  }
+  
+  // Process collections
+  if (data.collections && data.collections.length > 0) {
+    for (const rawCollection of data.collections) {
+      try {
+        // Validate collection
+        if (!rawCollection.id || !rawCollection.name) {
+          result.collections.failed.push({
+            rawData: rawCollection,
+            reason: 'Missing required fields: id and name'
+          });
+          continue;
+        }
+        
+        // Add to successful imports
+        result.collections.successful.push(rawCollection);
+      } catch (error) {
+        result.collections.failed.push({
+          rawData: rawCollection,
+          reason: `Processing error: ${error instanceof Error ? error.message : String(error)}`
+        });
+      }
+    }
+  }
+  
+  return result;
 }
 
 /**

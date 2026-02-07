@@ -1,25 +1,27 @@
-import { LayoutGrid, List, Bookmark, BarChart, LibrarySquare } from "lucide-react";
+import { LayoutGrid, List, Bookmark, BarChart, LibrarySquare, FolderOpen } from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
-export type ViewMode = 'shelf' | 'list' | 'cover' | 'insights' | 'series';
+export type ViewMode = 'shelf' | 'list' | 'cover' | 'insights' | 'series' | 'collections';
 
 interface ViewToggleProps {
   viewMode: ViewMode;
   onChange: (viewMode: ViewMode) => void;
+  libraryOnly?: boolean; // New prop to limit view options
 }
 
-export const ViewToggle = ({ viewMode, onChange }: ViewToggleProps) => {
+export const ViewToggle = ({ viewMode, onChange, libraryOnly = false }: ViewToggleProps) => {
   return (
     <TooltipProvider delayDuration={400}>
-      <ToggleGroup 
-        type="single" 
-        value={viewMode}
-        onValueChange={(value) => {
-          if (value) onChange(value as ViewMode);
-        }}
-        className="border rounded-md"
-      >
+      <div className="flex items-center">
+        <ToggleGroup 
+          type="single" 
+          value={viewMode}
+          onValueChange={(value) => {
+            if (value) onChange(value as ViewMode);
+          }}
+          className="border rounded-md h-10"
+        >
         <Tooltip>
           <TooltipTrigger asChild>
             <ToggleGroupItem 
@@ -65,36 +67,57 @@ export const ViewToggle = ({ viewMode, onChange }: ViewToggleProps) => {
           </TooltipContent>
         </Tooltip>
 
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <ToggleGroupItem 
-              value="insights" 
-              aria-label="Insights View"
-              className="data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
-            >
-              <BarChart className="h-4 w-4" />
-            </ToggleGroupItem>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>Reading Insights</p>
-          </TooltipContent>
-        </Tooltip>
+        {/* Only show these options if not in library-only mode */}
+        {!libraryOnly && (
+          <>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <ToggleGroupItem 
+                  value="insights" 
+                  aria-label="Insights View"
+                  className="data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+                >
+                  <BarChart className="h-4 w-4" />
+                </ToggleGroupItem>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Reading Insights</p>
+              </TooltipContent>
+            </Tooltip>
 
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <ToggleGroupItem 
-              value="series" 
-              aria-label="Series View"
-              className="data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
-            >
-              <LibrarySquare className="h-4 w-4" />
-            </ToggleGroupItem>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>Series View</p>
-          </TooltipContent>
-        </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <ToggleGroupItem 
+                  value="series" 
+                  aria-label="Series View"
+                  className="data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+                >
+                  <LibrarySquare className="h-4 w-4" />
+                </ToggleGroupItem>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Series View</p>
+              </TooltipContent>
+            </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <ToggleGroupItem 
+                  value="collections" 
+                  aria-label="Collections View"
+                  className="data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+                >
+                  <FolderOpen className="h-4 w-4" />
+                </ToggleGroupItem>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Collections View</p>
+              </TooltipContent>
+            </Tooltip>
+          </>
+        )}
       </ToggleGroup>
+      </div>
     </TooltipProvider>
   );
 };

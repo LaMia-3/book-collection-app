@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, KeyboardEvent, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { Book } from "@/types/book";
 import { Series } from "@/types/series";
 import { Button } from "@/components/ui/button";
@@ -46,6 +47,7 @@ import {
 import { SeriesInfoPanel } from '@/components/series/SeriesInfoPanel';
 import { SeriesAssignmentDialog } from '@/components/dialogs/SeriesAssignmentDialog';
 import { CreateSeriesDialog } from '@/components/series/CreateSeriesDialog';
+import BookCollectionAssignment from '@/components/BookCollectionAssignment';
 import { cn } from "@/lib/utils";
 import { cleanHtml } from "@/utils/textUtils";
 import { format, parse, isValid } from "date-fns";
@@ -77,6 +79,7 @@ interface BookDetailsProps {
 }
 
 export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsProps) => {
+  const navigate = useNavigate();
   // State management
   const [editedBook, setEditedBook] = useState<Book>({ ...book });
   const [availableSeries, setAvailableSeries] = useState<Series[]>([]);
@@ -120,6 +123,7 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
   const [showCreateSeriesDialog, setShowCreateSeriesDialog] = useState(false);
   const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
   const [showMetadataInfo, setShowMetadataInfo] = useState(false);
+  const [showCollectionsInfo, setShowCollectionsInfo] = useState(true);
   const [seriesDetectionResult, setSeriesDetectionResult] = useState<any>(null);
   // Format date for HTML date input (YYYY-MM-DD)
   const formatDateForInput = (dateString?: string): string => {
@@ -1579,15 +1583,25 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
           {/* Notes */}
           <div>
             <Label htmlFor="notes">Notes</Label>
-            <Textarea
-              id="notes"
-              placeholder="Your thoughts about this book..."
-              value={editedBook.notes || ""}
-              onChange={(e) =>
-                setEditedBook({ ...editedBook, notes: e.target.value })
-              }
-              className="min-h-[100px]"
-            />
+            {isViewMode ? (
+              <div className="text-sm mt-1 p-3 bg-muted rounded leading-relaxed min-h-[100px] overflow-y-auto scrollbar-thin scrollbar-thumb-rounded scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent">
+                {editedBook.notes ? (
+                  <div className="whitespace-pre-line">{editedBook.notes}</div>
+                ) : (
+                  <div className="text-muted-foreground italic">No notes available.</div>
+                )}
+              </div>
+            ) : (
+              <Textarea
+                id="notes"
+                placeholder="Your thoughts about this book..."
+                value={editedBook.notes || ""}
+                onChange={(e) =>
+                  setEditedBook({ ...editedBook, notes: e.target.value })
+                }
+                className="min-h-[100px]"
+              />
+            )}
           </div>
 
           {/* Description */}
@@ -1707,14 +1721,36 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
                       <h4 className="font-medium mb-2 text-sm">Series</h4>
                       <div className="p-2 border rounded-md bg-muted text-foreground">
                         {selectedSeriesId ? (
-                          <div>
-                            {availableSeries.find(s => s.id === selectedSeriesId)?.name || 'Loading series...'}
-                            {availableSeries.find(s => s.id === selectedSeriesId)?.author && 
-                              ` (${availableSeries.find(s => s.id === selectedSeriesId)?.author})`}
-                            {volumeNumber && ` - Volume ${volumeNumber}`}
+                          <div className="flex flex-col gap-2">
+                            <div className="flex items-center gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="flex items-center gap-1.5 bg-primary/5 hover:bg-primary/10 border-primary/20 text-primary hover:text-primary-foreground transition-all duration-200 shadow-sm hover:shadow"
+                                onClick={() => navigate(`/series/${selectedSeriesId}`)}
+                              >
+                                <BookOpen className="h-3.5 w-3.5" />
+                                <span>
+                                  {availableSeries.find(s => s.id === selectedSeriesId)?.name || 'Loading series...'}
+                                  {availableSeries.find(s => s.id === selectedSeriesId)?.author && 
+                                    ` (${availableSeries.find(s => s.id === selectedSeriesId)?.author})`}
+                                  {volumeNumber && ` - Volume ${volumeNumber}`}
+                                </span>
+                              </Button>
+                            </div>
                           </div>
                         ) : (
-                          <div className="text-muted-foreground">Not part of a series</div>
+                          <div className="flex flex-col gap-2">
+                            <div className="text-muted-foreground">Not part of a series</div>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="w-[180px]"
+                              onClick={() => detectAndOpenSeriesDialog()}
+                            >
+                              Manage Series
+                            </Button>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -1800,23 +1836,18 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
                   </div>
                 )}
                 
-                {!selectedSeriesId && (
-                  <div className="flex flex-col items-center justify-center p-4 border border-dashed rounded-md bg-muted/50">
-                    <p className="text-sm text-muted-foreground mb-2">This book is not part of any series</p>
-                    {!isViewMode && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="flex items-center mt-2"
-                        onClick={() => {
-                          setShowCreateSeriesDialog(true);
-                        }}
-                      >
-                        <Plus className="mr-1 h-3 w-3" />
-                        Create New Series
-                      </Button>
-                    )}
-                  </div>
+                {!selectedSeriesId && !isViewMode && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex items-center mt-2"
+                    onClick={() => {
+                      setShowCreateSeriesDialog(true);
+                    }}
+                  >
+                    <Plus className="mr-1 h-3 w-3" />
+                    Create New Series
+                  </Button>
                 )}
                 
                 {/* Legacy fields - hidden but preserved for data migration */}
@@ -1832,6 +1863,45 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
                   type="hidden" 
                   value={editedBook._legacyNextBookExpectedYear || ''}
                 />
+              </div>
+            )}
+          </div>
+
+          {/* Collections */}
+          <div className="space-y-3 mt-4">
+            <div 
+              className="flex items-center justify-between cursor-pointer"
+              onClick={() => setShowCollectionsInfo(!showCollectionsInfo)}
+            >
+              <div className="flex items-center gap-2">
+                <BookmarkIcon className="h-5 w-5 text-primary" />
+                <h3 className="text-base font-medium">Collections</h3>
+              </div>
+              <Button variant="ghost" size="sm" className="p-1 h-8 w-8">
+                {showCollectionsInfo ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </Button>
+            </div>
+            
+            {showCollectionsInfo && (
+              <div className="bg-muted/30 p-4 rounded-md border">
+                {/* Only allow collection management in edit mode */}
+                {isViewMode ? (
+                  <BookCollectionAssignment 
+                    book={book} 
+                    onCollectionsUpdated={() => {
+                      // Refresh the book data after collections are updated
+                      onUpdate(editedBook);
+                    }}
+                  />
+                ) : (
+                  <BookCollectionAssignment 
+                    book={editedBook} 
+                    onCollectionsUpdated={() => {
+                      // Refresh the book data after collections are updated
+                      setEditedBook({...editedBook});
+                    }}
+                  />
+                )}
               </div>
             )}
           </div>

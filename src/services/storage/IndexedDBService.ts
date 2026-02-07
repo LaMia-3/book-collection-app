@@ -1,7 +1,7 @@
 /**
  * Enhanced IndexedDB service with improved schema and indices
  */
-import { openDB, IDBPDatabase, StoreNames as IDBStoreNames } from 'idb';
+import { openDB, deleteDB, IDBPDatabase, StoreNames as IDBStoreNames } from 'idb';
 import { Book, BookSummary } from '@/types/indexeddb/Book';
 import { Series, SeriesMetadata } from '@/types/indexeddb/Series';
 import { UpcomingBook } from '@/types/indexeddb/UpcomingBook';
@@ -40,12 +40,31 @@ export class IndexedDBService {
   }
 
   /**
+   * Get the current version of the database
+   */
+  private async getCurrentDatabaseVersion(): Promise<number> {
+    try {
+      // Open the database without specifying a version to get the current version
+      const tempDb = await openDB(DB_CONFIG.NAME, undefined, {
+        blocking: () => {}
+      });
+      const currentVersion = tempDb.version;
+      tempDb.close();
+      return currentVersion;
+    } catch (error) {
+      // If the database doesn't exist yet, return 0
+      return 0;
+    }
+  }
+
+  /**
    * Initialize the database connection with enhanced schema, indices, and error handling
    * 
    * Features:
    * - Connection retry with exponential backoff
    * - Error classification and recovery
    * - Telemetry for tracking connection issues
+   * - Version mismatch detection and handling
    */
   async initDb(): Promise<IDBPDatabase> {
     log.debug('Initializing IndexedDB connection');
@@ -54,23 +73,51 @@ export class IndexedDBService {
     
     // Prevent multiple concurrent initializations
     if (this.isInitializing) {
-      if (this.initPromise) return this.initPromise;
+      if (this.initPromise) {
+        log.debug('Database initialization already in progress, waiting for existing promise');
+        return this.initPromise;
+      }
       throw new DatabaseConnectionError('Database initialization in progress, but no promise available');
     }
     
     this.isInitializing = true;
+    log.info('Starting IndexedDB initialization');
     
     try {
+      // Check current database version to avoid version mismatch errors
+      const currentVersion = await this.getCurrentDatabaseVersion();
+      
+      // If the database exists and has a higher version than our config, use that version
+      const versionToUse = currentVersion > DB_CONFIG.VERSION ? currentVersion : DB_CONFIG.VERSION;
+      
+      if (currentVersion > 0) {
+        log.info(`Found existing database with version ${currentVersion}`);
+      }
+      
+      if (currentVersion > DB_CONFIG.VERSION) {
+        log.warn(`Database version mismatch: Config version ${DB_CONFIG.VERSION} is less than existing version ${currentVersion}. Using existing version.`);
+      }
+      
       // Use retry mechanism for database initialization
       this.initPromise = withRetry(
         async () => {
-          const db = await openDB(DB_CONFIG.NAME, DB_CONFIG.VERSION, {
+          log.debug(`Opening database ${DB_CONFIG.NAME} with version ${versionToUse}`);
+          const db = await openDB(DB_CONFIG.NAME, versionToUse, {
             upgrade: (db, oldVersion, newVersion) => {
               log.info(`Upgrading database`, { fromVersion: oldVersion, toVersion: newVersion });
               try {
                 this.applyMigrations(db, oldVersion, newVersion || DB_CONFIG.VERSION);
               } catch (upgradeError) {
-                log.error('Database upgrade failed', { error: String(upgradeError) });
+                // Enhanced error logging with more details
+                const errorDetails = {
+                  message: upgradeError?.message || 'Unknown error',
+                  name: upgradeError?.name || 'Error',
+                  stack: upgradeError?.stack,
+                  code: (upgradeError as any)?.code,
+                  toString: String(upgradeError)
+                };
+                log.error('Database upgrade failed', errorDetails);
+                
                 // Log error for telemetry but don't throw (would block upgrade)
                 ErrorTelemetry.logError(
                   classifyIndexedDBError(upgradeError),
@@ -97,6 +144,7 @@ export class IndexedDBService {
             }
           });
           
+          log.info(`Successfully opened database ${DB_CONFIG.NAME} with version ${db.version}`);
           return db;
         },
         { 
@@ -108,16 +156,26 @@ export class IndexedDBService {
       
       this.db = await this.initPromise;
       this.isInitializing = false;
+      log.info('Database initialization completed successfully');
       return this.db;
     } catch (error) {
       this.isInitializing = false;
       
+      // Enhanced error logging with more details
+      const errorDetails = {
+        message: error?.message || 'Unknown error',
+        name: error?.name || 'Error',
+        stack: error?.stack,
+        code: (error as any)?.code,
+        toString: String(error)
+      };
+      
       // Classify and log the error
       const classifiedError = classifyIndexedDBError(error);
-      ErrorTelemetry.logError(classifiedError, false, { operation: 'initDb' });
+      ErrorTelemetry.logError(classifiedError, false, { operation: 'initDb', ...errorDetails });
       
-      log.error('Failed to initialize IndexedDB', { error: String(classifiedError) });
-      this.showUserNotification('Database initialization failed. Some features may not work correctly.');
+      log.error('Failed to initialize IndexedDB', errorDetails);
+      this.showUserNotification(`Database initialization failed: ${errorDetails.message}. Some features may not work correctly.`);
       
       // Rethrow the classified error
       throw classifiedError;
@@ -126,15 +184,42 @@ export class IndexedDBService {
 
   /**
    * Apply database migrations based on version changes
+   * This method handles all database schema migrations in a robust way
    */
   private applyMigrations(db: IDBPDatabase, oldVersion: number, newVersion: number): void {
-    // Migrations are cumulative, so each case falls through to the next one
-    switch (oldVersion) {
-      case 0:
-        // Initial database creation
-        this.createInitialSchema(db);
-        break;
+    log.info(`Applying migrations from version ${oldVersion} to ${newVersion}`);
+    
+    // Migrations are applied incrementally based on the oldVersion
+    // Each case falls through to ensure all migrations are applied in sequence
+    
+    // Version 0 to 1: Initial schema creation
+    if (oldVersion < 1) {
+      log.info('Creating initial database schema (v1)');
+      this.createInitialSchema(db);
     }
+    
+    // Version 1 to 2: Add collections store
+    if (oldVersion < 2 && newVersion >= 2) {
+      log.info('Applying migration to v2: Adding collections store');
+      if (!db.objectStoreNames.contains(StoreNames.COLLECTIONS)) {
+        const collectionsStore = db.createObjectStore(StoreNames.COLLECTIONS, { keyPath: 'id' });
+        collectionsStore.createIndex('name', 'name', { unique: false });
+        collectionsStore.createIndex('dateAdded', 'dateAdded', { unique: false });
+        collectionsStore.createIndex('lastModified', 'lastModified', { unique: false });
+        log.info('Created collections store in migration to v2');
+      } else {
+        log.info('Collections store already exists, skipping creation');
+      }
+    }
+    
+    // Version 2 to 3: Future migrations would go here
+    if (oldVersion < 3 && newVersion >= 3) {
+      log.info('Applying migration to v3: No schema changes needed');
+      // No schema changes in v3, just version bump to handle existing databases
+    }
+    
+    // Add future migrations here with the same pattern
+    // if (oldVersion < 4 && newVersion >= 4) { ... }
   }
 
   /**
@@ -188,6 +273,14 @@ export class IndexedDBService {
     if (!db.objectStoreNames.contains(StoreNames.SETTINGS)) {
       db.createObjectStore(StoreNames.SETTINGS, { keyPath: 'id' });
     }
+
+    // Collections store with indices
+    if (!db.objectStoreNames.contains(StoreNames.COLLECTIONS)) {
+      const collectionsStore = db.createObjectStore(StoreNames.COLLECTIONS, { keyPath: 'id' });
+      collectionsStore.createIndex('name', 'name', { unique: false });
+      collectionsStore.createIndex('dateAdded', 'dateAdded', { unique: false });
+      collectionsStore.createIndex('lastModified', 'lastModified', { unique: false });
+    }
   }
 
   /**
@@ -230,7 +323,42 @@ export class IndexedDBService {
       const db = await this.initDb();
       return db.getAll(StoreNames.BOOKS);
     } catch (error) {
-      log.error('Failed to get books from IndexedDB', { error: String(error) });
+      // Enhanced error logging with more details
+      const errorDetails = {
+        message: error?.message || 'Unknown error',
+        name: error?.name || 'Error',
+        stack: error?.stack,
+        code: (error as any)?.code,
+        toString: String(error)
+      };
+      log.error('Failed to get books from IndexedDB', errorDetails);
+      
+      // Show user notification with better error message
+      this.showUserNotification(`Failed to get books: ${errorDetails.message}`);
+      
+      // Attempt database repair if the error indicates a schema issue
+      const errorName = error?.name || '';
+      const errorMsg = error?.message || '';
+      if (
+        errorName === 'NotFoundError' || 
+        errorMsg.includes('store not found') || 
+        errorMsg.includes('The operation failed') ||
+        errorMsg.includes('object store') ||
+        errorMsg.includes('schema')
+      ) {
+        log.warn('Database schema issue detected, attempting repair');
+        const repaired = await this.checkAndRepairDatabase();
+        if (repaired) {
+          // Try again after repair
+          try {
+            const db = await this.initDb();
+            return db.getAll(StoreNames.BOOKS);
+          } catch (retryError) {
+            log.error('Failed to get books after repair attempt', { error: String(retryError) });
+          }
+        }
+      }
+      
       return [];
     }
   }
@@ -267,8 +395,19 @@ export class IndexedDBService {
       log.info('Book saved successfully', { bookId: book.id });
       return book.id;
     } catch (error) {
-      log.error(`Failed to save book to IndexedDB`, { bookId: book.id, error: String(error) });
-      this.showUserNotification('Failed to save book. Please try again.');
+      // Enhanced error logging with more details
+      const errorDetails = {
+        message: error?.message || 'Unknown error',
+        name: error?.name || 'Error',
+        stack: error?.stack,
+        code: (error as any)?.code,
+        toString: String(error)
+      };
+      log.error(`Failed to save book to IndexedDB`, { bookId: book.id, ...errorDetails });
+      
+      // Show user notification with better error message
+      this.showUserNotification(`Failed to save book: ${errorDetails.message}. Please try again.`);
+      
       throw error;
     }
   }
@@ -282,8 +421,42 @@ export class IndexedDBService {
       const db = await this.initDb();
       return db.getAll(StoreNames.SERIES);
     } catch (error) {
-      log.error('Failed to get series from IndexedDB', { error: String(error) });
-      // No longer fallback to localStorage
+      // Enhanced error logging with more details
+      const errorDetails = {
+        message: error?.message || 'Unknown error',
+        name: error?.name || 'Error',
+        stack: error?.stack,
+        code: (error as any)?.code,
+        toString: String(error)
+      };
+      log.error('Failed to get series from IndexedDB', errorDetails);
+      
+      // Show user notification with better error message
+      this.showUserNotification(`Failed to get series: ${errorDetails.message}`);
+      
+      // Attempt database repair if the error indicates a schema issue
+      const errorName = error?.name || '';
+      const errorMsg = error?.message || '';
+      if (
+        errorName === 'NotFoundError' || 
+        errorMsg.includes('store not found') || 
+        errorMsg.includes('The operation failed') ||
+        errorMsg.includes('object store') ||
+        errorMsg.includes('schema')
+      ) {
+        log.warn('Database schema issue detected, attempting repair');
+        const repaired = await this.checkAndRepairDatabase();
+        if (repaired) {
+          // Try again after repair
+          try {
+            const db = await this.initDb();
+            return db.getAll(StoreNames.SERIES);
+          } catch (retryError) {
+            log.error('Failed to get series after repair attempt', { error: String(retryError) });
+          }
+        }
+      }
+      
       return [];
     }
   }
@@ -426,6 +599,198 @@ export class IndexedDBService {
   }
 
   // This method was removed as part of migration away from localStorage
+
+  /**
+   * Check database health and attempt repairs if needed
+   * This method can be called when database errors are detected
+   */
+  async checkAndRepairDatabase(): Promise<boolean> {
+    log.info('Checking database health');
+    
+    try {
+      // Close any existing connections
+      if (this.db) {
+        this.db.close();
+        this.db = null;
+      }
+      
+      // Clear initialization state
+      this.isInitializing = false;
+      this.initPromise = null;
+      
+      // Try to open the database with a simple check
+      const tempDb = await openDB(DB_CONFIG.NAME, undefined, {
+        blocking: () => {},
+        terminated: () => {}
+      });
+      
+      // Check if all required stores exist
+      const missingStores = [];
+      const requiredStores = Object.values(StoreNames);
+      
+      for (const storeName of requiredStores) {
+        if (!tempDb.objectStoreNames.contains(storeName)) {
+          missingStores.push(storeName);
+        }
+      }
+      
+      if (missingStores.length > 0) {
+        log.warn(`Database is missing required stores: ${missingStores.join(', ')}`);
+        
+        // Close the temporary connection
+        tempDb.close();
+        
+        // Attempt to repair by upgrading the version
+        const currentVersion = await this.getCurrentDatabaseVersion();
+        const newVersion = currentVersion + 1;
+        
+        log.info(`Attempting to repair database by upgrading to version ${newVersion}`);
+        
+        const repairedDb = await openDB(DB_CONFIG.NAME, newVersion, {
+          upgrade: (db, oldVersion, newVersion) => {
+            log.info(`Repairing database`, { fromVersion: oldVersion, toVersion: newVersion });
+            
+            // Create missing stores
+            for (const storeName of missingStores) {
+              if (!db.objectStoreNames.contains(storeName)) {
+                log.info(`Creating missing store: ${storeName}`);
+                
+                if (storeName === StoreNames.BOOKS) {
+                  const bookStore = db.createObjectStore(StoreNames.BOOKS, { keyPath: 'id' });
+                  bookStore.createIndex('title', 'title', { unique: false });
+                  bookStore.createIndex('author', 'author', { unique: false });
+                  bookStore.createIndex('status', 'status', { unique: false });
+                  bookStore.createIndex('seriesId', 'seriesId', { unique: false });
+                  bookStore.createIndex('dateAdded', 'dateAdded', { unique: false });
+                  bookStore.createIndex('lastModified', 'lastModified', { unique: false });
+                } else if (storeName === StoreNames.SERIES) {
+                  const seriesStore = db.createObjectStore(StoreNames.SERIES, { keyPath: 'id' });
+                  seriesStore.createIndex('name', 'name', { unique: false });
+                  seriesStore.createIndex('lastModified', 'lastModified', { unique: false });
+                } else if (storeName === StoreNames.COLLECTIONS) {
+                  const collectionsStore = db.createObjectStore(StoreNames.COLLECTIONS, { keyPath: 'id' });
+                  collectionsStore.createIndex('name', 'name', { unique: false });
+                  collectionsStore.createIndex('dateAdded', 'dateAdded', { unique: false });
+                  collectionsStore.createIndex('lastModified', 'lastModified', { unique: false });
+                } else {
+                  // Generic store creation for other stores
+                  db.createObjectStore(storeName, { keyPath: 'id' });
+                }
+              }
+            }
+          }
+        });
+        
+        // Close the repaired connection
+        repairedDb.close();
+        
+        log.info('Database repair completed');
+        this.showUserNotification('Database has been repaired. Please refresh the page.', 'info');
+        return true;
+      } else {
+        log.info('Database health check passed - all stores exist');
+        tempDb.close();
+        return true;
+      }
+    } catch (error) {
+      // Enhanced error logging with more details
+      const errorDetails = {
+        message: error?.message || 'Unknown error',
+        name: error?.name || 'Error',
+        stack: error?.stack,
+        code: (error as any)?.code,
+        toString: String(error)
+      };
+      
+      log.error('Database health check failed', errorDetails);
+      this.showUserNotification(`Database health check failed: ${errorDetails.message}`);
+      return false;
+    }
+  }
+
+  /**
+   * Reset the database completely (dangerous operation)
+   */
+  async resetDatabase(): Promise<void> {
+    log.warn('Resetting database - this will delete all data');
+    
+    try {
+      // Close any existing connections
+      if (this.db) {
+        this.db.close();
+        this.db = null;
+      }
+      
+      // Delete the database
+      await deleteDB(DB_CONFIG.NAME);
+      
+      // Clear initialization state
+      this.isInitializing = false;
+      this.initPromise = null;
+      
+      log.info('Database reset successful');
+      this.showUserNotification('Database has been reset successfully.', 'info');
+    } catch (error) {
+      // Enhanced error logging with more details
+      const errorDetails = {
+        message: error?.message || 'Unknown error',
+        name: error?.name || 'Error',
+        stack: error?.stack,
+        code: (error as any)?.code,
+        toString: String(error)
+      };
+      
+      log.error('Failed to reset database', errorDetails);
+      this.showUserNotification(`Failed to reset database: ${errorDetails.message}. Please try again.`);
+      throw error;
+    }
+  }
+
+  /**
+   * Ensure the collections store exists
+   * This is a helper method to make sure the collections store is available
+   */
+  async ensureCollectionsStore(): Promise<void> {
+    log.debug('Ensuring collections store exists');
+    try {
+      // Check current database version
+      const currentVersion = await this.getCurrentDatabaseVersion();
+      
+      // Get a database connection
+      const db = await this.initDb();
+      
+      // Check if the collections store exists
+      if (!db.objectStoreNames.contains(StoreNames.COLLECTIONS)) {
+        log.warn('Collections store not found, attempting to create it');
+        
+        // Need to close and reopen with a higher version to create a new store
+        db.close();
+        this.db = null;
+        
+        // Use a version higher than both the config version and current version
+        const newVersion = Math.max(currentVersion, DB_CONFIG.VERSION) + 1;
+        log.info(`Upgrading database to version ${newVersion} to add collections store`);
+        
+        // Open with a version upgrade to create the store
+        const upgradedDb = await openDB(DB_CONFIG.NAME, newVersion, {
+          upgrade: (db) => {
+            const collectionsStore = db.createObjectStore(StoreNames.COLLECTIONS, { keyPath: 'id' });
+            collectionsStore.createIndex('name', 'name', { unique: false });
+            collectionsStore.createIndex('dateAdded', 'dateAdded', { unique: false });
+            collectionsStore.createIndex('lastModified', 'lastModified', { unique: false });
+            log.info('Created collections store in emergency recovery');
+          }
+        });
+        
+        // Update our db reference
+        this.db = upgradedDb;
+        log.info('Collections store created successfully');
+      }
+    } catch (error) {
+      log.error('Failed to ensure collections store exists', { error: String(error) });
+      this.showUserNotification('Failed to create collections store. Collection features may not work correctly.');
+    }
+  }
 
   /**
    * Close the database connection

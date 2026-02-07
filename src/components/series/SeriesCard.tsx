@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { Series } from "@/types/series";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { 
@@ -11,6 +11,8 @@ import {
   BellOff,
   ChevronDown,
   ChevronUp, 
+  ChevronRight,
+  Trash2,
   BookOpen as BookOpenIcon 
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -48,32 +50,30 @@ export const SeriesCard = ({ series, onToggleTracking, onDeleteSeries }: SeriesC
     }
   };
   
+  // Determine series color based on status or use a default
+  const seriesColor = series.status === 'completed' ? '#22c55e' : 
+                      series.status === 'cancelled' ? '#ef4444' : 
+                      series.status === 'ongoing' ? '#3b82f6' : 
+                      '#6366f1';
+                      
   return (
-    <Card className="h-full overflow-hidden transition-all duration-300 hover:shadow-md border border-border">
-      <div className="relative h-40 bg-gradient-to-r from-muted to-muted/50">
-        {series.coverImage ? (
-          <img 
-            src={series.coverImage} 
-            alt={series.name}
-            className="w-full h-full object-cover"
-          />
-        ) : (
-          <div className="flex items-center justify-center h-full">
-            <BookOpen className="h-16 w-16 text-muted-foreground/50" />
-            <span className="sr-only">{series.name}</span>
-          </div>
-        )}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-        
-        {/* Status badge */}
-        {series.status && (
-          <div className="absolute top-2 right-2 z-10">
-            <Badge 
-              variant="outline" 
-              className={cn("text-xs capitalize", getStatusColor(series.status))}
-            >
-              {series.status}
-            </Badge>
+    <Card 
+      className="flex flex-col overflow-hidden hover:shadow-md transition-shadow cursor-pointer h-full"
+      style={{ borderLeft: `4px solid ${seriesColor}` }}
+      onClick={() => window.location.href = `/series/${series.id}`}
+    >
+      <div 
+        className="h-32 bg-cover bg-center relative"
+        style={{ 
+          backgroundColor: seriesColor,
+          backgroundImage: series.coverImage ? `url(${series.coverImage})` : 'none'
+        }}
+      >
+        {!series.coverImage && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <span className="text-white text-4xl font-bold opacity-30">
+              {series.name.substring(0, 2).toUpperCase()}
+            </span>
           </div>
         )}
         
@@ -97,21 +97,22 @@ export const SeriesCard = ({ series, onToggleTracking, onDeleteSeries }: SeriesC
             )}
           </Button>
         )}
+        
+        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-3">
+          <h3 className="text-white font-semibold truncate">{series.name}</h3>
+        </div>
       </div>
       
-      <CardContent className="pt-4">
-        <h3 className="font-serif text-xl font-medium mb-1 line-clamp-2">
-          {series.name}
-        </h3>
-        <p className="text-sm text-muted-foreground mb-3 line-clamp-1">
+      <div className="p-4 flex-grow">
+        <p className="text-sm text-muted-foreground line-clamp-2 mb-2">
           {series.author || "Various Authors"}
         </p>
         
-        <div className="flex items-center gap-2 mb-4">
+        <div className="flex items-center gap-2 mb-2">
           <div className="flex-grow bg-muted h-2 rounded-full overflow-hidden">
             <div 
-              className="h-full bg-gradient-warm"
-              style={{ width: `${completionPercentage}%` }}
+              className="h-full"
+              style={{ width: `${completionPercentage}%`, backgroundColor: seriesColor }}
             />
           </div>
           <span className="text-sm font-medium whitespace-nowrap">
@@ -119,74 +120,52 @@ export const SeriesCard = ({ series, onToggleTracking, onDeleteSeries }: SeriesC
           </span>
         </div>
         
-        <div className="flex items-center justify-between">
-          <div className="flex gap-2">
-            <Button variant="ghost" size="sm" asChild>
-              <Link to={`/series/${series.id}`}>View Series</Link>
-            </Button>
-            
-            {onDeleteSeries && (
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  if (window.confirm(`Are you sure you want to delete "${series.name}"? This action cannot be undone.`)) {
-                    onDeleteSeries(series.id);
-                  }
-                }}
-              >
-                Delete
-              </Button>
-            )}
-            
-            {series.books?.length > 0 && (
-              <Collapsible
-                open={showBooks}
-                onOpenChange={setShowBooks}
-                className="w-full"
-              >
-                <CollapsibleTrigger asChild>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="flex items-center gap-1"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <BookOpenIcon className="h-3.5 w-3.5" />
-                    {showBooks ? 'Hide Books' : 'Show Books'}
-                    {showBooks ? 
-                      <ChevronUp className="h-3.5 w-3.5 ml-1" /> : 
-                      <ChevronDown className="h-3.5 w-3.5 ml-1" />
-                    }
-                  </Button>
-                </CollapsibleTrigger>
-              </Collapsible>
-            )}
-          </div>
-          
-          {series.hasUpcoming && (
-            <div className="flex items-center gap-1 text-accent-warm text-sm">
-              <CalendarClock className="h-4 w-4" />
-              <span>Upcoming</span>
-            </div>
-          )}
-        </div>
+        <p className="text-sm text-gray-500">
+          {`${series.books.length} ${series.books.length === 1 ? 'book' : 'books'}`}
+          {series.totalBooks && series.totalBooks > series.books.length && 
+            ` (${series.totalBooks} total)`}
+        </p>
         
-        {/* Expandable Books Panel */}
-        {series.books?.length > 0 && (
-          <Collapsible
-            open={showBooks}
-            className="w-full"
-          >
-            <CollapsibleContent className="mt-4 pt-4 border-t">
-              <SeriesBooksPanel series={series} />
-            </CollapsibleContent>
-          </Collapsible>
+        {series.hasUpcoming && (
+          <div className="flex items-center gap-1 text-accent-warm text-sm mt-2">
+            <CalendarClock className="h-4 w-4" />
+            <span>Upcoming release</span>
+          </div>
         )}
-      </CardContent>
+      </div>
+      
+      <div className="p-3 border-t flex justify-end gap-2">
+        <Button 
+          variant="ghost" 
+          size="icon"
+          asChild
+          onClick={(e) => e.stopPropagation()}
+        >
+          <Link to={`/series/${series.id}`} title="View series details">
+            <ChevronRight className="h-4 w-4" />
+          </Link>
+        </Button>
+        
+        {onDeleteSeries && (
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="text-destructive hover:text-destructive hover:bg-destructive/10"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              if (window.confirm(`Are you sure you want to delete "${series.name}"? This action cannot be undone.`)) {
+                onDeleteSeries(series.id);
+              }
+            }}
+            title="Delete series"
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        )}
+      </div>
+      
+      {/* Books panel removed */}
     </Card>
   );
 };

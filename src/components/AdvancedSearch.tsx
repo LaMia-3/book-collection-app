@@ -112,7 +112,7 @@ export const AdvancedSearch = ({ onSearch, placeholder = "Search your books...",
           value={query}
           onChange={handleInputChange}
           placeholder={placeholder}
-          className="pl-10 pr-20"
+          className="pl-10 pr-20 text-sm h-10"
         />
         <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex gap-1">
           {query && (

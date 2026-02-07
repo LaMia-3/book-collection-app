@@ -2,29 +2,52 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSettings } from "@/contexts/SettingsContext";
 import { Book } from "@/types/book";
-import { BookSearch } from "@/components/BookSearch";
 import { BookShelf } from "@/components/BookShelf";
 import { BookListView } from "@/components/BookListView";
 import { BookCoverView } from "@/components/BookCoverView";
-import { InsightsView } from "@/components/InsightsView";
 import { Settings } from "@/components/Settings";
-import { ViewToggle, ViewMode } from "@/components/ViewToggle";
+import { ViewMode } from "@/components/ViewToggle";
 import { BookDetails } from "@/components/BookDetails";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { Library, Search, Settings as SettingsIcon, PlusCircle, PenLine } from "lucide-react";
+import { 
+  Library, 
+  Search, 
+  PlusCircle, 
+  PenLine, 
+  Plus, 
+  BookOpen, 
+  Bell, 
+  BellOff, 
+  RefreshCw, 
+  BookMarked, 
+  Grid3X3, 
+  List, 
+  X, 
+  Filter, 
+  ChevronDown,
+  SortAsc
+} from "lucide-react";
 import { ManualAddBookDialog } from "@/components/dialogs/ManualAddBookDialog";
+import { BookSearchDialog } from "@/components/dialogs/BookSearchDialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
 import searchService, { SearchResult, SearchOptions } from "@/services/search/SearchService";
-import { AdvancedSearch } from "@/components/AdvancedSearch";
+import { SimpleSearch } from "@/components/SimpleSearch";
 import { GoalTracker } from "@/components/GoalTracker";
-import { NotificationBell } from "@/components/notifications/NotificationBell";
-import { PageHeader, HeaderActionButton } from "@/components/ui/page-header";
+import { AppLayout } from "@/components/layout/AppLayout";
 
 const Index = () => {
   const navigate = useNavigate();
@@ -42,8 +65,21 @@ const Index = () => {
     exactMatch: false,
     limit: 100
   });
-  const [showSearch, setShowSearch] = useState(false);
+  const [showSearchDialog, setShowSearchDialog] = useState(false);
   const [showManualAddDialog, setShowManualAddDialog] = useState(false);
+  
+  // Expose state setters to window object for the dropdown menu
+  useEffect(() => {
+    // Expose state setters to window object
+    (window as any).setShowSearch = setShowSearchDialog;
+    (window as any).setShowManualAddDialog = setShowManualAddDialog;
+    
+    // Cleanup function
+    return () => {
+      delete (window as any).setShowSearch;
+      delete (window as any).setShowManualAddDialog;
+    };
+  }, []);
   // Use default view from settings or fallback to 'shelf'
   const [viewMode, setViewMode] = useState<ViewMode>(settings.defaultView as ViewMode || 'shelf');
   const [showSettings, setShowSettings] = useState(false);
@@ -247,8 +283,8 @@ const Index = () => {
         setFilteredBooks(prev => [...prev, savedBook]);
       }
       
-      // Close the search interface
-      setShowSearch(false);
+      // Close the search dialog
+      setShowSearchDialog(false);
       
       console.log('Book successfully saved to IndexedDB with ID:', bookId);
     } catch (error) {
@@ -303,12 +339,6 @@ const Index = () => {
         variant: "destructive"
       });
     }
-    
-    // Show success toast
-    toast({
-      title: "Book Removed",
-      description: "The book has been removed from your library.",
-    });
   };
 
   // Handle search with advanced options
@@ -332,78 +362,91 @@ const Index = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-page">
-      <div className="container mx-auto max-w-6xl">
-        {/* Standardized Header */}
-        <PageHeader
-          title={libraryName}
-          subtitle="Track your reading journey, one book at a time"
-          actions={
-            <>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="default" className="flex items-center gap-2" size="sm">
-                    <PlusCircle className="h-4 w-4" />
-                    Add Books
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent>
-                  <DropdownMenuItem onClick={() => {
-                    setShowSearch(true);
-                    setShowManualAddDialog(false);
-                  }}>
-                    <Search className="h-4 w-4 mr-2" />
-                    Search API
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => {
-                    setShowManualAddDialog(true);
-                    setShowSearch(false);
-                  }}>
-                    <PenLine className="h-4 w-4 mr-2" />
-                    Manual Entry
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-              <NotificationBell />
-              <HeaderActionButton
-                icon={<SettingsIcon className="h-4 w-4" />}
-                label="Settings"
-                onClick={() => setShowSettings(true)}
-              />
-            </>
-          }
-          className="py-6"
-        >
-          <div className="flex flex-col sm:flex-row gap-4 mt-4">
-            <div className="relative flex-1">
-              <AdvancedSearch 
-                onSearch={handleSearch}
-                placeholder="Search your books..."
-                className="w-full"
-              />
-            </div>
-            <ViewToggle 
-              viewMode={viewMode} 
-              onChange={(newViewMode) => {
-                if (newViewMode === 'series') {
-                  navigate('/series');
-                } else {
-                  setViewMode(newViewMode);
-                }
+    <AppLayout
+      viewMode={viewMode}
+      onViewModeChange={setViewMode}
+      onAddClick={() => {
+        // Show dropdown with API search and manual entry options
+        // This is handled by a custom dropdown in the AppLayout
+      }}
+      onSettingsClick={() => setShowSettings(true)}
+      onSearchAPIClick={() => setShowSearchDialog(true)}
+      onManualEntryClick={() => setShowManualAddDialog(true)}
+      addButtonLabel="Add Books"
+      searchComponent={
+        <div className="flex items-center gap-2 w-full">
+          {/* Search input */}
+          <div className="relative flex-grow">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+            <Input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => {
+                const newQuery = e.target.value;
+                setSearchQuery(newQuery);
+                handleSearch(newQuery, searchOptions);
               }}
+              placeholder="Search your books..."
+              className="pl-10 h-10 text-sm w-full"
             />
+            {searchQuery && (
+              <button
+                type="button"
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 flex items-center justify-center text-muted-foreground hover:text-foreground"
+                onClick={() => {
+                  setSearchQuery('');
+                  handleSearch('', searchOptions);
+                }}
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
           </div>
-        </PageHeader>
+          
+          {/* View Toggle Buttons */}
+          <div className="flex">
+            <Button
+              variant={viewMode === 'shelf' ? 'default' : 'outline'}
+              size="icon"
+              onClick={() => setViewMode('shelf')}
+              className="rounded-l-md rounded-r-none h-10 w-10"
+              title="Shelf view"
+            >
+              <BookOpen className="h-4 w-4" />
+            </Button>
+            <Button
+              variant={viewMode === 'cover' ? 'default' : 'outline'}
+              size="icon"
+              onClick={() => setViewMode('cover')}
+              className="rounded-none h-10 w-10"
+              title="Cover view"
+            >
+              <Grid3X3 className="h-4 w-4" />
+            </Button>
+            <Button
+              variant={viewMode === 'list' ? 'default' : 'outline'}
+              size="icon"
+              onClick={() => setViewMode('list')}
+              className="rounded-l-none rounded-r-md h-10 w-10"
+              title="List view"
+            >
+              <List className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      }
+    >
 
-        {/* Book Search */}
-        {showSearch && (
-          <div className="mb-8 p-6 mx-4 bg-card rounded-lg shadow-elegant">
-            <BookSearch onAddBook={addBook} existingBooks={books} />
-          </div>
-        )}
+        {/* Book Search Dialog */}
+        <BookSearchDialog
+          open={showSearchDialog}
+          onOpenChange={setShowSearchDialog}
+          onAddBook={addBook}
+          existingBooks={books}
+        />
 
         {/* Library Stats */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8 mt-0">
           <div className="text-center p-4 bg-card rounded-lg shadow-book">
             <div className="text-2xl font-serif font-bold text-primary">
               {books.length}
@@ -460,11 +503,7 @@ const Index = () => {
                 <BookCoverView books={filteredBooks} onBookClick={setSelectedBook} />
               </div>
             )}
-            {viewMode === 'insights' && (
-              <div className="animate-fade-in">
-                <InsightsView books={books} onBookClick={setSelectedBook} />
-              </div>
-            )}
+            {/* Insights view moved to its own page */}
           </div>
         </div>
 
@@ -738,6 +777,84 @@ const Index = () => {
                     await enhancedStorageService.saveBook(indexedDBBook);
                   }
                   
+                  // Process series data from the backup
+                  // First check if this is an enhanced backup with explicit series data
+                  if (restoreResult.isEnhancedFormat && restoreResult.series && restoreResult.series.length > 0) {
+                    console.log(`Restoring ${restoreResult.series.length} series from backup`);
+                    
+                    // Save each series to IndexedDB
+                    for (const series of restoreResult.series) {
+                      // Convert dates to Date objects for UI format
+                      const uiSeries = {
+                        ...series,
+                        createdAt: new Date(series.timestamps?.created || new Date().toISOString()),
+                        updatedAt: new Date(series.timestamps?.updated || new Date().toISOString())
+                      };
+                      
+                      // Save to IndexedDB
+                      await enhancedStorageService.saveSeries(uiSeries);
+                    }
+                  } 
+                  // For older backup format (v1.0.0), extract series from book references
+                  else {
+                    console.log('Extracting series from book references');
+                    
+                    // Map to collect series data from books
+                    const seriesMap = new Map();
+                    
+                    // Extract series data from books
+                    for (const book of restoreResult.books) {
+                      if (book.isPartOfSeries && book.seriesId) {
+                        // If this series ID hasn't been seen yet, create a new series entry
+                        if (!seriesMap.has(book.seriesId)) {
+                          // Create a new series with basic info
+                          seriesMap.set(book.seriesId, {
+                            id: book.seriesId,
+                            name: book._legacySeriesName || `Series ${seriesMap.size + 1}`,
+                            author: book.author || '',
+                            description: '',
+                            books: [],
+                            createdAt: new Date(),
+                            updatedAt: new Date(),
+                            genre: book.genre || [],
+                            status: 'ongoing',
+                            readingOrder: 'publication'
+                          });
+                        }
+                        
+                        // Add this book to the series
+                        const series = seriesMap.get(book.seriesId);
+                        if (!series.books.includes(book.id)) {
+                          series.books.push(book.id);
+                        }
+                      }
+                    }
+                    
+                    // Save all extracted series to IndexedDB
+                    console.log(`Extracted ${seriesMap.size} series from book references`);
+                    for (const series of seriesMap.values()) {
+                      await enhancedStorageService.saveSeries(series);
+                    }
+                  }
+                  
+                  // If this is an enhanced backup with collections, restore them
+                  if (restoreResult.isEnhancedFormat && restoreResult.collections && restoreResult.collections.length > 0) {
+                    console.log(`Restoring ${restoreResult.collections.length} collections from backup`);
+                    
+                    // Save each collection to IndexedDB
+                    for (const collection of restoreResult.collections) {
+                      // Convert dates to Date objects for UI format
+                      const uiCollection = {
+                        ...collection,
+                        createdAt: new Date(collection.createdAt || new Date().toISOString()),
+                        updatedAt: new Date(collection.updatedAt || new Date().toISOString())
+                      };
+                      
+                      // Save to IndexedDB
+                      await enhancedStorageService.saveCollection(uiCollection);
+                    }
+                  }
+                  
                   // Replace the current book collection with the restored books
                   setBooks(restoreResult.books);
                   
@@ -746,10 +863,10 @@ const Index = () => {
                     description: restoreResult.message
                   });
                 } catch (saveError) {
-                  console.error('Error saving restored books to IndexedDB:', saveError);
+                  console.error('Error saving restored data to IndexedDB:', saveError);
                   toast({
                     title: "Restore Partial Success",
-                    description: `Books restored but may not appear in all views. Please refresh the page. Error: ${saveError instanceof Error ? saveError.message : String(saveError)}`,
+                    description: `Data restored but may not appear in all views. Please refresh the page. Error: ${saveError instanceof Error ? saveError.message : String(saveError)}`,
                     variant: "destructive"
                   });
                 }
@@ -773,8 +890,7 @@ const Index = () => {
             }
           }}
         />
-      </div>
-    </div>
+    </AppLayout>
   );
 };
 

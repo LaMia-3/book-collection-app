@@ -8,6 +8,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Database, AlertCircle, Trash2, RefreshCw, Settings, Server, CheckCircle2, Wrench, Zap, UserCircle } from "lucide-react";
 import { PageHeader, HeaderActionButton } from '@/components/ui/page-header';
 import { useToast } from '@/hooks/use-toast';
+import { DatabaseRepairUtility } from '@/components/debug/DatabaseRepairUtility';
 
 // Import components and utilities
 import { IndexedDBViewer } from '@/components/debug/IndexedDBViewer';
@@ -220,6 +221,10 @@ export default function AdminPage() {
           <TabsTrigger value="reset" className="flex items-center gap-2">
             <Trash2 className="h-4 w-4" />
             <span>Database Reset</span>
+          </TabsTrigger>
+          <TabsTrigger value="repair" className="flex items-center gap-2">
+            <Wrench className="h-4 w-4" />
+            <span>Database Repair</span>
           </TabsTrigger>
           <TabsTrigger value="workflow-test" className="flex items-center gap-2">
             <Zap className="h-4 w-4" />
@@ -650,6 +655,24 @@ export default function AdminPage() {
             </CardHeader>
             <CardContent>
               <WorkflowTester />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Database Repair Tab */}
+        <TabsContent value="repair">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <Wrench className="h-5 w-5 mr-2" />
+                Database Repair Utility
+              </CardTitle>
+              <CardDescription>
+                Diagnose and fix database issues
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <DatabaseRepairUtility />
             </CardContent>
           </Card>
         </TabsContent>

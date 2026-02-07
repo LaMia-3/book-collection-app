@@ -1,8 +1,11 @@
-import { indexedDBService } from './storage/indexedDBService';
+import { IndexedDBService } from './storage/IndexedDBService';
 import { StoreNames } from './storage/types';
 import type { Book } from '@/types/models/Book';
 import type { Book as IndexedDBBook } from '@/types/indexeddb/Book';
 import { createLogger } from '@/utils/loggingUtils';
+
+// Create an instance of the service
+const indexedDBService = new IndexedDBService();
 
 const log = createLogger('bookService');
 

@@ -285,65 +285,63 @@ const SeriesDetailPage = () => {
   }
   
   return (
-    <div className="container mx-auto px-4 py-6">
-      <PageHeader
-        title={series.name}
-        subtitle={series.author || ''}
-        backTo="/series"
-        backAriaLabel="Back to Series"
-        actions={
-          <>
-            <HeaderActionButton
-              icon={series.isTracked ? <Bell /> : <BellOff />}
-              label={series.isTracked ? "Stop tracking" : "Track series"}
-              onClick={handleToggleTracking}
-              variant="secondary"
-            />
-            <HeaderActionButton
-              icon={<Pencil />}
-              label="Edit series"
-              onClick={() => setIsEditDialogOpen(true)}
-              variant="secondary"
-            />
-            <HeaderActionButton
-              icon={<Trash2 />}
-              label="Delete series"
-              onClick={handleDeleteSeries}
-              variant="secondary"
-            />
-          </>
-        }
-        className="pb-0"
-      >
-        {/* Hero Header with Cover Image */}
-        <div className="relative h-64 rounded-lg overflow-hidden mb-6 -mt-4">
-          {series.coverImage ? (
-            <img 
-              src={series.coverImage} 
-              alt={series.name}
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <div className="w-full h-full bg-gradient-to-r from-muted/60 via-muted to-muted/60 flex items-center justify-center">
-              <BookOpen className="h-24 w-24 text-muted-foreground/30" />
-            </div>
-          )}
-          
-          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent"></div>
-          
-          <div className="absolute bottom-0 left-0 right-0 p-6 text-white">
-            <div className="flex items-center">
-              {isRefreshing && (
-                <Loader2 className="h-5 w-5 mr-2 animate-spin text-white/70" />
-              )}
-              <div className="flex items-center gap-1">
-                <span className="text-white/80">{seriesBooks.length} books</span>
-                <span className="text-white/50 px-1">•</span>
-                <span className="text-white/80">{completionPercentage}% complete</span>
-              </div>
-            </div>
+    <div className="container max-w-7xl mx-auto px-4 py-6">
+      {/* Page Header */}
+      <div className="mb-8">
+        <PageHeader
+          title={series.name}
+          subtitle={series.author || ''}
+          backTo="/series"
+          backAriaLabel="Back to Series"
+          actions={
+            <>
+              <HeaderActionButton
+                icon={series.isTracked ? <Bell /> : <BellOff />}
+                label={series.isTracked ? "Stop tracking" : "Track series"}
+                onClick={handleToggleTracking}
+                variant="secondary"
+              />
+              <HeaderActionButton
+                icon={<Pencil />}
+                label="Edit series"
+                onClick={() => setIsEditDialogOpen(true)}
+                variant="secondary"
+              />
+              <HeaderActionButton
+                icon={<Trash2 />}
+                label="Delete series"
+                onClick={handleDeleteSeries}
+                variant="secondary"
+              />
+            </>
+          }
+          className="pb-0"
+        />
+      </div>
+      
+      {/* Hero Header with Cover Image */}
+      <div className="relative h-64 w-full rounded-lg overflow-hidden mb-6 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20">
+        {series.coverImage ? (
+          <img 
+            src={series.coverImage} 
+            alt={series.name}
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <div className="w-full h-full bg-gradient-to-r from-muted/60 via-muted to-muted/60 flex items-center justify-center">
+            <BookOpen className="h-24 w-24 text-muted-foreground/30" />
+          </div>
+        )}
+        
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent"></div>
+        
+        <div className="absolute bottom-0 left-0 right-0 p-0 pb-4 text-white">
+          <div className="flex flex-col gap-1 pl-4">
+            <h1 className="text-2xl font-bold text-white">{series.name}</h1>
+            <span className="text-white/80 font-medium">{seriesBooks.length} {seriesBooks.length === 1 ? 'book' : 'books'}</span>
           </div>
         </div>
+      </div>
       
       {/* Progress bar */}
       <div className="mb-6">
@@ -380,6 +378,19 @@ const SeriesDetailPage = () => {
             series={series} 
             books={seriesBooks} 
             allBooks={books}
+            onUpdateBook={(updatedBook) => {
+              // Update the book in the local state
+              const updatedBooks = books.map(book => 
+                book.id === updatedBook.id ? updatedBook : book
+              );
+              setBooks(updatedBooks);
+              
+              // Update series books
+              const updatedSeriesBooks = seriesBooks.map(book => 
+                book.id === updatedBook.id ? updatedBook : book
+              );
+              setSeriesBooks(updatedSeriesBooks);
+            }}
           />
         </TabsContent>
         
@@ -397,7 +408,6 @@ const SeriesDetailPage = () => {
           <UpcomingReleasesTab seriesId={series.id} seriesName={series.name} author={series.author} />
         </TabsContent>
       </Tabs>
-      </PageHeader>
       
       {/* Series Edit Dialog */}
       {series && (

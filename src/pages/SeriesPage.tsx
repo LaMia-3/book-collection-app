@@ -1,19 +1,30 @@
 import { useState, useEffect, useMemo } from "react";
+import { Settings } from "@/components/Settings";
 import { useNavigate } from "react-router-dom";
 import { useSettings } from "@/contexts/SettingsContext";
 import { Series } from "@/types/series";
 import { Book } from "@/types/book";
-import { Button } from "@/components/ui/button";
-import { Library, Plus, BookOpen, Bell, BellOff, RefreshCw, BookMarked } from "lucide-react";
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Library, Plus, BookOpen, Bell, BellOff, RefreshCw, BookMarked, Grid3X3, List, Search, X, Filter, ChevronDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { SeriesCard } from "@/components/series/SeriesCard";
 import { CreateSeriesDialog } from "@/components/series/CreateSeriesDialog";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { seriesDetectionService } from "@/services/api/SeriesDetectionService";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Checkbox } from "@/components/ui/checkbox";
 import { SeriesFilterPanel, SeriesFilter } from "@/components/filters/SeriesFilterPanel";
 import { enhancedStorageService } from "@/services/storage/EnhancedStorageService";
 import { PageHeader, HeaderActionButton } from "@/components/ui/page-header";
+import { AppLayout } from "@/components/layout/AppLayout";
 
 /**
  * Series management page component
@@ -26,8 +37,10 @@ const SeriesPage = () => {
   const [series, setSeries] = useState<Series[]>([]);
   const [isCreatingNewSeries, setIsCreatingNewSeries] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"all" | "tracked">("tracked");
+  const [showSettings, setShowSettings] = useState(false);
   const [filter, setFilter] = useState<SeriesFilter>({});
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
   
   // Extract unique genres and authors for filtering
   const availableGenres = useMemo(() => {
@@ -52,8 +65,13 @@ const SeriesPage = () => {
   
   // Apply filters to series
   const filteredSeries = useMemo(() => {
-    // Start with the tab filter
-    let result = activeTab === "tracked" ? series.filter(s => s.isTracked) : series;
+    // Start with all series
+    let result = series;
+    
+    // Apply tracked filter if enabled
+    if (filter.tracked) {
+      result = result.filter(s => s.isTracked);
+    }
     
     // Apply search filter
     if (filter.search) {
@@ -90,7 +108,7 @@ const SeriesPage = () => {
     }
     
     return result;
-  }, [series, activeTab, filter]);
+  }, [series, filter]);
   
   // Clear all filters
   const clearFilters = () => {
@@ -99,8 +117,8 @@ const SeriesPage = () => {
   
   // Get the personalized library name
   const libraryName = settings.preferredName 
-    ? `${settings.preferredName}'s Series Collection`
-    : "My Series Collection";
+    ? `${settings.preferredName}'s Series`
+    : "My Series";
     
   // Load books and series from IndexedDB as the sole source of truth
   useEffect(() => {
@@ -379,60 +397,111 @@ const SeriesPage = () => {
   };
 
   return (
-    <div className="container mx-auto">
-      <PageHeader
-        title={libraryName}
-        subtitle={series.length === 0 
-          ? "Start organizing your books into series"
-          : `${series.length} series in your collection`}
-        backTo="/"
-        backAriaLabel="Back to Library"
-        actions={
-          <>
-            {/* Detect Series button removed - functionality to be redone */}
-            {/* TODO: Redo series detection functionality */}
-            <HeaderActionButton
-              icon={<Plus />}
-              label="New Series"
-              onClick={() => setIsCreatingNewSeries(true)}
-              variant="primary"
+    <AppLayout
+      onAddClick={() => setIsCreatingNewSeries(true)}
+      onSettingsClick={() => setShowSettings(true)}
+      addButtonLabel="Add Series"
+      searchComponent={
+        <div className="flex items-center gap-2 w-full">
+          {/* Search input */}
+          <div className="relative flex-grow">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+            <Input
+              type="text"
+              value={filter.search || ''}
+              onChange={(e) => setFilter({ ...filter, search: e.target.value || undefined })}
+              placeholder="Search series..."
+              className="pl-10 h-10 text-sm w-full"
             />
-            <NotificationBell />
-          </>
-        }
-        className="py-6"
-      >
-        {/* Series Tabs */}
-        <Tabs defaultValue="tracked" onValueChange={(v) => setActiveTab(v as "all" | "tracked")} className="mt-6">
-          <div className="flex items-center justify-between mb-6">
-            <TabsList className="grid w-[400px] grid-cols-2">
-              <TabsTrigger value="tracked" className="flex items-center gap-2">
-                <BookMarked className="h-4 w-4" />
-                Tracked Series <span className="ml-1.5 text-xs bg-muted rounded-full px-2 py-0.5">{series.filter(s => s.isTracked).length}</span>
-              </TabsTrigger>
-              <TabsTrigger value="all" className="flex items-center gap-2">
-                <Library className="h-4 w-4" />
-                All Series <span className="ml-1.5 text-xs bg-muted rounded-full px-2 py-0.5">{series.length}</span>
-              </TabsTrigger>
-            </TabsList>
-            
-            <div className="text-sm text-muted-foreground">
-              {activeTab === "tracked" 
-                ? "Series you're tracking for updates"
-                : "All series in your collection"}
-            </div>
+            {filter.search && (
+              <button
+                type="button"
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 flex items-center justify-center text-muted-foreground hover:text-foreground"
+                onClick={() => setFilter({ ...filter, search: undefined })}
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
           </div>
+          
+          {/* Sort dropdown */}
+          <Select
+            value={filter.sortBy || 'alphabetical'}
+            onValueChange={(value) => setFilter({...filter, sortBy: value as 'alphabetical' | 'recent'})}
+          >
+            <SelectTrigger className="w-[140px] h-10">
+              <SelectValue placeholder="Sort by" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="alphabetical">Alphabetical</SelectItem>
+              <SelectItem value="recent">Recently Updated</SelectItem>
+            </SelectContent>
+          </Select>
+          
+          {/* Filter button */}
+          <div className="relative">
+            <Button 
+              variant="outline" 
+              className="h-10"
+              onClick={() => {
+                setIsFilterOpen(!isFilterOpen)
+              }}
+            >
+              <Filter className="h-4 w-4 mr-1" />
+              Filters
+              {(filter.genres?.length || 0) + (filter.statuses?.length || 0) + (filter.authors?.length || 0) > 0 && (
+                <Badge
+                  variant="secondary"
+                  className="rounded-full h-5 min-w-[20px] p-0 flex items-center justify-center text-xs ml-1"
+                >
+                  {(filter.genres?.length || 0) + (filter.statuses?.length || 0) + (filter.authors?.length || 0)}
+                </Badge>
+              )}
+            </Button>
+            
+            {/* Filter Panel Dropdown */}
+            {isFilterOpen && (
+              <div className="absolute z-50 right-0 mt-1">
+                <SeriesFilterPanel
+                  filter={filter}
+                  onFilterChange={setFilter}
+                  genres={availableGenres}
+                  authors={availableAuthors}
+                  onClearFilters={clearFilters}
+                  hideSearchInput={true}
+                />
+              </div>
+            )}
+          </div>
+          
+          {/* View Toggle Buttons */}
+          <div className="flex">
+            <Button
+              variant={viewMode === "grid" ? "default" : "outline"}
+              size="icon"
+              onClick={() => setViewMode("grid")}
+              className="rounded-r-none h-10 w-10"
+              title="Grid view"
+            >
+              <Grid3X3 />
+            </Button>
+            <Button
+              variant={viewMode === "list" ? "default" : "outline"}
+              size="icon"
+              onClick={() => setViewMode("list")}
+              className="rounded-l-none h-10 w-10"
+              title="List view"
+            >
+              <List />
+            </Button>
+          </div>
+        </div>
+      }
+    >
+      <div className="mt-6 mb-6">
+        {/* Series Filter Panel moved to dropdown */}
         
-        {/* Series Filter Panel */}
-        <SeriesFilterPanel
-          filter={filter}
-          onFilterChange={setFilter}
-          genres={availableGenres}
-          authors={availableAuthors}
-          onClearFilters={clearFilters}
-        />
-        
-        <TabsContent value="all" className="mt-0">
+        <div className="mt-0">
           {/* Empty state when no series exist */}
           {series.length === 0 && (
             <div className="flex flex-col items-center justify-center py-20 border-2 border-dashed border-muted-foreground/20 rounded-lg">
@@ -452,132 +521,180 @@ const SeriesPage = () => {
             </div>
           )}
           
-          {/* All Series grid */}
-          {isLoading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {[1, 2, 3].map(i => (
-                <div key={i} className="h-64 animate-pulse bg-muted rounded-lg" />
-              ))}
-            </div>
-          ) : series.length > 0 && (
-            <>
-              {filteredSeries.length === 0 && (
-                <div className="flex flex-col items-center justify-center py-12 border border-dashed rounded-lg">
-                  <p className="text-muted-foreground">No series match your filters</p>
-                  <Button 
-                    variant="link" 
-                    className="mt-2"
-                    onClick={clearFilters}
-                  >
-                    Clear all filters
-                  </Button>
-                </div>
-              )}
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredSeries.map(seriesItem => (
-                  <SeriesCard 
-                    key={seriesItem.id} 
-                    series={seriesItem}
-                    onToggleTracking={handleToggleTracking}
-                    onDeleteSeries={handleDeleteSeries}
-                  />
-                ))}
-              </div>
-            </>
-          )}
-        </TabsContent>
-        
-        <TabsContent value="tracked" className="mt-0">
           {/* Empty state when no tracked series exist */}
-          {series.filter(s => s.isTracked).length === 0 && (
+          {series.length > 0 && filter.tracked && filteredSeries.length === 0 && (
             <div className="flex flex-col items-center justify-center py-16 border-2 border-dashed border-muted-foreground/20 rounded-lg">
               <BookMarked className="h-16 w-16 text-muted-foreground/40 mb-4" />
               <h2 className="text-xl font-medium mb-2">No Tracked Series</h2>
               <p className="text-muted-foreground text-center max-w-md mb-6">
                 Track series to get notifications about upcoming releases and keep up with your favorite authors.
               </p>
-              {series.length > 0 ? (
-                <div className="text-center">
-                  <p className="mb-3 text-sm">You have {series.length} series in your collection</p>
-                  <Button 
-                    onClick={() => setActiveTab("all")}
-                    variant="outline"
-                  >
-                    <Bell className="h-4 w-4 mr-2" />
-                    Enable Tracking for Series
-                  </Button>
-                </div>
-              ) : (
+              <div className="text-center">
+                <p className="mb-3 text-sm">You have {series.length} series in your collection</p>
                 <Button 
-                  onClick={() => setIsCreatingNewSeries(true)}
-                  className="bg-gradient-warm hover:bg-primary-glow"
+                  onClick={() => setFilter({...filter, tracked: false})}
+                  variant="outline"
                 >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Create Your First Series
+                  <Bell className="h-4 w-4 mr-2" />
+                  Show All Series
                 </Button>
-              )}
+              </div>
             </div>
           )}
           
-          {/* Tracked Series grid */}
-          {!isLoading && series.filter(s => s.isTracked).length > 0 && (
+          {/* Series grid/list */}
+          {isLoading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {[1, 2, 3].map(i => (
+                <div key={i} className="h-64 animate-pulse bg-muted rounded-lg" />
+              ))}
+            </div>
+          ) : (series.length > 0 && filteredSeries.length > 0) && (
             <>
-              {filteredSeries.length === 0 && (
-                <div className="flex flex-col items-center justify-center py-12 border border-dashed rounded-lg">
-                  <p className="text-muted-foreground">No tracked series match your filters</p>
-                  <Button 
-                    variant="link" 
-                    className="mt-2"
-                    onClick={clearFilters}
-                  >
-                    Clear all filters
-                  </Button>
+              {viewMode === "grid" ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {filteredSeries.map(seriesItem => (
+                    <SeriesCard 
+                      key={seriesItem.id} 
+                      series={seriesItem}
+                      onToggleTracking={handleToggleTracking}
+                      onDeleteSeries={handleDeleteSeries}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {filteredSeries.map(seriesItem => (
+                    <div key={seriesItem.id} className="flex items-start gap-4 p-4 border rounded-lg hover:bg-accent/5 transition-colors">
+                      {/* Series cover image */}
+                      <div className="h-24 w-20 flex-shrink-0 bg-muted overflow-hidden rounded-md">
+                        {seriesItem.coverImage ? (
+                          <img
+                            src={seriesItem.coverImage}
+                            alt={seriesItem.name}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <div className="h-full w-full flex items-center justify-center bg-primary/10 text-primary p-1">
+                            <Library className="h-8 w-8 opacity-70" />
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* Series details */}
+                      <div className="flex-grow min-w-0">
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-lg font-medium truncate">{seriesItem.name}</h3>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => handleToggleTracking(seriesItem.id, !seriesItem.isTracked)}
+                              title={seriesItem.isTracked ? "Stop tracking" : "Track series"}
+                            >
+                              {seriesItem.isTracked ? (
+                                <Bell className="h-4 w-4 text-primary" />
+                              ) : (
+                                <BellOff className="h-4 w-4 text-muted-foreground" />
+                              )}
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-destructive hover:text-destructive/80"
+                              onClick={() => handleDeleteSeries(seriesItem.id)}
+                              title="Delete series"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-trash-2">
+                                <path d="M3 6h18" />
+                                <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                                <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                                <line x1="10" x2="10" y1="11" y2="17" />
+                                <line x1="14" x2="14" y1="11" y2="17" />
+                              </svg>
+                            </Button>
+                          </div>
+                        </div>
+                        
+                        {seriesItem.author && (
+                          <p className="text-sm text-muted-foreground mb-1">by {seriesItem.author}</p>
+                        )}
+                        
+                        <div className="flex items-center gap-4 mt-2">
+                          <div className="flex items-center gap-1">
+                            <BookOpen className="h-4 w-4 text-muted-foreground" />
+                            <span className="text-sm">{seriesItem.books?.length || 0} books</span>
+                          </div>
+                          
+                          {seriesItem.genre && (
+                            <div className="flex items-center gap-1">
+                              <span className="text-xs px-2 py-0.5 bg-accent/20 rounded-full">
+                                {Array.isArray(seriesItem.genre) ? seriesItem.genre[0] : seriesItem.genre}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredSeries.map(seriesItem => (
-                  <SeriesCard 
-                    key={seriesItem.id} 
-                    series={seriesItem}
-                    onToggleTracking={handleToggleTracking}
-                    onDeleteSeries={handleDeleteSeries}
-                  />
-                ))}
-              </div>
             </>
           )}
-        </TabsContent>
-      </Tabs>
-      </PageHeader>
-
-      {/* Create Series Dialog */}
-      <CreateSeriesDialog
-        open={isCreatingNewSeries}
-        onOpenChange={setIsCreatingNewSeries}
-        onSeriesCreated={(newSeries) => {
-          // Update state immediately for UI responsiveness
-          setSeries(prev => [...prev, newSeries]);
           
-          // Save to IndexedDB in the background
-          (async () => {
-            try {
-              const enhancedSeries = {
-                ...newSeries,
-                readingProgress: 0,
-                completedBooks: 0,
-                dateAdded: new Date().toISOString(),
-                lastModified: new Date().toISOString()
-              };
-              await enhancedStorageService.saveSeries(enhancedSeries as any);
-            } catch (error) {
-              console.error("Error saving new series to IndexedDB:", error);
-            }
-          })();
-        }}
-      />
-    </div>
+          {/* No results message */}
+          {series.length > 0 && filteredSeries.length === 0 && !filter.tracked && (
+            <div className="flex flex-col items-center justify-center py-12 border border-dashed rounded-lg">
+              <p className="text-muted-foreground">No series match your filters</p>
+              <Button 
+                variant="link" 
+                className="mt-2"
+                onClick={clearFilters}
+              >
+                Clear all filters
+              </Button>
+            </div>
+          )}
+        </div>
+      </div>
+      
+      {/* Create Series Dialog */}
+      {isCreatingNewSeries && (
+        <CreateSeriesDialog
+          isOpen={isCreatingNewSeries}
+          onClose={() => setIsCreatingNewSeries(false)}
+          onCreateSeries={(newSeries) => {
+            // Add the new series to state
+            setSeries(prev => [...prev, newSeries]);
+            setIsCreatingNewSeries(false);
+            
+            // Save to IndexedDB
+            enhancedStorageService.saveSeries(newSeries)
+              .then(() => {
+                console.log(`Series ${newSeries.id} saved to IndexedDB`);
+              })
+              .catch(error => {
+                console.error(`Error saving series ${newSeries.id} to IndexedDB:`, error);
+                toast({
+                  title: "Error",
+                  description: "Could not save the new series to database",
+                  variant: "destructive"
+                });
+              });
+          }}
+          books={books}
+        />
+      )}
+      
+      {/* Settings Dialog */}
+      {showSettings && (
+        <Settings
+          isOpen={showSettings}
+          onClose={() => setShowSettings(false)}
+        />
+      )}
+    </AppLayout>
   );
 };
 

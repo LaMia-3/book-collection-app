@@ -1,4 +1,5 @@
 import React from 'react';
+import { downloadFile } from '@/utils/exportUtils';
 import {
   Dialog,
   DialogContent,
@@ -16,6 +17,118 @@ interface ImportFormatHelpProps {
 }
 
 export const ImportFormatHelp: React.FC<ImportFormatHelpProps> = ({ trigger }) => {
+  // Example CSV content
+  const csvExampleContent = `title,author,status,rating,completedDate,notes,genre,isPartOfSeries,seriesName,volumeNumber,collectionNames
+"The Great Gatsby","F. Scott Fitzgerald","completed",4,"2025-01-15","A classic tale of wealth and obsession","Fiction","false","","",""
+"Dune","Frank Herbert","reading","","","Epic sci-fi adventure","Science Fiction","true","Dune Chronicles","1","Science Fiction;Favorites"
+"Project Hail Mary","Andy Weir","want to read","","","","Science Fiction","false","","","Science Fiction"`;
+
+  // Example simple JSON content
+  const simpleJsonExampleContent = JSON.stringify([
+    {
+      "title": "The Great Gatsby",
+      "author": "F. Scott Fitzgerald",
+      "status": "completed",
+      "rating": 4,
+      "completedDate": "2025-01-15",
+      "notes": "A classic tale of wealth and obsession",
+      "genre": "Fiction"
+    },
+    {
+      "title": "Dune",
+      "author": "Frank Herbert",
+      "status": "reading",
+      "genre": "Science Fiction",
+      "isPartOfSeries": true,
+      "seriesName": "Dune Chronicles",
+      "volumeNumber": 1,
+      "collectionNames": ["Science Fiction", "Favorites"]
+    },
+    {
+      "title": "Project Hail Mary",
+      "author": "Andy Weir",
+      "status": "want to read",
+      "genre": "Science Fiction",
+      "collectionNames": ["Science Fiction"]
+    }
+  ], null, 2);
+
+  // Example enhanced JSON content
+  const enhancedJsonExampleContent = JSON.stringify({
+    "version": "2.0.0",
+    "timestamp": new Date().toISOString(),
+    "books": [
+      {
+        "id": "b1",
+        "title": "Dune",
+        "author": "Frank Herbert",
+        "status": "reading",
+        "genre": "Science Fiction",
+        "isPartOfSeries": true,
+        "seriesId": "s1",
+        "volumeNumber": 1,
+        "collectionIds": ["c1", "c2"]
+      },
+      {
+        "id": "b2",
+        "title": "Dune Messiah",
+        "author": "Frank Herbert",
+        "status": "want to read",
+        "genre": "Science Fiction",
+        "isPartOfSeries": true,
+        "seriesId": "s1",
+        "volumeNumber": 2,
+        "collectionIds": ["c1"]
+      }
+    ],
+    "series": [
+      {
+        "id": "s1",
+        "name": "Dune Chronicles",
+        "author": "Frank Herbert",
+        "books": ["b1", "b2"],
+        "totalBooks": 6,
+        "readingOrder": "publication",
+        "status": "completed",
+        "genre": ["Science Fiction"],
+        "isTracked": true
+      }
+    ],
+    "collections": [
+      {
+        "id": "c1",
+        "name": "Science Fiction",
+        "bookIds": ["b1", "b2"],
+        "color": "#3b82f6"
+      },
+      {
+        "id": "c2",
+        "name": "Favorites",
+        "bookIds": ["b1"],
+        "color": "#f59e0b"
+      }
+    ],
+    "metadata": {
+      "bookCount": 2,
+      "seriesCount": 1,
+      "collectionCount": 2,
+      "appVersion": "2.0.0",
+      "exportDate": new Date().toISOString()
+    }
+  }, null, 2);
+
+  // Download handlers
+  const handleDownloadCsvExample = () => {
+    downloadFile(csvExampleContent, 'book-collection-example.csv', 'text/csv;charset=utf-8');
+  };
+
+  const handleDownloadSimpleJsonExample = () => {
+    downloadFile(simpleJsonExampleContent, 'book-collection-simple-example.json', 'application/json');
+  };
+
+  const handleDownloadEnhancedJsonExample = () => {
+    downloadFile(enhancedJsonExampleContent, 'book-collection-enhanced-example.json', 'application/json');
+  };
   return (
     <Dialog>
       <DialogTrigger asChild>
@@ -30,7 +143,7 @@ export const ImportFormatHelp: React.FC<ImportFormatHelpProps> = ({ trigger }) =
         <DialogHeader>
           <DialogTitle>Import File Format Guide</DialogTitle>
           <DialogDescription>
-            Learn how to format your CSV and JSON files for importing books
+            Learn how to format your CSV and JSON files for importing books, series, and collections
           </DialogDescription>
         </DialogHeader>
 
@@ -69,11 +182,14 @@ export const ImportFormatHelp: React.FC<ImportFormatHelpProps> = ({ trigger }) =
                       <li><code>completedDate</code> - Date finished (YYYY-MM-DD, with or without quotes)</li>
                       <li><code>rating</code> - Rating from 1-5</li>
                       <li><code>notes</code> - Your notes about the book</li>
+                      <li><code>genre</code> - Book genre</li>
                     </ul>
                     <ul className="list-disc pl-5 space-y-1">
-                      <li><code>genre</code> - Book genre</li>
                       <li><code>isPartOfSeries</code> - "true" or "false"</li>
+                      <li><code>seriesId</code> - ID of the series</li>
                       <li><code>seriesName</code> - Name of the series</li>
+                      <li><code>volumeNumber</code> - Position in the series</li>
+                      <li><code>collectionNames</code> - Collection names (semicolon-separated)</li>
                     </ul>
                   </div>
                 </div>
@@ -94,7 +210,14 @@ export const ImportFormatHelp: React.FC<ImportFormatHelpProps> = ({ trigger }) =
               <div>
                 <h3 className="text-lg font-semibold mb-2">JSON Structure</h3>
                 <p className="mb-4">
-                  Your JSON file should contain an array of book objects with the following structure:
+                  Your JSON file can be in one of two formats:
+                </p>
+                <ol className="list-decimal pl-5 mb-4 space-y-1">
+                  <li><strong>Simple Format</strong>: An array of book objects</li>
+                  <li><strong>Enhanced Format</strong>: A complete library export with books, series, and collections</li>
+                </ol>
+                <p className="mb-4">
+                  For the simple format, your JSON file should contain an array of book objects with the following structure:
                 </p>
 
                 <div className="bg-muted p-4 rounded-md">
@@ -111,11 +234,15 @@ export const ImportFormatHelp: React.FC<ImportFormatHelpProps> = ({ trigger }) =
                       <li><code>completedDate</code> - Date finished (YYYY-MM-DD, with or without quotes)</li>
                       <li><code>rating</code> - Integer from 1-5</li>
                       <li><code>notes</code> - Your notes about the book</li>
+                      <li><code>genre</code> - Book genre or array of genres</li>
                     </ul>
                     <ul className="list-disc pl-5 space-y-1">
-                      <li><code>genre</code> - Book genre</li>
                       <li><code>isPartOfSeries</code> - Boolean (true/false)</li>
+                      <li><code>seriesId</code> - ID of the series</li>
                       <li><code>seriesName</code> - Name of the series</li>
+                      <li><code>volumeNumber</code> - Position in the series</li>
+                      <li><code>collectionIds</code> - Array of collection IDs</li>
+                      <li><code>collectionNames</code> - Array of collection names</li>
                     </ul>
                   </div>
                 </div>
@@ -149,6 +276,57 @@ export const ImportFormatHelp: React.FC<ImportFormatHelpProps> = ({ trigger }) =
 ]`}
                 </pre>
               </div>
+
+              <div>
+                <h3 className="text-lg font-semibold mb-2">Enhanced JSON Format</h3>
+                <p className="mb-4">
+                  The enhanced JSON format includes complete library data with books, series, and collections:
+                </p>
+                <pre className="bg-muted p-4 rounded-md overflow-x-auto text-sm">
+{`{
+  "version": "2.0.0",
+  "timestamp": "2026-01-26T10:00:00.000Z",
+  "books": [
+    {
+      "id": "book-uuid-1",
+      "title": "Dune",
+      "author": "Frank Herbert",
+      "seriesId": "series-uuid-1",
+      "collectionIds": ["collection-uuid-1"]
+      // other book fields
+    }
+  ],
+  "series": [
+    {
+      "id": "series-uuid-1",
+      "name": "Dune Chronicles",
+      "author": "Frank Herbert",
+      "books": ["book-uuid-1"],
+      "isTracked": true
+      // other series fields
+    }
+  ],
+  "collections": [
+    {
+      "id": "collection-uuid-1",
+      "name": "Science Fiction",
+      "bookIds": ["book-uuid-1"]
+      // other collection fields
+    }
+  ],
+  "metadata": {
+    "bookCount": 1,
+    "seriesCount": 1,
+    "collectionCount": 1,
+    "appVersion": "2.0.0",
+    "exportDate": "2026-01-26T10:00:00.000Z"
+  }
+}`}
+                </pre>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  The enhanced format preserves all relationships between books, series, and collections, making it ideal for complete library transfers.
+                </p>
+              </div>
             </TabsContent>
 
             <TabsContent value="examples" className="mt-4 space-y-4">
@@ -158,8 +336,12 @@ export const ImportFormatHelp: React.FC<ImportFormatHelpProps> = ({ trigger }) =
                   You can download these example files to get started with your own imports:
                 </p>
 
-                <div className="flex flex-col sm:flex-row gap-4">
-                  <Button variant="outline" className="flex gap-2 items-center">
+                <div className="flex flex-col gap-4">
+                  <Button 
+                    variant="outline" 
+                    className="flex gap-2 items-center"
+                    onClick={handleDownloadCsvExample}
+                  >
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                       <polyline points="7 10 12 15 17 10"></polyline>
@@ -167,13 +349,29 @@ export const ImportFormatHelp: React.FC<ImportFormatHelpProps> = ({ trigger }) =
                     </svg>
                     Download CSV Example
                   </Button>
-                  <Button variant="outline" className="flex gap-2 items-center">
+                  <Button 
+                    variant="outline" 
+                    className="flex gap-2 items-center"
+                    onClick={handleDownloadSimpleJsonExample}
+                  >
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                       <polyline points="7 10 12 15 17 10"></polyline>
                       <line x1="12" y1="15" x2="12" y2="3"></line>
                     </svg>
-                    Download JSON Example
+                    Download Simple JSON Example
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    className="flex gap-2 items-center"
+                    onClick={handleDownloadEnhancedJsonExample}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                      <polyline points="7 10 12 15 17 10"></polyline>
+                      <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    Download Enhanced JSON Example
                   </Button>
                 </div>
               </div>
@@ -181,14 +379,16 @@ export const ImportFormatHelp: React.FC<ImportFormatHelpProps> = ({ trigger }) =
               <div>
                 <h3 className="text-lg font-semibold mb-2">Post-Import Processing</h3>
                 <p className="mb-4">
-                  After importing your file, Mira Book Collection App will:
+                  After importing your file, Book Collection App will:
                 </p>
                 <ul className="list-disc pl-5 space-y-1">
                   <li>Validate the data format</li>
                   <li>Fetch additional book details from Google Books API</li>
                   <li>If Google Books doesn't have the book, try Open Library API</li>
                   <li>Merge any existing information with the imported data</li>
-                  <li>Display a summary of successfully imported books</li>
+                  <li>Reconstruct series and collection relationships</li>
+                  <li>Resolve any conflicts between existing and imported series/collections</li>
+                  <li>Display a summary of successfully imported books, series, and collections</li>
                 </ul>
               </div>
             </TabsContent>
