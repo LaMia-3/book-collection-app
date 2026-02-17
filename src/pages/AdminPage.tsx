@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Database, AlertCircle, Trash2, RefreshCw, Settings, Server, CheckCircle2, Wrench, Zap, UserCircle } from "lucide-react";
+import { Database, AlertCircle, RefreshCw, Settings, Server, CheckCircle2, Wrench, Zap, UserCircle } from "lucide-react";
 import { PageHeader, HeaderActionButton } from '@/components/ui/page-header';
 import { useToast } from '@/hooks/use-toast';
 import { DatabaseRepairUtility } from '@/components/debug/DatabaseRepairUtility';
@@ -13,7 +13,6 @@ import { DatabaseRepairUtility } from '@/components/debug/DatabaseRepairUtility'
 // Import components and utilities
 import { IndexedDBViewer } from '@/components/debug/IndexedDBViewer';
 import WorkflowTester from '@/components/debug/WorkflowTester';
-import { resetIndexedDB, resetLocalStorage, resetAllStorage } from '@/utils/ResetDatabaseUtil';
 import { migrateDataToIndexedDB, isMigrationNeeded } from '@/utils/DataMigrationUtil';
 import { useSettings } from '@/contexts/SettingsContext';
 
@@ -39,7 +38,7 @@ interface MigrationReport {
  * A unified admin interface that combines:
  * 1. Database Viewer - View and inspect IndexedDB data
  * 2. Data Migration - Migrate data between localStorage and IndexedDB
- * 3. Database Reset - Reset the database to a clean state
+ * 3. Database Repair - Diagnose and fix database issues
  */
 export default function AdminPage() {
   const navigate = useNavigate();
@@ -51,8 +50,6 @@ export default function AdminPage() {
   
   const [activeTab, setActiveTab] = useState(tabParam || 'viewer');
   const { settings } = useSettings();
-  const [isResetting, setIsResetting] = useState(false);
-  const [resetType, setResetType] = useState<'indexeddb' | 'localstorage' | 'all' | null>(null);
   
   // Data migration state
   // Migration state
@@ -143,56 +140,6 @@ export default function AdminPage() {
     }
   };
   
-  // Handle database reset
-  const handleReset = async (type: 'indexeddb' | 'localstorage' | 'all') => {
-    if (isResetting) return;
-    
-    const confirmReset = window.confirm(
-      type === 'all' 
-        ? 'Are you sure you want to reset all storage? This will delete all your books and series data.'
-        : type === 'indexeddb'
-          ? 'Are you sure you want to reset IndexedDB? This will delete all your books and series data from IndexedDB.'
-          : 'Are you sure you want to reset localStorage? This will delete any legacy data that might still be in localStorage.'
-    );
-    
-    if (!confirmReset) return;
-    
-    setIsResetting(true);
-    setResetType(type);
-    
-    try {
-      if (type === 'indexeddb') {
-        await resetIndexedDB();
-        // Update IndexedDB stats
-        setIndexedDBStats({ books: 0, series: 0 });
-      } else if (type === 'localstorage') {
-        await resetLocalStorage();
-        // Update localStorage stats
-        setLocalStorageStats({ books: 0, series: 0 });
-      } else {
-        // Reset both
-        await resetAllStorage();
-        // Update both stats
-        setIndexedDBStats({ books: 0, series: 0 });
-        setLocalStorageStats({ books: 0, series: 0 });
-      }
-      
-      toast({
-        title: "Reset Successful",
-        description: `Successfully reset ${type === 'all' ? 'all storage' : type}. You may need to refresh the page.`,
-        variant: "default"
-      });
-    } catch (error) {
-      console.error(`Error resetting ${type}:`, error);
-      toast({
-        title: "Reset Failed",
-        description: `Failed to reset ${type}: ${error instanceof Error ? error.message : String(error)}`,
-        variant: "destructive"
-      });
-    } finally {
-      setIsResetting(false);
-    }
-  };
 
   return (
     <div className="container py-8 max-w-7xl">
@@ -217,10 +164,6 @@ export default function AdminPage() {
           <TabsTrigger value="migration" className="flex items-center gap-2">
             <Server className="h-4 w-4" />
             <span>Data Migration</span>
-          </TabsTrigger>
-          <TabsTrigger value="reset" className="flex items-center gap-2">
-            <Trash2 className="h-4 w-4" />
-            <span>Database Reset</span>
           </TabsTrigger>
           <TabsTrigger value="repair" className="flex items-center gap-2">
             <Wrench className="h-4 w-4" />
@@ -430,142 +373,6 @@ export default function AdminPage() {
           </Card>
         </TabsContent>
 
-        {/* Database Reset Tab */}
-        <TabsContent value="reset">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <Trash2 className="h-5 w-5 mr-2" />
-                Database Reset
-              </CardTitle>
-              <CardDescription>
-                Reset your database and start fresh
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-6">
-                <Alert className="bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950 dark:text-amber-200 dark:border-amber-900">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertTitle>Warning</AlertTitle>
-                  <AlertDescription>
-                    Resetting your database will permanently delete all your data. This action cannot be undone.
-                  </AlertDescription>
-                </Alert>
-                
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center">
-                      <Database className="h-5 w-5 mr-2" />
-                      Reset IndexedDB
-                      <Badge variant="outline" className="ml-2 text-primary border-primary">Primary Storage</Badge>
-                    </CardTitle>
-                    <CardDescription>
-                      Clear all data stored in IndexedDB (the app's exclusive source of truth)
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <p>
-                      This will delete all your books, series, and settings data stored in IndexedDB.
-                      Since IndexedDB is now the exclusive source of truth for all application data, 
-                      resetting it will give you a completely clean slate.
-                    </p>
-                  </CardContent>
-                  <CardFooter className="flex justify-end">
-                    <Button 
-                      variant="destructive"
-                      onClick={() => handleReset('indexeddb')}
-                      disabled={isResetting}
-                      className="flex items-center gap-2"
-                    >
-                      {isResetting && resetType === 'indexeddb' ? (
-                        <RefreshCw className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Trash2 className="h-4 w-4" />
-                      )}
-                      Reset IndexedDB
-                    </Button>
-                  </CardFooter>
-                </Card>
-                
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center">
-                      <Server className="h-5 w-5 mr-2" />
-                      Reset localStorage
-                      <Badge variant="outline" className="ml-2 text-yellow-500 border-yellow-500">Legacy Storage</Badge>
-                    </CardTitle>
-                    <CardDescription>
-                      Clear all data stored in legacy localStorage (deprecated storage)
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <p>
-                      This will clear any remaining data in localStorage. Note that the application has been updated to 
-                      use IndexedDB as the exclusive source of truth, so this is only needed if you suspect 
-                      there's still legacy data in localStorage.
-                    </p>
-                  </CardContent>
-                  <CardFooter className="flex justify-end">
-                    <Button 
-                      variant="destructive"
-                      onClick={() => handleReset('localstorage')}
-                      disabled={isResetting}
-                      className="flex items-center gap-2"
-                    >
-                      {isResetting && resetType === 'localstorage' ? (
-                        <RefreshCw className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Trash2 className="h-4 w-4" />
-                      )}
-                      Reset localStorage
-                    </Button>
-                  </CardFooter>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center">
-                      <Database className="h-5 w-5 mr-2" />
-                      Reset All Storage
-                    </CardTitle>
-                    <CardDescription>
-                      Complete reset of all application storage
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <p>
-                      This will reset both IndexedDB (primary storage) and localStorage (legacy storage), giving you a completely clean slate.
-                      After resetting, you should refresh the page to ensure all components initialize properly with the empty data stores.
-                    </p>
-                    
-                    <div className="mt-4 p-4 border rounded-md bg-muted/50">
-                      <h4 className="font-medium mb-2">How to restart the application after reset:</h4>
-                      <ol className="list-decimal pl-5 space-y-1">
-                        <li>Reset all storage using the button below</li>
-                        <li>Refresh the page to reload with empty storage</li>
-                      </ol>
-                    </div>
-                  </CardContent>
-                  <CardFooter className="flex justify-end">
-                    <Button 
-                      variant="destructive"
-                      onClick={() => handleReset('all')}
-                      disabled={isResetting}
-                      className="flex items-center gap-2"
-                    >
-                      {isResetting && resetType === 'all' ? (
-                        <RefreshCw className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Trash2 className="h-4 w-4" />
-                      )}
-                      Reset All Storage
-                    </Button>
-                  </CardFooter>
-                </Card>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
 
         {/* User Settings Tab */}
         <TabsContent value="settings">

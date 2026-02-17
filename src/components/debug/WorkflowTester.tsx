@@ -4,13 +4,15 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Check, AlertCircle } from 'lucide-react';
+import { Check, AlertCircle, Database } from 'lucide-react';
 import { Book } from '@/types/book';
 import { enhancedStorageService } from '@/services/storage/EnhancedStorageService';
 import { seriesService } from '@/services/SeriesService';
 import googleBooksProvider from '@/services/api/GoogleBooksProvider';
 import openLibraryProvider from '@/services/api/OpenLibraryProvider';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { CollectionTestUI } from './CollectionTestUI';
 
 // Books to search for by API provider
 const GOOGLE_BOOK_SEARCHES = [
@@ -991,52 +993,86 @@ export function WorkflowTester() {
     <div className="p-4 max-w-4xl mx-auto">
       <h1 className="text-2xl font-bold mb-4">Workflow Tester</h1>
       <p className="mb-4 text-muted-foreground">
-        Tests the complete workflow of adding books, creating series, and verifying data.
+        Test various workflows and generate test data for the application.
       </p>
       
-      <Button 
-        onClick={runWorkflowTest} 
-        disabled={running}
-        className="mb-4"
-      >
-        {running ? 'Running...' : 'Run Workflow Test'}
-      </Button>
-      
-      {running && (
-        <div className="mb-4">
-          <Progress value={progress} className="mb-2" />
-          <p className="text-sm text-center">{progress.toFixed(0)}% complete</p>
-        </div>
-      )}
-      
-      {results.length > 0 && (
-        <Card className="mb-4">
-          <CardHeader>
-            <CardTitle>Test Results</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {results.map((result, index) => (
-                <Alert key={index} variant={result.success ? "default" : "destructive"}>
-                  <div className="flex items-start gap-2">
-                    {result.success ? <Check className="h-5 w-5 text-green-500" /> : <AlertCircle className="h-5 w-5" />}
-                    <div>
-                      <AlertTitle className="flex items-center gap-2">
-                        {result.step}
-                        {result.success ? 
-                          <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">Success</Badge> : 
-                          <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">Failed</Badge>
-                        }
-                      </AlertTitle>
-                      <AlertDescription>{result.message}</AlertDescription>
-                    </div>
+      <Tabs defaultValue="workflow" className="mb-6">
+        <TabsList className="mb-4">
+          <TabsTrigger value="workflow">Book & Series Workflow</TabsTrigger>
+          <TabsTrigger value="collections">
+            <span className="flex items-center gap-1">
+              <Database className="h-4 w-4" />
+              Collections
+            </span>
+          </TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="workflow">
+          <div className="space-y-4">
+            <p className="text-muted-foreground">
+              Tests the complete workflow of adding books, creating series, and verifying data.
+            </p>
+            
+            <Button 
+              onClick={runWorkflowTest} 
+              disabled={running}
+              className="mb-4"
+            >
+              {running ? 'Running...' : 'Run Workflow Test'}
+            </Button>
+            
+            {running && (
+              <div className="mb-4">
+                <Progress value={progress} className="mb-2" />
+                <p className="text-sm text-center">{progress.toFixed(0)}% complete</p>
+              </div>
+            )}
+            
+            {results.length > 0 && (
+              <Card className="mb-4">
+                <CardHeader>
+                  <CardTitle>Test Results</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    {results.map((result, index) => (
+                      <Alert key={index} variant={result.success ? "default" : "destructive"}>
+                        <div className="flex items-start gap-2">
+                          {result.success ? <Check className="h-5 w-5 text-green-500" /> : <AlertCircle className="h-5 w-5" />}
+                          <div>
+                            <AlertTitle className="flex items-center gap-2">
+                              {result.step}
+                              {result.success ? 
+                                <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">Success</Badge> : 
+                                <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">Failed</Badge>
+                              }
+                            </AlertTitle>
+                            <AlertDescription>{result.message}</AlertDescription>
+                          </div>
+                        </div>
+                      </Alert>
+                    ))}
                   </div>
-                </Alert>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        </TabsContent>
+        
+        <TabsContent value="collections">
+          <div className="space-y-4">
+            <p className="text-muted-foreground">
+              Generate test collections with books for testing the collections feature.
+            </p>
+            
+            <CollectionTestUI 
+              onComplete={(collections) => {
+                console.log('Collections generated:', collections);
+              }} 
+            />
+          </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
