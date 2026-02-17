@@ -24,7 +24,7 @@ import { Card } from '@/components/ui/card';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { ImportExportView } from './ImportExportView';
-import { Settings as SettingsIcon, Trash2, AlertTriangle, Palette, Trophy, BookOpen, ArrowUp, ArrowDown, ListOrdered, Wrench, Sun, Moon, Monitor } from 'lucide-react';
+import { Settings as SettingsIcon, Trash2, AlertTriangle, Palette, Trophy, BookOpen, ArrowUp, ArrowDown, ListOrdered, Wrench, Sun, Moon, Monitor, Sliders, FileUp, FileDown } from 'lucide-react';
 import { useSettings } from '@/contexts/SettingsContext';
 import { useTheme } from '@/components/ui-common/ThemeProvider';
 import { PaletteSelector } from '@/components/PaletteSelector';
@@ -197,7 +197,10 @@ export const Settings: React.FC<SettingsProps> = ({
                 value="general" 
                 className="justify-start w-40 data-[state=active]:bg-muted"
               >
-                General
+                <span className="flex items-center gap-2">
+                  <Sliders className="h-4 w-4 text-gray-500" />
+                  General
+                </span>
               </TabsTrigger>
               <TabsTrigger 
                 value="bookshelf-view" 
@@ -221,13 +224,19 @@ export const Settings: React.FC<SettingsProps> = ({
                 value="appearance" 
                 className="justify-start w-40 data-[state=active]:bg-muted"
               >
-                Appearance
+                <span className="flex items-center gap-2">
+                  <Palette className="h-4 w-4 text-purple-500" />
+                  Appearance
+                </span>
               </TabsTrigger>
               <TabsTrigger 
                 value="import-export" 
                 className="justify-start w-40 data-[state=active]:bg-muted"
               >
-                Import & Export
+                <span className="flex items-center gap-2">
+                  <FileUp className="h-4 w-4 text-green-500" />
+                  Import & Export
+                </span>
               </TabsTrigger>
               <TabsTrigger 
                 value="troubleshooting" 
@@ -487,7 +496,7 @@ export const Settings: React.FC<SettingsProps> = ({
                         className={`flex flex-col items-center justify-center p-6 rounded-lg border-2 cursor-pointer transition-all ${colorMode === 'light' ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/50'}`}
                         onClick={() => setColorMode('light')}
                       >
-                        <Sun className="h-8 w-8 text-purple-500 mb-2" />
+                        <Sun className="h-8 w-8 text-yellow-500 mb-2" />
                         <span className="text-center font-medium">Light</span>
                       </div>
                       
