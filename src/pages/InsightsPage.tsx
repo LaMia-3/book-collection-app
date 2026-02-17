@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { Settings } from '@/components/Settings';
 import { EnhancedHeader } from '@/components/navigation/EnhancedHeader';
 import { InsightsView } from '@/components/InsightsView';
@@ -85,6 +86,21 @@ const InsightsPage = () => {
         <div className="bg-card rounded-lg p-6 mx-4 shadow-elegant mt-6">
           <InsightsView books={books} onBookClick={() => {/* Handle book click */}} />
         </div>
+
+        {/* Footer */}
+        <footer className="mt-12 mb-6 px-4 text-center text-xs text-muted-foreground/60">
+          <nav className="flex items-center justify-center gap-1.5">
+            <Link to="/about?tab=changelog" className="hover:text-muted-foreground transition-colors">Changelog</Link>
+            <span>·</span>
+            <Link to="/about?tab=known-issues" className="hover:text-muted-foreground transition-colors">Known Issues</Link>
+            <span>·</span>
+            <Link to="/about?tab=roadmap" className="hover:text-muted-foreground transition-colors">Roadmap</Link>
+            <span>·</span>
+            <Link to="/about?tab=privacy" className="hover:text-muted-foreground transition-colors">Privacy</Link>
+            <span>·</span>
+            <Link to="/about?tab=about" className="hover:text-muted-foreground transition-colors">About</Link>
+          </nav>
+        </footer>
       </div>
       
       {/* Settings Modal */}

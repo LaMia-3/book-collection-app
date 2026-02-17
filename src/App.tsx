@@ -17,6 +17,7 @@ import CollectionDetailPage from "./pages/CollectionDetailPage";
 import InsightsPage from "./pages/InsightsPage";
 // TestBackendPage has been integrated into AdminPage as a tab
 import AdminPage from "./pages/AdminPage";
+import AboutPage from "./pages/AboutPage";
 // StatisticsPage removed - functionality moved to Reading Insights tab
 import NotFound from "./pages/NotFound";
 import LocalStorageCheck from "./components/debug/LocalStorageCheck";
@@ -47,6 +48,7 @@ const App = () => (
                   <Route path="/admin" element={<AdminPage />} />
                   <Route path="/test-indexeddb" element={<Navigate to="/admin?tab=indexeddb-test" replace />} />
                   <Route path="/storage-check" element={<LocalStorageCheck />} />
+                  <Route path="/about" element={<AboutPage />} />
                   {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                   <Route path="*" element={<NotFound />} />
                 </Routes>

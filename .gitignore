@@ -116,6 +116,5 @@ $RECYCLE.BIN/
 
 # testingdocs
 prompts
-docs
 smallbookwdates.csv
-.windsurf/workflows/docs.md
+.windsurf/
