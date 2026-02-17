@@ -10,6 +10,13 @@ const log = createLogger('ImportUtils');
 /**
  * Represents a raw book entry from an imported CSV or JSON file
  */
+// Extend the Book type to include import-specific fields
+declare module '@/types/book' {
+  interface Book {
+    _importedCollectionNames?: string[];
+  }
+}
+
 interface RawBookImport {
   title: string;
   author?: string;
@@ -26,6 +33,7 @@ interface RawBookImport {
   volumeNumber?: string | number;
   pageCount?: string | number;
   publishedDate?: string;
+  addedDate?: string; // Date the book was added to the library
   collectionIds?: string | string[];
   collectionNames?: string | string[];
   id?: string; // For enhanced imports that include IDs
@@ -131,13 +139,55 @@ export function parseCSV(csvString: string): RawBookImport[] {
   }
   
   // Parse headers (first row)
-  const headers = parseCSVLine(lines[0]);
+  const rawHeaders = parseCSVLine(lines[0]);
+  
+  // Normalize headers to match our expected format
+  const headers = rawHeaders.map(header => {
+    // Convert header to lowercase and trim
+    const normalizedHeader = header.toLowerCase().trim();
+    
+    // Map common variations to our expected format
+    switch (normalizedHeader) {
+      case 'googleid':
+      case 'google_id':
+      case 'google_books_id':
+        return 'googleBooksId';
+      case 'completed_date':
+      case 'date_completed':
+        return 'completedDate';
+      case 'published_date':
+      case 'date_published':
+        return 'publishedDate';
+      case 'added_date':
+      case 'date_added':
+        return 'addedDate';
+      case 'is_part_of_series':
+        return 'isPartOfSeries';
+      case 'series_id':
+        return 'seriesId';
+      case 'series_name':
+        return 'seriesName';
+      case 'volume_number':
+        return 'volumeNumber';
+      case 'page_count':
+        return 'pageCount';
+      case 'collection_names':
+        return 'collectionNames';
+      case 'collection_ids':
+        return 'collectionIds';
+      default:
+        return normalizedHeader;
+    }
+  });
   
   // Parse data rows
   const result: RawBookImport[] = [];
   
   // Log detected headers
-  log.debug('CSV headers detected', { headers });
+  log.info('CSV headers detected and normalized', { 
+    originalHeaders: rawHeaders,
+    normalizedHeaders: headers 
+  });
   
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i].trim();
@@ -216,12 +266,25 @@ export function validateImportedBook(book: RawBookImport): { valid: boolean; rea
     return { valid: false, reason: 'Missing required field: title' };
   }
   
-  // Check for either author or ISBN
-  if ((!book.author || !book.author.trim()) && (!book.isbn || !book.isbn.trim()) && (!book.googleBooksId || !book.googleBooksId.trim())) {
+  // Accept books with just a title for imports from our own exports
+  // This ensures that books with 'Unknown Author' or missing identifiers can still be imported
+  // The author will be set to 'Unknown' in the conversion function if missing
+  
+  // Check if this is likely from our own export (has addedDate field or "Unknown Author")
+  const isLikelyOurExport = book.addedDate || 
+                          (book.author && book.author.trim() === 'Unknown Author');
+                          
+  // Only apply strict validation for external imports
+  if ((!book.author || !book.author.trim() || book.author.trim() === 'Unknown Author') && 
+      (!book.isbn || !book.isbn.trim()) && 
+      (!book.googleBooksId || !book.googleBooksId.trim()) && 
+      !isLikelyOurExport) {
     log.warn('Validation failed: Missing required identifiers', { 
       hasAuthor: Boolean(book.author?.trim()), 
+      authorValue: book.author,
       hasISBN: Boolean(book.isbn?.trim()),
-      hasGoogleId: Boolean(book.googleBooksId?.trim())
+      hasGoogleId: Boolean(book.googleBooksId?.trim()),
+      hasAddedDate: Boolean(book.addedDate)
     });
     return { valid: false, reason: 'Missing required field: either author or ISBN is required' };
   }
@@ -243,12 +306,15 @@ export function validateImportedBook(book: RawBookImport): { valid: boolean; rea
   
   // Check for valid completedDate if provided
   if (book.completedDate) {
-    // Simple validation, check if it looks like a date
-    const datePattern = /^\d{4}-\d{2}-\d{2}$/;
-    if (!datePattern.test(book.completedDate.trim())) {
+    // Accept both ISO format dates (with time) and simple YYYY-MM-DD format
+    try {
+      // Try to parse the date - this will validate it's a proper date string
+      new Date(book.completedDate.trim());
+      // If we get here, the date is valid
+    } catch (e) {
       return { 
         valid: false, 
-        reason: `Invalid completedDate: ${book.completedDate}. Must be in YYYY-MM-DD format` 
+        reason: `Invalid completedDate: ${book.completedDate}. Must be a valid date format` 
       };
     }
   }
@@ -257,7 +323,12 @@ export function validateImportedBook(book: RawBookImport): { valid: boolean; rea
   if (book.isPartOfSeries !== undefined && book.isPartOfSeries !== '') {
     if (typeof book.isPartOfSeries === 'string') {
       const value = book.isPartOfSeries.toLowerCase().trim();
-      if (!['true', 'false', 'yes', 'no', '1', '0'].includes(value)) {
+      log.debug('Validating isPartOfSeries value', { value, original: book.isPartOfSeries });
+      
+      // Accept any value that can be reasonably interpreted as boolean
+      // This is more lenient to handle various export formats
+      if (!['true', 'false', 'yes', 'no', '1', '0', 't', 'f', 'y', 'n'].includes(value)) {
+        log.warn('Invalid isPartOfSeries value', { value });
         return { 
           valid: false, 
           reason: `Invalid isPartOfSeries value: ${book.isPartOfSeries}. Must be true or false` 
@@ -277,13 +348,59 @@ function convertRawToBook(rawBook: RawBookImport): Partial<Book> {
   // Start with basic book info
   const book: Partial<Book> = {
     title: rawBook.title,
-    author: rawBook.author || '',
+    // Handle 'Unknown Author' as empty string to be replaced with 'Unknown' later
+    author: (rawBook.author && rawBook.author.trim() !== 'Unknown Author') ? rawBook.author : '',
     googleBooksId: rawBook.googleBooksId || rawBook.isbn, // Use ISBN as googleBooksId if available
-    genre: rawBook.genre ? standardizeGenreData(rawBook.genre) : undefined,
     notes: rawBook.notes,
     // Preserve ID if provided (for enhanced imports)
     id: rawBook.id || crypto.randomUUID(),
   };
+  
+  // Handle genre data with special care for CSV imports
+  if (rawBook.genre) {
+    try {
+      log.debug('Processing genre data', { rawGenre: rawBook.genre, type: typeof rawBook.genre });
+      
+      // Handle string genre data (common in CSV imports)
+      if (typeof rawBook.genre === 'string') {
+        // Check if it's a JSON string that needs parsing
+        if (rawBook.genre.startsWith('[') && rawBook.genre.endsWith(']')) {
+          try {
+            const parsedGenre = JSON.parse(rawBook.genre);
+            book.genre = standardizeGenreData(parsedGenre);
+            log.debug('Parsed JSON genre data', { parsedGenre });
+          } catch (e) {
+            // If JSON parsing fails, treat as comma-separated list
+            const genreList = rawBook.genre
+              .replace(/[\[\]"']/g, '') // Remove brackets and quotes
+              .split(/,|;/) // Split by comma or semicolon
+              .map(g => g.trim())
+              .filter(Boolean);
+            book.genre = standardizeGenreData(genreList);
+            log.debug('Processed genre as comma-separated list', { genreList });
+          }
+        } else {
+          // Simple string - could be a single genre or comma-separated
+          const genreList = rawBook.genre
+            .split(/,|;/) // Split by comma or semicolon
+            .map(g => g.trim())
+            .filter(Boolean);
+          book.genre = standardizeGenreData(genreList.length > 0 ? genreList : rawBook.genre);
+          log.debug('Processed genre as string', { genreList });
+        }
+      } else {
+        // Already an array or other format
+        book.genre = standardizeGenreData(rawBook.genre);
+        log.debug('Using genre data as-is', { genre: book.genre });
+      }
+    } catch (e) {
+      log.warn('Error processing genre data', { error: e, rawGenre: rawBook.genre });
+      // Default to undefined if processing fails
+      book.genre = undefined;
+    }
+  } else {
+    book.genre = undefined;
+  }
   
   // Convert status to our internal format
   log.debug('Processing book status', { rawStatus: rawBook.status });
@@ -316,20 +433,29 @@ function convertRawToBook(rawBook: RawBookImport): Partial<Book> {
     }
   }
   
-  // Handle completed date - supports both quoted and unquoted YYYY-MM-DD format
+  // Handle completed date - supports ISO format dates, YYYY-MM-DD format, and quoted dates
   if (rawBook.completedDate && rawBook.completedDate.trim()) {
     // Clean up the date string - remove any quotes that might be present
     let dateStr = rawBook.completedDate.trim();
     dateStr = dateStr.replace(/^"|"$/g, ''); // Remove surrounding quotes if present
     
-    // Validate that the date is in YYYY-MM-DD format
-    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-      // FIXED: Accept all valid YYYY-MM-DD dates, including future dates
-      book.completedDate = dateStr;
-      log.debug(`Valid completed date format accepted`, { date: dateStr });
-    } else {
-      log.warn(`Invalid completed date format`, { date: dateStr, expected: 'YYYY-MM-DD' });
-      // Still use the date but log a warning
+    try {
+      // Parse the date - works with ISO format and YYYY-MM-DD
+      const date = new Date(dateStr);
+      
+      if (isNaN(date.getTime())) {
+        // Invalid date
+        log.warn(`Invalid date format, using as-is`, { date: dateStr });
+        book.completedDate = dateStr;
+      } else {
+        // Valid date - normalize to YYYY-MM-DD format for consistency
+        const normalizedDate = date.toISOString().split('T')[0];
+        book.completedDate = normalizedDate;
+        log.debug(`Valid date format normalized`, { original: dateStr, normalized: normalizedDate });
+      }
+    } catch (e) {
+      // If date parsing fails, still use the original string but log a warning
+      log.warn(`Date parsing failed, using as-is`, { date: dateStr, error: e });
       book.completedDate = dateStr;
     }
   } else if (book.status === 'completed') {
@@ -352,9 +478,19 @@ function convertRawToBook(rawBook: RawBookImport): Partial<Book> {
   if (rawBook.isPartOfSeries !== undefined && rawBook.isPartOfSeries !== '') {
     if (typeof rawBook.isPartOfSeries === 'boolean') {
       book.isPartOfSeries = rawBook.isPartOfSeries;
+      log.debug('Using boolean isPartOfSeries value', { value: rawBook.isPartOfSeries });
     } else if (typeof rawBook.isPartOfSeries === 'string') {
       const value = rawBook.isPartOfSeries.toLowerCase().trim();
-      book.isPartOfSeries = ['true', 'yes', '1'].includes(value);
+      log.debug('Converting string isPartOfSeries value', { original: rawBook.isPartOfSeries, normalized: value });
+      
+      // Handle various string representations of boolean values
+      if (['true', 'yes', '1', 't', 'y'].includes(value)) {
+        book.isPartOfSeries = true;
+        log.debug('Converted to true');
+      } else {
+        book.isPartOfSeries = false;
+        log.debug('Converted to false');
+      }
     }
   }
   
@@ -380,24 +516,78 @@ function convertRawToBook(rawBook: RawBookImport): Partial<Book> {
       : rawBook.collectionIds;
     
     book.collectionIds = collectionIds;
+    log.debug('Processed collectionIds', { collectionIds });
   }
   
-  // Add published date - supports both quoted and unquoted YYYY-MM-DD format
+  // Handle collection names (from CSV imports)
+  if (rawBook.collectionNames) {
+    try {
+      log.debug('Processing collectionNames', { raw: rawBook.collectionNames, type: typeof rawBook.collectionNames });
+      
+      // Convert string to array if needed
+      let collectionNames;
+      if (typeof rawBook.collectionNames === 'string') {
+        // Check if it's a JSON string
+        if (rawBook.collectionNames.startsWith('[') && rawBook.collectionNames.endsWith(']')) {
+          try {
+            collectionNames = JSON.parse(rawBook.collectionNames);
+          } catch (e) {
+            // If JSON parsing fails, treat as semicolon-separated list
+            collectionNames = rawBook.collectionNames
+              .replace(/[\[\]"']/g, '') // Remove brackets and quotes
+              .split(';')
+              .map(name => name.trim())
+              .filter(Boolean);
+          }
+        } else {
+          // Simple string - could be a single name or semicolon-separated
+          collectionNames = rawBook.collectionNames
+            .split(';')
+            .map(name => name.trim())
+            .filter(Boolean);
+        }
+      } else if (Array.isArray(rawBook.collectionNames)) {
+        collectionNames = rawBook.collectionNames;
+      }
+      
+      // Store the collection names for reference
+      if (collectionNames && collectionNames.length > 0) {
+        book._importedCollectionNames = collectionNames;
+        log.debug('Processed collectionNames', { collectionNames });
+      }
+    } catch (e) {
+      log.warn('Error processing collectionNames', { error: e, raw: rawBook.collectionNames });
+    }
+  }
+  
+  // Add published date - supports ISO format dates, YYYY-MM-DD format, YYYY format, and quoted dates
   if (rawBook.publishedDate) {
     // Clean up the date string - remove any quotes that might be present
     let dateStr = rawBook.publishedDate.trim();
     dateStr = dateStr.replace(/^"|"$/g, ''); // Remove surrounding quotes if present
     
-    // Validate that the date is in YYYY-MM-DD format
-    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    // Special case for YYYY format which is common for published dates
+    if (/^\d{4}$/.test(dateStr)) {
       book.publishedDate = dateStr;
+      log.debug(`Year-only published date accepted`, { year: dateStr });
     } else {
-      // For published date, also support YYYY format
-      if (/^\d{4}$/.test(dateStr)) {
-        book.publishedDate = dateStr;
-      } else {
-        log.warn(`Invalid published date format`, { date: dateStr, expected: 'YYYY-MM-DD or YYYY' });
-        // Still use the date but log a warning
+      try {
+        // Try to parse as a full date - works with ISO format and YYYY-MM-DD
+        const date = new Date(dateStr);
+        
+        if (isNaN(date.getTime())) {
+          // Invalid date
+          log.warn(`Invalid published date format, using as-is`, { date: dateStr });
+          book.publishedDate = dateStr;
+        } else {
+          // Valid date - normalize to YYYY-MM-DD format for consistency
+          const normalizedDate = date.toISOString().split('T')[0];
+          book.publishedDate = normalizedDate;
+          log.debug(`Valid published date format normalized`, { original: dateStr, normalized: normalizedDate });
+        }
+      } catch (e) {
+        // If date parsing fails, still use the original string but log a warning
+        log.warn(`Published date parsing failed, using as-is`, { date: dateStr, error: e });
         book.publishedDate = dateStr;
       }
     }
@@ -634,7 +824,8 @@ async function processImportedBooks(rawBooks: RawBookImport[]): Promise<ImportRe
         ...partialBook,
         id: crypto.randomUUID(),
         title: rawBook.title,
-        author: rawBook.author || 'Unknown',
+        // Handle 'Unknown Author' as 'Unknown'
+        author: (rawBook.author && rawBook.author.trim() !== 'Unknown Author') ? (rawBook.author || 'Unknown') : 'Unknown',
         spineColor: Math.floor(Math.random() * 8) + 1, // Random color between 1-8
         addedDate: new Date().toISOString().split('T')[0], // Today's date
         // Ensure status is one of the required types

@@ -6,6 +6,7 @@ import { ImportFormatHelp } from './ImportFormatHelp';
 
 import { Book } from '@/types/book';
 import { useImport } from '@/contexts/ImportContext';
+import { useSettings } from '@/contexts/SettingsContext';
 import { booksToCSV, booksToJSON, downloadFile } from '@/utils/exportUtils';
 import { importFromCSV, importFromJSON, ImportResult } from '@/utils/importUtils';
 import { createBackup, restoreFromBackup } from '@/utils/backupUtils';
@@ -27,6 +28,8 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
 }) => {
   // Get import context functions for background processing
   const { startImport, updateImportProgress, completeImport, errorImport, setCancelCallback } = useImport();
+  // Get settings for preferred name
+  const { settings } = useSettings();
   
   // State for file inputs and operation status
   const [csvFile, setCsvFile] = useState<File | null>(null);
@@ -90,9 +93,14 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
       // Generate CSV content
       const csvContent = booksToCSV(books);
       
-      // Create filename with current date
-      const date = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
-      const filename = `mira-books-${date}.csv`;
+      // Create filename with current date and time
+      const now = new Date();
+      const dateStr = now.toISOString().split('T')[0]; // YYYY-MM-DD
+      const timeStr = now.toTimeString().split(' ')[0].replace(/:/g, '-'); // HH-MM-SS
+      
+      // Create filename with preferred name if available
+      const prefix = settings?.preferredName ? `${settings.preferredName.toLowerCase().replace(/\s+/g, '-')}-library` : 'library';
+      const filename = `${prefix}-export-${dateStr}-${timeStr}.csv`;
       
       // Download the file
       downloadFile(csvContent, filename, 'text/csv;charset=utf-8');
@@ -123,9 +131,14 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
       // Generate JSON content
       const jsonContent = booksToJSON(books);
       
-      // Create filename with current date
-      const date = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
-      const filename = `mira-books-${date}.json`;
+      // Create filename with current date and time
+      const now = new Date();
+      const dateStr = now.toISOString().split('T')[0]; // YYYY-MM-DD
+      const timeStr = now.toTimeString().split(' ')[0].replace(/:/g, '-'); // HH-MM-SS
+      
+      // Create filename with preferred name if available
+      const prefix = settings?.preferredName ? `${settings.preferredName.toLowerCase().replace(/\s+/g, '-')}-library` : 'library';
+      const filename = `${prefix}-export-${dateStr}-${timeStr}.json`;
       
       // Download the file
       downloadFile(jsonContent, filename, 'application/json');
@@ -371,8 +384,8 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
         message: 'Creating backup...'
       });
       
-      // Create and download the backup
-      createBackup(books);
+      // Create and download the backup (now async) with preferred name
+      await createBackup(books, settings?.preferredName);
       
       // Call the onCreateBackup prop if provided
       if (onCreateBackup) {

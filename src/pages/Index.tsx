@@ -540,48 +540,68 @@ const Index = () => {
             try {
               // Import required services only when needed
               const { enhancedStorageService } = await import('@/services/storage/EnhancedStorageService');
+              const { collectionRepository } = await import('@/repositories/CollectionRepository');
               const { seriesService } = await import('@/services/SeriesService');
-              const { notificationService } = await import('@/services/NotificationService');
               
               // Clear UI state first for immediate feedback
               setBooks([]);
               setFilteredBooks([]);
+              
+              // Get all collections before clearing books to preserve them
+              const collections = await collectionRepository.getAll();
+              console.log('Retrieved collections to preserve:', collections.length);
               
               // Clear all books in IndexedDB
               try {
                 // Use a helper function to clear the IndexedDB books store
                 await clearIndexedDBStore('book-collection-db', 'books');
                 console.log('Successfully cleared books from IndexedDB');
-              } catch (booksError) {
-                console.error('Error clearing books from IndexedDB:', booksError);
-                // Continue with other deletion even if books deletion fails
-              }
-              
-              // Clear series and related data
-              try {
+                
                 // Clear all series in IndexedDB
                 await clearIndexedDBStore('book-collection-db', 'series');
                 console.log('Successfully cleared series from IndexedDB');
                 
-                // Clear any remaining notifications
-                await notificationService.clearAllNotifications();
-                console.log('Notifications cleared successfully');
-              } catch (seriesError) {
-                console.error('Error clearing series data:', seriesError);
-                // Continue with library deletion even if series deletion fails
+                // Explicitly preserve each collection but remove their books
+                for (const collection of collections) {
+                  try {
+                    // Create a clean copy of the collection with empty bookIds
+                    const updatedCollection = {
+                      id: collection.id,
+                      name: collection.name,
+                      description: collection.description || '',
+                      imageUrl: collection.imageUrl,
+                      color: collection.color,
+                      bookIds: [], // Empty the book IDs
+                      createdAt: collection.createdAt,
+                      updatedAt: new Date() // Update the timestamp
+                    };
+                    
+                    // Save the updated collection back to the database
+                    await collectionRepository.update(collection.id, updatedCollection);
+                    console.log(`Preserved collection: ${collection.name} (${collection.id})`);
+                  } catch (collectionError) {
+                    console.error(`Error preserving collection ${collection.id}:`, collectionError);
+                  }
+                }
+                console.log('Successfully preserved collections while removing books and series');
+              } catch (error) {
+                console.error('Error clearing books and series:', error);
+                // Continue with deletion even if there are errors
               }
               
               // Also clear localStorage for compatibility with old implementation
               localStorage.removeItem('bookLibrary');
-              localStorage.removeItem('seriesLibrary');
+              localStorage.removeItem('seriesLibrary'); // Remove series from localStorage
               localStorage.removeItem('upcomingBooks');
               localStorage.removeItem('releaseNotifications');
+              localStorage.removeItem('seriesCache'); // Remove series cache
+              localStorage.removeItem('seriesMapping'); // Remove series mappings
               console.log('localStorage items removed');
               
               // Show success toast
               toast({
                 title: "Library Deleted",
-                description: "Your book collection and series data have been successfully deleted."
+                description: "All books and series have been removed from your library while preserving your collections."
               });
               
               return Promise.resolve();
@@ -592,6 +612,81 @@ const Index = () => {
               toast({
                 title: "Error",
                 description: `Failed to delete library: ${error instanceof Error ? error.message : String(error)}`,
+                variant: "destructive"
+              });
+              
+              return Promise.reject(error);
+            }
+          }}
+          onResetLibrary={async () => {
+            try {
+              // Import required services only when needed
+              const { enhancedStorageService } = await import('@/services/storage/EnhancedStorageService');
+              const { notificationService } = await import('@/services/NotificationService');
+              const { collectionRepository } = await import('@/repositories/CollectionRepository');
+              
+              // Clear UI state first for immediate feedback
+              setBooks([]);
+              setFilteredBooks([]);
+              
+              // Clear all books in IndexedDB
+              try {
+                await clearIndexedDBStore('book-collection-db', 'books');
+                console.log('Successfully cleared books from IndexedDB');
+              } catch (error) {
+                console.error('Error clearing books:', error);
+              }
+              
+              // Clear all series
+              try {
+                await clearIndexedDBStore('book-collection-db', 'series');
+                console.log('Successfully cleared series from IndexedDB');
+              } catch (error) {
+                console.error('Error clearing series:', error);
+              }
+              
+              // Clear all collections
+              try {
+                await clearIndexedDBStore('book-collection-db', 'collections');
+                console.log('Successfully cleared collections from IndexedDB');
+              } catch (error) {
+                console.error('Error clearing collections:', error);
+              }
+              
+              // Clear notifications
+              try {
+                await notificationService.clearAllNotifications();
+                console.log('Notifications cleared successfully');
+              } catch (error) {
+                console.error('Error clearing notifications:', error);
+              }
+              
+              // Also clear localStorage for compatibility with old implementation
+              localStorage.removeItem('bookLibrary');
+              localStorage.removeItem('seriesLibrary');
+              localStorage.removeItem('upcomingBooks');
+              localStorage.removeItem('releaseNotifications');
+              localStorage.removeItem('seriesCache');
+              localStorage.removeItem('seriesMapping');
+              localStorage.removeItem('seriesAssignments');
+              localStorage.removeItem('seriesMetadata');
+              localStorage.removeItem('collections');
+              console.log('localStorage items removed');
+              
+              // Show success toast
+              toast({
+                title: "Library Reset Complete",
+                description: "Your library has been completely reset. All books, series, and collections have been removed."
+              });
+              
+              return Promise.resolve();
+            } catch (error) {
+              console.error('Error resetting library:', error);
+              
+              // Show error toast
+              toast({
+                title: "Error",
+                description: `Failed to reset library: ${error instanceof Error ? error.message : String(error)}`,
                 variant: "destructive"
               });
               
@@ -731,8 +826,11 @@ const Index = () => {
               // Import and use the backup utility
               const { createBackup } = await import('@/utils/backupUtils');
               
-              // Create and download a backup of the current books
-              createBackup(books);
+              // Get preferred name from settings
+              const preferredName = settings?.preferredName;
+              
+              // Create and download a backup of the current books (now async)
+              await createBackup(books, preferredName);
               
               toast({
                 title: "Backup Created",

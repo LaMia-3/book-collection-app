@@ -1,4 +1,6 @@
 import { Book } from '@/types/book';
+import { Collection } from '@/types/collection';
+import { Series } from '@/types/series';
 
 /**
  * Interface for the backup data structure
@@ -7,8 +9,8 @@ interface BackupData {
   version: string;
   timestamp: string;
   books: Book[];
-  series?: any[];
-  collections?: any[];
+  series?: Series[];
+  collections?: Collection[];
   metadata: {
     bookCount: number;
     seriesCount?: number;
@@ -20,19 +22,28 @@ interface BackupData {
 }
 
 /**
- * Create a backup of the user's book collection
+ * Create a backup of the user's book collection, including series and collections
  * @param books Collection of books to backup
- * @returns Backup data object
+ * @returns Promise resolving to the backup data object
  */
-export function createBackupData(books: Book[]): BackupData {
+export async function createBackupData(books: Book[]): Promise<BackupData> {
   const now = new Date();
   
+  // Get series and collections data
+  const { enhancedStorageService } = await import('@/services/storage/EnhancedStorageService');
+  const series = await enhancedStorageService.getSeries();
+  const collections = await enhancedStorageService.getCollections();
+  
   return {
-    version: '1.0.0', // Backup format version
+    version: '1.1.0', // Updated backup format version
     timestamp: now.toISOString(),
     books: books,
+    series: series,
+    collections: collections,
     metadata: {
       bookCount: books.length,
+      seriesCount: series.length,
+      collectionCount: collections.length,
       appVersion: '1.0.0', // App version
       creationDate: now.toISOString(),
     }
@@ -42,11 +53,13 @@ export function createBackupData(books: Book[]): BackupData {
 /**
  * Create and download a backup file
  * @param books Collection of books to backup
+ * @param preferredName Optional preferred name to use in the filename
+ * @returns Promise that resolves when the backup is complete
  */
-export function createBackup(books: Book[]): void {
+export async function createBackup(books: Book[], preferredName?: string): Promise<void> {
   try {
-    // Create backup data
-    const backupData = createBackupData(books);
+    // Create backup data (now async)
+    const backupData = await createBackupData(books);
     
     // Convert to JSON
     const backupJson = JSON.stringify(backupData, null, 2);
@@ -55,9 +68,14 @@ export function createBackup(books: Book[]): void {
     const blob = new Blob([backupJson], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     
-    // Generate filename with current date
-    const date = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-    const filename = `mira-books-backup-${date}.json`;
+    // Generate filename with current date and time
+    const now = new Date();
+    const dateStr = now.toISOString().split('T')[0]; // YYYY-MM-DD
+    const timeStr = now.toTimeString().split(' ')[0].replace(/:/g, '-'); // HH-MM-SS
+    
+    // Create filename with preferred name if available
+    const prefix = preferredName ? `${preferredName.toLowerCase().replace(/\s+/g, '-')}-library` : 'library';
+    const filename = `${prefix}-backup-${dateStr}-${timeStr}.json`;
     
     // Create download link and trigger it
     const a = document.createElement('a');
