@@ -93,9 +93,14 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
       // Generate CSV content
       const csvContent = booksToCSV(books);
       
-      // Create filename with current date
-      const date = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
-      const filename = `mira-books-${date}.csv`;
+      // Create filename with current date and time
+      const now = new Date();
+      const dateStr = now.toISOString().split('T')[0]; // YYYY-MM-DD
+      const timeStr = now.toTimeString().split(' ')[0].replace(/:/g, '-'); // HH-MM-SS
+      
+      // Create filename with preferred name if available
+      const prefix = settings?.preferredName ? `${settings.preferredName.toLowerCase().replace(/\s+/g, '-')}-library` : 'library';
+      const filename = `${prefix}-export-${dateStr}-${timeStr}.csv`;
       
       // Download the file
       downloadFile(csvContent, filename, 'text/csv;charset=utf-8');
@@ -126,9 +131,14 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
       // Generate JSON content
       const jsonContent = booksToJSON(books);
       
-      // Create filename with current date
-      const date = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
-      const filename = `mira-books-${date}.json`;
+      // Create filename with current date and time
+      const now = new Date();
+      const dateStr = now.toISOString().split('T')[0]; // YYYY-MM-DD
+      const timeStr = now.toTimeString().split(' ')[0].replace(/:/g, '-'); // HH-MM-SS
+      
+      // Create filename with preferred name if available
+      const prefix = settings?.preferredName ? `${settings.preferredName.toLowerCase().replace(/\s+/g, '-')}-library` : 'library';
+      const filename = `${prefix}-export-${dateStr}-${timeStr}.json`;
       
       // Download the file
       downloadFile(jsonContent, filename, 'application/json');
