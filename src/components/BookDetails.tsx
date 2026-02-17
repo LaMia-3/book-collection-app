@@ -525,30 +525,53 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
         pageCountChanged: pageCountToUse !== book.pageCount
       });
       
+      // Build a clean book object with only known Book interface fields
+      // to prevent property accumulation from spread chains across UI/DB conversions
       const updatedBook: Book = {
-        ...editedBook,
+        id: editedBook.id,
         title: titleToUse,
         author: authorToUse,
+        genre: editedBook.genre,
+        description: editedBook.description,
+        publishedDate: editedBook.publishedDate,
         pageCount: pageCountToUse,
+        thumbnail: editedBook.thumbnail,
+        googleBooksId: editedBook.googleBooksId,
+        openLibraryId: editedBook.openLibraryId,
+        sourceId: editedBook.sourceId,
+        sourceType: editedBook.sourceType,
+        isbn10: editedBook.isbn10,
+        isbn13: editedBook.isbn13,
+        status: editedBook.status,
+        completedDate: editedBook.completedDate,
+        rating: editedBook.rating,
+        notes: editedBook.notes,
+        progress: editedBook.progress,
         isPartOfSeries: !!selectedSeriesId,
         seriesId: selectedSeriesId || undefined,
         volumeNumber: volumeNumber,
-        seriesPosition: volumeNumber // Set both for compatibility
+        seriesPosition: volumeNumber,
+        collectionIds: editedBook.collectionIds,
+        _legacySeriesName: editedBook._legacySeriesName,
+        _legacyNextBookTitle: editedBook._legacyNextBookTitle,
+        _legacyNextBookExpectedYear: editedBook._legacyNextBookExpectedYear,
+        spineColor: editedBook.spineColor,
+        addedDate: editedBook.addedDate,
       };
       
       // If a series was selected, make sure the book is added to that series
       if (selectedSeriesId) {
         try {
-          // First update using seriesService (which now updates IndexedDB - exclusive source of truth)
+          // Update using seriesService (which updates IndexedDB - exclusive source of truth)
           await seriesService.addBookToSeries(selectedSeriesId, book.id);
           
           // Also update directly in IndexedDB for data consistency
+          // addBookToSeries reads the book from DB, updates series fields, and saves it
           try {
             await enhancedStorageService.initialize();
             await enhancedStorageService.addBookToSeries(book.id, selectedSeriesId, volumeNumber);
           } catch (indexedDBError) {
             console.error('Error updating book-series relationship in IndexedDB:', indexedDBError);
-            // Continue even if IndexedDB update fails - we'll still update the UI
           }
           
           toast({
@@ -565,35 +588,24 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
         }
       }
 
-      // First call parent update to update UI state
+      // Update UI state via parent callback
       onUpdate(updatedBook);
 
-      // Then also save to IndexedDB in the background for data persistence
+      // Save to IndexedDB — single save with the clean book object
+      // (addBookToSeries above only updates series fields; we still need to persist
+      //  other edits like title, author, notes, rating, etc.)
       try {
         await enhancedStorageService.initialize();
-
-        // Convert to IndexedDB format and save
-        const enhancedBook = {
-          ...updatedBook,
-          // Add required IndexedDB fields
-          dateAdded: updatedBook.addedDate,
-          lastModified: new Date().toISOString(),
-          // Add reading progress if not present
-          progress: (updatedBook as any).progress || 0
-        };
-
-        await enhancedStorageService.saveBook(enhancedBook as any);
+        await enhancedStorageService.saveBook(updatedBook);
         log.info('Book saved to IndexedDB successfully', {
           bookId: book.id,
-          title: updatedBook.title,
-          lastModified: new Date().toISOString()
+          title: updatedBook.title
         });
       } catch (indexedDBError) {
         log.error('Error saving book to IndexedDB', {
           bookId: book.id,
           error: indexedDBError.message || String(indexedDBError)
         });
-        // Continue even if IndexedDB update fails - we'll still update the UI
       }
 
       // Close the dialog
