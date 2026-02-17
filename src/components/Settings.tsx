@@ -21,9 +21,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Card } from '@/components/ui/card';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Label } from '@/components/ui/label';
 import { ImportExportView } from './ImportExportView';
-import { Settings as SettingsIcon, Trash2, AlertTriangle, Palette, Trophy, BookOpen, ArrowUp, ArrowDown, ListOrdered, Wrench } from 'lucide-react';
+import { Settings as SettingsIcon, Trash2, AlertTriangle, Palette, Trophy, BookOpen, ArrowUp, ArrowDown, ListOrdered, Wrench, Sun, Moon, Monitor } from 'lucide-react';
 import { useSettings } from '@/contexts/SettingsContext';
+import { useTheme } from '@/components/ui-common/ThemeProvider';
 import { PaletteSelector } from '@/components/PaletteSelector';
 import { GoalsTab } from '@/components/GoalsTab';
 import { indexedDBService } from '@/services/storage/IndexedDBService';
@@ -37,6 +40,7 @@ interface SettingsProps {
   onCreateBackup?: () => Promise<void>;
   onRestoreBackup?: (file: File) => Promise<void>;
   onDeleteLibrary?: () => Promise<void>;
+  onResetLibrary?: () => Promise<void>;
 }
 
 export const Settings: React.FC<SettingsProps> = ({
@@ -47,13 +51,16 @@ export const Settings: React.FC<SettingsProps> = ({
   onImportJSON,
   onCreateBackup,
   onRestoreBackup,
-  onDeleteLibrary
+  onDeleteLibrary,
+  onResetLibrary
 }) => {
   const [activeTab, setActiveTab] = useState('general');
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
+  const [deleteMode, setDeleteMode] = useState<'delete' | 'reset'>('delete');
   const [isRepairing, setIsRepairing] = useState(false);
   const [repairStatus, setRepairStatus] = useState<{success: boolean; message: string} | null>(null);
   const { settings, updateSettings, isLoading } = useSettings();
+  const { colorMode, setColorMode } = useTheme();
   
   // Local form state for settings
   const [preferredName, setPreferredName] = useState('');
@@ -474,6 +481,35 @@ export const Settings: React.FC<SettingsProps> = ({
                 
                 <div className="space-y-6">
                   <div className="border-b pb-6">
+                    <h4 className="text-base font-medium mb-2">Theme</h4>
+                    <div className="grid grid-cols-3 gap-4 mt-4">
+                      <div 
+                        className={`flex flex-col items-center justify-center p-6 rounded-lg border-2 cursor-pointer transition-all ${colorMode === 'light' ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/50'}`}
+                        onClick={() => setColorMode('light')}
+                      >
+                        <Sun className="h-8 w-8 text-purple-500 mb-2" />
+                        <span className="text-center font-medium">Light</span>
+                      </div>
+                      
+                      <div 
+                        className={`flex flex-col items-center justify-center p-6 rounded-lg border-2 cursor-pointer transition-all ${colorMode === 'dark' ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/50'}`}
+                        onClick={() => setColorMode('dark')}
+                      >
+                        <Moon className="h-8 w-8 text-gray-400 mb-2" />
+                        <span className="text-center font-medium">Dark</span>
+                      </div>
+                      
+                      <div 
+                        className={`flex flex-col items-center justify-center p-6 rounded-lg border-2 cursor-pointer transition-all ${colorMode === 'system' ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/50'}`}
+                        onClick={() => setColorMode('system')}
+                      >
+                        <Monitor className="h-8 w-8 text-gray-400 mb-2" />
+                        <span className="text-center font-medium">System</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="border-b pb-6">
                     <h4 className="text-base font-medium mb-2">Book Spine Colors</h4>
                     <p className="text-sm text-muted-foreground mb-4">
                       Choose a color palette based on your favorite book cover to customize the appearance of your bookshelf.
@@ -577,26 +613,59 @@ export const Settings: React.FC<SettingsProps> = ({
                 </h3>
                 
                 <p className="text-muted-foreground mb-6">
-                  This will permanently delete your entire book collection. This action cannot be undone.
+                  Choose an option below to either delete your books or completely reset your library.
                 </p>
                 
-                <Card className="border-destructive/20 bg-destructive/5 p-6 mb-6">
-                  <h4 className="font-medium mb-4">Before deleting your library:</h4>
-                  <ul className="list-disc pl-5 space-y-2 text-sm text-muted-foreground mb-4">
-                    <li>Consider exporting your collection as a backup</li>
-                    <li>All your books, ratings, notes, and reading statuses will be permanently lost</li>
-                    <li>This action affects all views and cannot be reversed</li>
-                  </ul>
+                <div className="space-y-6">
+                  <Card className="border-destructive/20 bg-destructive/5 p-6">
+                    <h4 className="font-medium mb-2">Delete Library</h4>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      This will remove all books and remove all books from collections, but keep your series and collection structures intact.
+                    </p>
+                    <ul className="list-disc pl-5 space-y-2 text-sm text-muted-foreground mb-4">
+                      <li>All books will be deleted</li>
+                      <li>Books will be removed from collections</li>
+                      <li>Series and collection structures will be preserved</li>
+                    </ul>
+                    
+                    <Button 
+                      variant="destructive" 
+                      className="mt-2 flex items-center gap-2"
+                      onClick={() => {
+                        setDeleteMode('delete');
+                        setShowDeleteConfirmation(true);
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Delete Library
+                    </Button>
+                  </Card>
                   
-                  <Button 
-                    variant="destructive" 
-                    className="mt-2 flex items-center gap-2"
-                    onClick={() => setShowDeleteConfirmation(true)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    Delete Entire Library
-                  </Button>
-                </Card>
+                  <Card className="border-destructive/20 bg-destructive/5 p-6">
+                    <h4 className="font-medium mb-2">Reset Library</h4>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      This will completely reset your library by removing all books, series, and collections.
+                    </p>
+                    <ul className="list-disc pl-5 space-y-2 text-sm text-muted-foreground mb-4">
+                      <li>All books will be deleted</li>
+                      <li>All series will be deleted</li>
+                      <li>All collections will be deleted</li>
+                      <li>You will start with a completely empty library</li>
+                    </ul>
+                    
+                    <Button 
+                      variant="destructive" 
+                      className="mt-2 flex items-center gap-2"
+                      onClick={() => {
+                        setDeleteMode('reset');
+                        setShowDeleteConfirmation(true);
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Reset Library
+                    </Button>
+                  </Card>
+                </div>
               </TabsContent>
             </div>
           </div>
@@ -610,12 +679,22 @@ export const Settings: React.FC<SettingsProps> = ({
             <AlertDialogContent>
               <AlertDialogHeader>
                 <AlertDialogTitle className="text-destructive flex items-center gap-2">
-                  <AlertTriangle className="h-5 w-5" /> Delete Entire Library?
+                  <AlertTriangle className="h-5 w-5" /> 
+                  {deleteMode === 'delete' ? 'Delete Library?' : 'Reset Library?'}
                 </AlertDialogTitle>
                 <AlertDialogDescription>
-                  <p className="mb-2">Are you sure you want to delete your entire book collection? This action <strong>cannot be undone</strong>.</p>
-                  <p className="mb-4">All your books, ratings, notes, and reading statuses will be permanently lost.</p>
-                  <p className="text-sm font-medium">We recommend exporting a backup before deletion.</p>
+                  {deleteMode === 'delete' ? (
+                    <>
+                      <p className="mb-2">Are you sure you want to delete all books from your library? This action <strong>cannot be undone</strong>.</p>
+                      <p className="mb-4">All your books will be removed, but your series and collection structures will remain intact.</p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="mb-2">Are you sure you want to completely reset your library? This action <strong>cannot be undone</strong>.</p>
+                      <p className="mb-4">All your books, series, and collections will be permanently deleted.</p>
+                    </>
+                  )}
+                  <p className="text-sm font-medium">We recommend exporting a backup before proceeding.</p>
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -623,13 +702,15 @@ export const Settings: React.FC<SettingsProps> = ({
                 <AlertDialogAction
                   className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                   onClick={() => {
-                    if (onDeleteLibrary) {
+                    if (deleteMode === 'delete' && onDeleteLibrary) {
                       onDeleteLibrary();
+                    } else if (deleteMode === 'reset' && onResetLibrary) {
+                      onResetLibrary();
                     }
                     setShowDeleteConfirmation(false);
                   }}
                 >
-                  Yes, Delete Everything
+                  {deleteMode === 'delete' ? 'Yes, Delete Library' : 'Yes, Reset Library'}
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>

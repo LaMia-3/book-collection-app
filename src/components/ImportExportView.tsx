@@ -6,6 +6,7 @@ import { ImportFormatHelp } from './ImportFormatHelp';
 
 import { Book } from '@/types/book';
 import { useImport } from '@/contexts/ImportContext';
+import { useSettings } from '@/contexts/SettingsContext';
 import { booksToCSV, booksToJSON, downloadFile } from '@/utils/exportUtils';
 import { importFromCSV, importFromJSON, ImportResult } from '@/utils/importUtils';
 import { createBackup, restoreFromBackup } from '@/utils/backupUtils';
@@ -27,6 +28,8 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
 }) => {
   // Get import context functions for background processing
   const { startImport, updateImportProgress, completeImport, errorImport, setCancelCallback } = useImport();
+  // Get settings for preferred name
+  const { settings } = useSettings();
   
   // State for file inputs and operation status
   const [csvFile, setCsvFile] = useState<File | null>(null);
@@ -371,8 +374,8 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
         message: 'Creating backup...'
       });
       
-      // Create and download the backup
-      createBackup(books);
+      // Create and download the backup (now async) with preferred name
+      await createBackup(books, settings?.preferredName);
       
       // Call the onCreateBackup prop if provided
       if (onCreateBackup) {

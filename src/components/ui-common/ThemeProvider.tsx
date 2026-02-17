@@ -108,7 +108,12 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
     } else {
       setEffectiveColorMode(colorMode);
     }
-  }, [colorMode]);
+    
+    // Apply the theme class to the document element
+    const html = document.documentElement;
+    html.classList.remove('light', 'dark');
+    html.classList.add(effectiveColorMode);
+  }, [colorMode, effectiveColorMode]);
 
   const themeContextValue: ThemeContextType = {
     colorMode,
@@ -128,6 +133,7 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
         attribute="class" 
         defaultTheme={colorMode} 
         enableSystem={colorMode === 'system'}
+        forcedTheme={colorMode === 'system' ? undefined : colorMode}
       >
         {children}
       </NextThemeProvider>
