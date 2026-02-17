@@ -15,6 +15,7 @@ import { Collection } from '@/types/collection';
 import { collectionRepository } from '@/repositories/CollectionRepository';
 import { useToast } from '@/components/ui/use-toast';
 import { AppLayout } from '@/components/layout/AppLayout';
+import { useLibrarySettings } from '@/hooks/useLibrarySettings';
 
 const CollectionsPage: React.FC = () => {
   const [collections, setCollections] = useState<Collection[]>([]);
@@ -27,7 +28,12 @@ const CollectionsPage: React.FC = () => {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedCollection, setSelectedCollection] = useState<Collection | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [showSettings, setShowSettings] = useState(false);
+  const { settingsProps, setShowSettings } = useLibrarySettings({
+    onLibraryCleared: () => {
+      setCollections([]);
+      setFilteredCollections([]);
+    },
+  });
   
   // Form state for creating/editing collections
   const [formData, setFormData] = useState({
@@ -654,47 +660,7 @@ const CollectionsPage: React.FC = () => {
       </Dialog>
       
       {/* Settings Modal */}
-      <Settings
-        isOpen={showSettings}
-        onClose={() => setShowSettings(false)}
-        books={[]}
-        onDeleteLibrary={async () => {
-          try {
-            // Import required services
-            const { enhancedStorageService } = await import('@/services/storage/EnhancedStorageService');
-            
-            // Clear collections data
-            try {
-              // Get all collections and delete them one by one
-              const allCollections = await collectionRepository.getAll();
-              for (const collection of allCollections) {
-                await collectionRepository.delete(collection.id);
-              }
-              
-              // Update UI
-              setCollections([]);
-              setFilteredCollections([]);
-              
-              toast({
-                title: "Collections Deleted",
-                description: "All collections have been successfully deleted."
-              });
-            } catch (error) {
-              console.error('Error clearing collections:', error);
-              toast({
-                title: "Error",
-                description: `Failed to delete collections: ${error instanceof Error ? error.message : String(error)}`,
-                variant: "destructive"
-              });
-            }
-            
-            return Promise.resolve();
-          } catch (error) {
-            console.error('Error deleting collections:', error);
-            return Promise.reject(error);
-          }
-        }}
-      />
+      <Settings {...settingsProps} />
     </AppLayout>
   );
 };

@@ -1,21 +1,18 @@
 import { useState, useEffect } from 'react';
 import { Settings } from '@/components/Settings';
-import { useToast } from '@/hooks/use-toast';
 import { EnhancedHeader } from '@/components/navigation/EnhancedHeader';
 import { InsightsView } from '@/components/InsightsView';
 import { GoalsTab } from '@/components/GoalsTab';
 import { useSettings } from '@/contexts/SettingsContext';
-// Removed Select import as it's no longer needed
-import { Book } from '@/types/book';
+import { useLibrarySettings } from '@/hooks/useLibrarySettings';
 
 const InsightsPage = () => {
   const { settings } = useSettings();
-  const { toast } = useToast();
-  // Removed activeTab state as we no longer have tabs
-  const [books, setBooks] = useState<Book[]>([]);
-  // Removed timePeriod state as it's no longer needed
   const [booksCompletedThisMonth, setBooksCompletedThisMonth] = useState<number>(0);
-  const [showSettings, setShowSettings] = useState(false);
+  
+  const { books, setBooks, settingsProps, setShowSettings } = useLibrarySettings({
+    onLibraryCleared: () => setBooksCompletedThisMonth(0),
+  });
   
   // Load books from IndexedDB
   useEffect(() => {
@@ -31,8 +28,8 @@ const InsightsPage = () => {
         const uiBooks = indexedDBBooks.map(book => ({
           ...book,
           // Map fields with different names
-          addedDate: book.dateAdded || new Date().toISOString(),
-          completedDate: book.dateCompleted,
+          addedDate: book.addedDate || new Date().toISOString(),
+          completedDate: book.completedDate,
           // Ensure all required fields are present
           isPartOfSeries: book.isPartOfSeries || false,
           spineColor: book.spineColor || 1
@@ -91,39 +88,7 @@ const InsightsPage = () => {
       </div>
       
       {/* Settings Modal */}
-      <Settings
-        isOpen={showSettings}
-        onClose={() => setShowSettings(false)}
-        books={books}
-        onDeleteLibrary={async () => {
-          try {
-            // Import required services
-            const { enhancedStorageService } = await import('@/services/storage/EnhancedStorageService');
-            
-            // Clear reading insights data if needed
-            // Note: Reading insights are derived from books, so we don't need to clear separate data
-            
-            // Update UI
-            setBooks([]);
-            setBooksCompletedThisMonth(0);
-            
-            toast({
-              title: "Reading Data Reset",
-              description: "Your reading insights data has been reset."
-            });
-            
-            return Promise.resolve();
-          } catch (error) {
-            console.error('Error resetting reading data:', error);
-            toast({
-              title: "Error",
-              description: `Failed to reset reading data: ${error instanceof Error ? error.message : String(error)}`,
-              variant: "destructive"
-            });
-            return Promise.reject(error);
-          }
-        }}
-      />
+      <Settings {...settingsProps} />
     </div>
   );
 };

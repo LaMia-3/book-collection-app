@@ -439,23 +439,51 @@ function convertRawToBook(rawBook: RawBookImport): Partial<Book> {
     let dateStr = rawBook.completedDate.trim();
     dateStr = dateStr.replace(/^"|"$/g, ''); // Remove surrounding quotes if present
     
+    log.info('Processing completedDate', { dateStr, bookTitle: book.title });
+    
     try {
-      // Parse the date - works with ISO format and YYYY-MM-DD
-      const date = new Date(dateStr);
-      
-      if (isNaN(date.getTime())) {
-        // Invalid date
-        log.warn(`Invalid date format, using as-is`, { date: dateStr });
+      // Check if the date is in YYYY-MM-DD format
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+        // Already in the correct format, use as is
         book.completedDate = dateStr;
-      } else {
-        // Valid date - normalize to YYYY-MM-DD format for consistency
-        const normalizedDate = date.toISOString().split('T')[0];
+        log.info('Using YYYY-MM-DD format date directly', { completedDate: dateStr, bookTitle: book.title });
+      } 
+      // Handle MM/DD/YYYY format (common in CSV imports)
+      else if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(dateStr)) {
+        // Parse MM/DD/YYYY format
+        const parts = dateStr.split('/');
+        const month = parts[0].padStart(2, '0');
+        const day = parts[1].padStart(2, '0');
+        const year = parts[2];
+        const normalizedDate = `${year}-${month}-${day}`;
         book.completedDate = normalizedDate;
-        log.debug(`Valid date format normalized`, { original: dateStr, normalized: normalizedDate });
+        log.info('Converted MM/DD/YYYY to YYYY-MM-DD', { 
+          original: dateStr, 
+          normalized: normalizedDate,
+          bookTitle: book.title 
+        });
+      }
+      else {
+        // Try to parse as a date object
+        const date = new Date(dateStr);
+        if (!isNaN(date.getTime())) {
+          // Valid date - normalize to YYYY-MM-DD format
+          const normalizedDate = date.toISOString().split('T')[0];
+          book.completedDate = normalizedDate;
+          log.info('Normalized date format', { 
+            original: dateStr, 
+            normalized: normalizedDate,
+            bookTitle: book.title 
+          });
+        } else {
+          // Invalid date - use as is
+          log.warn('Invalid date format, using as-is', { date: dateStr, bookTitle: book.title });
+          book.completedDate = dateStr;
+        }
       }
     } catch (e) {
-      // If date parsing fails, still use the original string but log a warning
-      log.warn(`Date parsing failed, using as-is`, { date: dateStr, error: e });
+      // If date parsing fails, use the original string
+      log.warn('Date parsing failed, using as-is', { date: dateStr, error: e, bookTitle: book.title });
       book.completedDate = dateStr;
     }
   } else if (book.status === 'completed') {

@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { Settings } from "@/components/Settings";
 import { useNavigate } from "react-router-dom";
 import { useSettings } from "@/contexts/SettingsContext";
+import { useLibrarySettings } from '@/hooks/useLibrarySettings';
 import { Series } from "@/types/series";
 import { Book } from "@/types/book";
 import { Button } from '@/components/ui/button';
@@ -33,11 +34,13 @@ const SeriesPage = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { settings } = useSettings();
-  const [books, setBooks] = useState<Book[]>([]);
   const [series, setSeries] = useState<Series[]>([]);
   const [isCreatingNewSeries, setIsCreatingNewSeries] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [showSettings, setShowSettings] = useState(false);
+  
+  const { books, setBooks, showSettings, settingsProps, setShowSettings } = useLibrarySettings({
+    onLibraryCleared: () => setSeries([]),
+  });
   const [filter, setFilter] = useState<SeriesFilter>({});
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [isFilterOpen, setIsFilterOpen] = useState(false);
@@ -662,7 +665,7 @@ const SeriesPage = () => {
       {/* Create Series Dialog */}
       {isCreatingNewSeries && (
         <CreateSeriesDialog
-          isOpen={isCreatingNewSeries}
+          open={isCreatingNewSeries}
           onClose={() => setIsCreatingNewSeries(false)}
           onCreateSeries={(newSeries) => {
             // Add the new series to state
@@ -689,10 +692,7 @@ const SeriesPage = () => {
       
       {/* Settings Dialog */}
       {showSettings && (
-        <Settings
-          isOpen={showSettings}
-          onClose={() => setShowSettings(false)}
-        />
+        <Settings {...settingsProps} />
       )}
     </AppLayout>
   );

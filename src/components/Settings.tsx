@@ -691,20 +691,21 @@ export const Settings: React.FC<SettingsProps> = ({
                   <AlertTriangle className="h-5 w-5" /> 
                   {deleteMode === 'delete' ? 'Delete Library?' : 'Reset Library?'}
                 </AlertDialogTitle>
-                <AlertDialogDescription>
+                {/* Use a custom description to avoid DOM nesting issues */}
+                <div className="text-sm text-muted-foreground">
                   {deleteMode === 'delete' ? (
                     <>
-                      <p className="mb-2">Are you sure you want to delete all books from your library? This action <strong>cannot be undone</strong>.</p>
-                      <p className="mb-4">All your books will be removed, but your series and collection structures will remain intact.</p>
+                      <span className="block mb-2">Are you sure you want to delete all books from your library? This action <strong>cannot be undone</strong>.</span>
+                      <span className="block mb-4">All your books will be removed, but your series and collection structures will remain intact.</span>
                     </>
                   ) : (
                     <>
-                      <p className="mb-2">Are you sure you want to completely reset your library? This action <strong>cannot be undone</strong>.</p>
-                      <p className="mb-4">All your books, series, and collections will be permanently deleted.</p>
+                      <span className="block mb-2">Are you sure you want to completely reset your library? This action <strong>cannot be undone</strong>.</span>
+                      <span className="block mb-4">All your books, series, and collections will be permanently deleted.</span>
                     </>
                   )}
-                  <p className="text-sm font-medium">We recommend exporting a backup before proceeding.</p>
-                </AlertDialogDescription>
+                  <span className="block text-sm font-medium">We recommend exporting a backup before proceeding.</span>
+                </div>
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
