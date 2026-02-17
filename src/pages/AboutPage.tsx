@@ -68,9 +68,9 @@ const AboutPage = () => {
                 </div>
                 <h3 className="text-lg font-semibold mb-2">Bug Fix — Book Editing</h3>
                 <ul className="space-y-1.5 text-sm text-muted-foreground list-disc list-inside">
-                  <li>Fixed an Out of Memory error that could occur when saving edits to a book</li>
-                  <li>Eliminated property accumulation across UI/DB conversion cycles</li>
-                  <li>Removed redundant double-save when updating book details</li>
+                  <li>Fixed an Out of Memory crash when saving edits to any book</li>
+                  <li>Resolved infinite loop in search index rebuild during book updates</li>
+                  <li>Improved data handling between UI and database layers</li>
                 </ul>
               </div>
 
