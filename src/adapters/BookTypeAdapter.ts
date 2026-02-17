@@ -78,18 +78,38 @@ export function convertDbBookToUiBook(dbBook: DBBook): UIBook {
     genreArray = dbBook.genre;
   }
   
+  // Explicitly map fields instead of spreading to prevent DB-only fields
+  // (dateAdded, lastModified, syncStatus, etc.) leaking into UI objects
   return {
-    ...dbBook,
-    // Convert string status to appropriate format for UI
+    id: dbBook.id,
+    title: dbBook.title,
+    author: dbBook.author,
+    genre: genreArray,
+    description: dbBook.description,
+    publishedDate: dbBook.publishedDate,
+    pageCount: dbBook.pageCount,
+    thumbnail: dbBook.thumbnail,
+    googleBooksId: dbBook.googleBooksId,
+    openLibraryId: dbBook.openLibraryId,
+    sourceId: dbBook.sourceId,
+    sourceType: dbBook.sourceType,
+    isbn10: dbBook.isbn10,
+    isbn13: dbBook.isbn13,
     status: mapDbStatusToUiStatus(dbBook.status),
-    // Ensure isPartOfSeries is defined (required in UIBook)
-    isPartOfSeries: dbBook.isPartOfSeries || false,
-    // Use addedDate if present, otherwise use dateAdded
-    addedDate: dbBook.addedDate || dbBook.dateAdded,
-    // Map dateCompleted to completedDate
     completedDate: dbBook.dateCompleted || dbBook.completedDate,
-    // Ensure genre is always in array format
-    genre: genreArray
+    rating: dbBook.rating,
+    notes: dbBook.notes,
+    progress: dbBook.progress,
+    isPartOfSeries: dbBook.isPartOfSeries || false,
+    seriesId: dbBook.seriesId,
+    volumeNumber: dbBook.volumeNumber,
+    seriesPosition: dbBook.seriesPosition,
+    collectionIds: (dbBook as any).collectionIds,
+    _legacySeriesName: dbBook._legacySeriesName,
+    _legacyNextBookTitle: dbBook._legacyNextBookTitle,
+    _legacyNextBookExpectedYear: dbBook._legacyNextBookExpectedYear,
+    spineColor: dbBook.spineColor,
+    addedDate: dbBook.addedDate || dbBook.dateAdded,
   };
 }
 
@@ -110,18 +130,42 @@ export function convertUiBookToDbBook(uiBook: UIBook): DBBook {
     genre = [];
   }
   
+  // Explicitly map fields instead of spreading to prevent property accumulation
+  // across UI/DB conversion cycles that can cause OOM errors
   return {
-    ...uiBook,
-    // Convert status to string format for DB
+    id: uiBook.id,
+    title: uiBook.title,
+    author: uiBook.author,
+    genre,
+    description: uiBook.description,
+    publishedDate: uiBook.publishedDate,
+    pageCount: uiBook.pageCount,
+    thumbnail: uiBook.thumbnail,
+    googleBooksId: uiBook.googleBooksId,
+    openLibraryId: uiBook.openLibraryId,
+    sourceId: uiBook.sourceId,
+    sourceType: uiBook.sourceType,
+    isbn10: uiBook.isbn10,
+    isbn13: uiBook.isbn13,
     status: mapUiStatusToDbStatus(uiBook.status),
-    // Add required DB fields
+    completedDate: uiBook.completedDate,
+    rating: uiBook.rating,
+    notes: uiBook.notes,
+    isPartOfSeries: uiBook.isPartOfSeries,
+    seriesId: uiBook.seriesId,
+    volumeNumber: uiBook.volumeNumber,
+    seriesPosition: uiBook.seriesPosition,
+    _legacySeriesName: uiBook._legacySeriesName,
+    _legacyNextBookTitle: uiBook._legacyNextBookTitle,
+    _legacyNextBookExpectedYear: uiBook._legacyNextBookExpectedYear,
+    spineColor: uiBook.spineColor,
+    addedDate: uiBook.addedDate,
+    // DB-specific fields
     dateAdded: uiBook.addedDate || now,
     dateCompleted: uiBook.completedDate || undefined,
     lastModified: now,
     syncStatus: 'local',
-    progress: 0, // Default progress value
-    // Store genre as array
-    genre
+    progress: uiBook.progress || 0,
   };
 }
 

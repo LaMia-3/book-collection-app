@@ -100,14 +100,17 @@ class SearchIndex<T> {
     const index = this.items.findIndex(item => this.getItemId(item) === id);
     if (index === -1) return;
     
-    // Remove the item from the items array
-    this.items.splice(index, 1);
+    // Snapshot remaining items, then clear and rebuild from scratch.
+    // We must NOT call addItem while iterating this.items because addItem
+    // pushes onto this.items, which would create an infinite loop / OOM.
+    const remaining = [...this.items];
+    remaining.splice(index, 1);
     
-    // Rebuild the index - this is inefficient but works for now
-    // In a production app, we'd want a more sophisticated approach
+    // Clear everything and re-index from the snapshot
+    this.items = [];
     this.tokenMap.clear();
-    for (let i = 0; i < this.items.length; i++) {
-      this.addItem(this.items[i]);
+    for (const item of remaining) {
+      this.addItem(item);
     }
   }
 

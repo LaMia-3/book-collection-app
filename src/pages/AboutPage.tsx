@@ -63,8 +63,20 @@ const AboutPage = () => {
             <div className="bg-card rounded-lg p-6 shadow-elegant space-y-8">
               <div>
                 <div className="flex items-center gap-3 mb-3">
-                  <span className="text-sm font-semibold bg-primary/10 text-primary px-2.5 py-0.5 rounded-full">v1.2.1</span>
+                  <span className="text-sm font-semibold bg-primary/10 text-primary px-2.5 py-0.5 rounded-full">v1.2.2</span>
                   <span className="text-sm text-muted-foreground">Latest</span>
+                </div>
+                <h3 className="text-lg font-semibold mb-2">Bug Fix — Book Editing</h3>
+                <ul className="space-y-1.5 text-sm text-muted-foreground list-disc list-inside">
+                  <li>Fixed an Out of Memory crash when saving edits to any book</li>
+                  <li>Resolved infinite loop in search index rebuild during book updates</li>
+                  <li>Improved data handling between UI and database layers</li>
+                </ul>
+              </div>
+
+              <div>
+                <div className="flex items-center gap-3 mb-3">
+                  <span className="text-sm font-semibold bg-muted text-muted-foreground px-2.5 py-0.5 rounded-full">v1.2.1</span>
                 </div>
                 <h3 className="text-lg font-semibold mb-2">About This App</h3>
                 <ul className="space-y-1.5 text-sm text-muted-foreground list-disc list-inside">
