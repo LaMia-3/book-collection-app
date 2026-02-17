@@ -171,7 +171,7 @@ export function useLibrarySettings(options: UseLibrarySettingsOptions = {}) {
       });
 
       // Force page refresh so all views reflect the cleared state
-      setTimeout(() => window.location.reload(), 500);
+      setTimeout(() => window.location.reload(), 1000);
 
       return Promise.resolve();
     } catch (error) {
@@ -243,7 +243,7 @@ export function useLibrarySettings(options: UseLibrarySettingsOptions = {}) {
       });
 
       // Force page refresh so all views reflect the cleared state
-      setTimeout(() => window.location.reload(), 500);
+      setTimeout(() => window.location.reload(), 1000);
 
       return Promise.resolve();
     } catch (error) {
@@ -288,7 +288,7 @@ export function useLibrarySettings(options: UseLibrarySettingsOptions = {}) {
           });
 
           // Force page refresh so all views reflect the imported data
-          setTimeout(() => window.location.reload(), 500);
+          setTimeout(() => window.location.reload(), 1000);
         } catch (saveError) {
           console.error('Error saving imported books to IndexedDB:', saveError);
           toast({
@@ -348,7 +348,7 @@ export function useLibrarySettings(options: UseLibrarySettingsOptions = {}) {
           });
 
           // Force page refresh so all views reflect the imported data
-          setTimeout(() => window.location.reload(), 500);
+          setTimeout(() => window.location.reload(), 1000);
         } catch (saveError) {
           console.error('Error saving imported books to IndexedDB:', saveError);
           toast({
@@ -487,7 +487,7 @@ export function useLibrarySettings(options: UseLibrarySettingsOptions = {}) {
           });
 
           // Force page refresh so all views reflect the restored data
-          setTimeout(() => window.location.reload(), 500);
+          setTimeout(() => window.location.reload(), 1000);
         } catch (saveError) {
           console.error('Error saving restored data to IndexedDB:', saveError);
           toast({
