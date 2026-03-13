@@ -40,6 +40,13 @@ export const sendError = (
   error: unknown,
 ): VercelResponse => {
   if (error instanceof ApiError) {
+    console.error("[API_ERROR]", {
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      statusCode: error.statusCode,
+    });
+
     return response.status(error.statusCode).json({
       error: {
         code: error.code,
@@ -49,10 +56,30 @@ export const sendError = (
     });
   }
 
+  const errorMessage =
+    error instanceof Error ? error.message : "An unexpected error occurred.";
+  const errorName = error instanceof Error ? error.name : "UnknownError";
+  const errorStack = error instanceof Error ? error.stack : undefined;
+  const isDebugEnvironment =
+    process.env.VERCEL_ENV === "preview" || process.env.NODE_ENV !== "production";
+
+  console.error("[UNHANDLED_API_ERROR]", {
+    name: errorName,
+    message: errorMessage,
+    stack: errorStack,
+  });
+
   return response.status(500).json({
     error: {
       code: "INTERNAL_SERVER_ERROR",
-      message: "An unexpected error occurred.",
+      message: isDebugEnvironment
+        ? errorMessage
+        : "An unexpected error occurred.",
+      details: isDebugEnvironment
+        ? {
+            name: errorName,
+          }
+        : undefined,
     },
   });
 };
