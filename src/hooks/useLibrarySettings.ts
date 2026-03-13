@@ -1,7 +1,11 @@
 import { useState, useCallback } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { useSettings } from '@/contexts/SettingsContext';
+import { useAuth } from '@/hooks/useAuth';
 import { Book } from '@/types/book';
+import { notifyStorageReset } from '@/services/storage/CacheResetListener';
+import type { Collection } from '@/types/collection';
+import type { Series } from '@/types/series';
 
 /**
  * Helper function to clear an IndexedDB object store.
@@ -80,6 +84,59 @@ const clearIndexedDBStore = (dbName: string, storeName: string): Promise<void> =
   });
 };
 
+const LEGACY_LOCAL_STORAGE_KEYS = [
+  'bookLibrary',
+  'seriesLibrary',
+  'upcomingBooks',
+  'releaseNotifications',
+  'seriesCache',
+  'seriesMapping',
+  'seriesAssignments',
+  'seriesMetadata',
+  'collections',
+  'mira_books',
+  'mira_collections',
+] as const;
+
+const clearLegacyLocalStorage = () => {
+  for (const key of LEGACY_LOCAL_STORAGE_KEYS) {
+    localStorage.removeItem(key);
+  }
+};
+
+const clearIndexedDBStoreIfExists = async (dbName: string, storeName: string) => {
+  try {
+    await clearIndexedDBStore(dbName, storeName);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+
+    if (
+      message.includes('does not exist') ||
+      message.includes('Failed to open database')
+    ) {
+      return;
+    }
+
+    throw error;
+  }
+};
+
+const clearAllClientLibraryData = async () => {
+  const storesByDatabase = {
+    'book-collection-db': ['books', 'series', 'collections', 'upcomingReleases', 'notifications'],
+    bookCollectionDb: ['books', 'series', 'collections', 'upcomingReleases', 'notifications'],
+  } as const;
+
+  for (const [dbName, stores] of Object.entries(storesByDatabase)) {
+    for (const storeName of stores) {
+      await clearIndexedDBStoreIfExists(dbName, storeName);
+    }
+  }
+
+  clearLegacyLocalStorage();
+  notifyStorageReset();
+};
+
 interface UseLibrarySettingsOptions {
   /** Pass external books state if the page manages its own books array */
   externalBooks?: Book[];
@@ -100,8 +157,10 @@ interface UseLibrarySettingsOptions {
 export function useLibrarySettings(options: UseLibrarySettingsOptions = {}) {
   const { toast } = useToast();
   const { settings } = useSettings();
+  const { deleteAccount, isAuthenticated, logout } = useAuth();
   const [showSettings, setShowSettings] = useState(false);
   const [internalBooks, setInternalBooks] = useState<Book[]>([]);
+  const onLibraryCleared = options.onLibraryCleared;
 
   // Decide which books state to use
   const books = options.externalBooks ?? internalBooks;
@@ -111,63 +170,122 @@ export function useLibrarySettings(options: UseLibrarySettingsOptions = {}) {
     rawSetBooks(newBooks);
   }, [rawSetBooks]);
 
+  const reloadBooksFromRepository = useCallback(async () => {
+    const { bookRepository } = await import('@/repositories/BookRepository');
+    const currentBooks = await bookRepository.getAll();
+    updateBooks(currentBooks);
+    return currentBooks;
+  }, [updateBooks]);
+
+  const upsertBooks = useCallback(async (importedBooks: Book[]) => {
+    const { bookRepository } = await import('@/repositories/BookRepository');
+
+    for (const book of importedBooks) {
+      const existingBook = await bookRepository.getById(book.id);
+
+      if (existingBook) {
+        await bookRepository.update(book.id, book);
+      } else {
+        await bookRepository.create(book);
+      }
+    }
+  }, []);
+
+  const upsertSeries = useCallback(async (seriesItems: Series[]) => {
+    const { seriesRepository } = await import('@/repositories/SeriesRepository');
+
+    for (const series of seriesItems) {
+      const existingSeries = await seriesRepository.getById(series.id);
+
+      if (existingSeries) {
+        await seriesRepository.update(series.id, series);
+      } else {
+        await seriesRepository.add(series);
+      }
+    }
+  }, []);
+
+  const upsertCollections = useCallback(async (collectionItems: Collection[]) => {
+    const { collectionRepository } = await import('@/repositories/CollectionRepository');
+
+    for (const collection of collectionItems) {
+      const existingCollection = await collectionRepository.getById(collection.id);
+
+      if (existingCollection) {
+        await collectionRepository.update(collection.id, {
+          name: collection.name,
+          description: collection.description,
+          bookIds: collection.bookIds,
+          color: collection.color,
+          imageUrl: collection.imageUrl,
+        });
+      } else {
+        await collectionRepository.add(collection);
+      }
+    }
+  }, []);
+
   const onDeleteLibrary = useCallback(async () => {
     try {
-      const { collectionRepository } = await import('@/repositories/CollectionRepository');
+      const [
+        { bookRepository },
+        { seriesRepository },
+        { collectionRepository },
+        { notificationRepository },
+      ] = await Promise.all([
+        import('@/repositories/BookRepository'),
+        import('@/repositories/SeriesRepository'),
+        import('@/repositories/CollectionRepository'),
+        import('@/repositories/NotificationRepository'),
+      ]);
 
-      // Get all collections before clearing books to preserve them
-      const collections = await collectionRepository.getAll();
-      console.log('Retrieved collections to preserve:', collections.length);
+      const [booksToDelete, collections, seriesList, notifications] = await Promise.all([
+        bookRepository.getAll(),
+        collectionRepository.getAll(),
+        seriesRepository.getAll(),
+        notificationRepository.getAll(),
+      ]);
 
-      // Clear all books in IndexedDB
-      try {
-        await clearIndexedDBStore('book-collection-db', 'books');
-        console.log('Successfully cleared books from IndexedDB');
+      const deletedBookIds = new Set(booksToDelete.map((book) => book.id));
 
-        // Clear all series in IndexedDB
-        await clearIndexedDBStore('book-collection-db', 'series');
-        console.log('Successfully cleared series from IndexedDB');
-
-        // Explicitly preserve each collection but remove their books
-        for (const collection of collections) {
-          try {
-            const updatedCollection = {
-              id: collection.id,
-              name: collection.name,
-              description: collection.description || '',
-              imageUrl: collection.imageUrl,
-              color: collection.color,
-              bookIds: [],
-              createdAt: collection.createdAt,
-              updatedAt: new Date()
-            };
-            await collectionRepository.update(collection.id, updatedCollection);
-            console.log(`Preserved collection: ${collection.name} (${collection.id})`);
-          } catch (collectionError) {
-            console.error(`Error preserving collection ${collection.id}:`, collectionError);
-          }
-        }
-        console.log('Successfully preserved collections while removing books and series');
-      } catch (error) {
-        console.error('Error clearing books and series:', error);
+      for (const collection of collections) {
+        await collectionRepository.update(collection.id, {
+          bookIds: [],
+        });
       }
 
-      // Clear localStorage for compatibility with old implementation
-      localStorage.removeItem('bookLibrary');
-      localStorage.removeItem('seriesLibrary');
-      localStorage.removeItem('upcomingBooks');
-      localStorage.removeItem('releaseNotifications');
-      localStorage.removeItem('seriesCache');
-      localStorage.removeItem('seriesMapping');
-      console.log('localStorage items removed');
+      for (const series of seriesList) {
+        await seriesRepository.update(series.id, {
+          books: [],
+          customOrder: [],
+        });
+      }
+
+      for (const notification of notifications) {
+        if (notification.bookId && deletedBookIds.has(notification.bookId)) {
+          await notificationRepository.delete(notification.id);
+        }
+      }
+
+      for (const book of booksToDelete) {
+        await bookRepository.delete(book.id);
+      }
+
+      if (isAuthenticated) {
+        await clearAllClientLibraryData();
+      } else {
+        clearLegacyLocalStorage();
+      }
 
       // Update UI state
       updateBooks([]);
-      options.onLibraryCleared?.();
+      onLibraryCleared?.();
 
       toast({
         title: "Library Deleted",
-        description: "All books and series have been removed from your library while preserving your collections."
+        description: isAuthenticated
+          ? "All books were deleted from this account library. Series and collections were preserved, and this device cache was cleared."
+          : "All local books were deleted. Series and collections were preserved."
       });
 
       // Force page refresh so all views reflect the cleared state
@@ -183,63 +301,62 @@ export function useLibrarySettings(options: UseLibrarySettingsOptions = {}) {
       });
       return Promise.reject(error);
     }
-  }, [toast, updateBooks, options.onLibraryCleared]);
+  }, [isAuthenticated, onLibraryCleared, toast, updateBooks]);
 
   const onResetLibrary = useCallback(async () => {
     try {
-      const { notificationService } = await import('@/services/NotificationService');
+      const [
+        { bookRepository },
+        { seriesRepository },
+        { collectionRepository },
+        { upcomingReleasesRepository },
+        { notificationRepository },
+      ] = await Promise.all([
+        import('@/repositories/BookRepository'),
+        import('@/repositories/SeriesRepository'),
+        import('@/repositories/CollectionRepository'),
+        import('@/repositories/UpcomingReleasesRepository'),
+        import('@/repositories/NotificationRepository'),
+      ]);
 
-      // Clear all books in IndexedDB
-      try {
-        await clearIndexedDBStore('book-collection-db', 'books');
-        console.log('Successfully cleared books from IndexedDB');
-      } catch (error) {
-        console.error('Error clearing books:', error);
+      const [booksToDelete, seriesList, collections, upcomingReleases] = await Promise.all([
+        bookRepository.getAll(),
+        seriesRepository.getAll(),
+        collectionRepository.getAll(),
+        upcomingReleasesRepository.getAll(),
+      ]);
+
+      for (const notification of await notificationRepository.getAll()) {
+        await notificationRepository.delete(notification.id);
       }
 
-      // Clear all series
-      try {
-        await clearIndexedDBStore('book-collection-db', 'series');
-        console.log('Successfully cleared series from IndexedDB');
-      } catch (error) {
-        console.error('Error clearing series:', error);
+      for (const upcomingRelease of upcomingReleases) {
+        await upcomingReleasesRepository.delete(upcomingRelease.id);
       }
 
-      // Clear all collections
-      try {
-        await clearIndexedDBStore('book-collection-db', 'collections');
-        console.log('Successfully cleared collections from IndexedDB');
-      } catch (error) {
-        console.error('Error clearing collections:', error);
+      for (const collection of collections) {
+        await collectionRepository.delete(collection.id);
       }
 
-      // Clear notifications
-      try {
-        await notificationService.clearAllNotifications();
-        console.log('Notifications cleared successfully');
-      } catch (error) {
-        console.error('Error clearing notifications:', error);
+      for (const series of seriesList) {
+        await seriesRepository.delete(series.id);
       }
 
-      // Clear localStorage for compatibility with old implementation
-      localStorage.removeItem('bookLibrary');
-      localStorage.removeItem('seriesLibrary');
-      localStorage.removeItem('upcomingBooks');
-      localStorage.removeItem('releaseNotifications');
-      localStorage.removeItem('seriesCache');
-      localStorage.removeItem('seriesMapping');
-      localStorage.removeItem('seriesAssignments');
-      localStorage.removeItem('seriesMetadata');
-      localStorage.removeItem('collections');
-      console.log('localStorage items removed');
+      for (const book of booksToDelete) {
+        await bookRepository.delete(book.id);
+      }
+
+      await clearAllClientLibraryData();
 
       // Update UI state
       updateBooks([]);
-      options.onLibraryCleared?.();
+      onLibraryCleared?.();
 
       toast({
         title: "Library Reset Complete",
-        description: "Your library has been completely reset. All books, series, and collections have been removed."
+        description: isAuthenticated
+          ? "This account library was reset. Books, series, collections, upcoming releases, and notifications were removed."
+          : "Your local library was reset. Books, series, collections, upcoming releases, and notifications were removed."
       });
 
       // Force page refresh so all views reflect the cleared state
@@ -255,7 +372,66 @@ export function useLibrarySettings(options: UseLibrarySettingsOptions = {}) {
       });
       return Promise.reject(error);
     }
-  }, [toast, updateBooks, options.onLibraryCleared]);
+  }, [isAuthenticated, onLibraryCleared, toast, updateBooks]);
+
+  const onDeleteAccount = useCallback(async () => {
+    try {
+      if (isAuthenticated) {
+        await deleteAccount();
+      }
+
+      await clearAllClientLibraryData();
+      updateBooks([]);
+      onLibraryCleared?.();
+      logout();
+
+      toast({
+        title: "Account Deleted",
+        description: "Your account and all associated data were permanently deleted.",
+      });
+
+      setTimeout(() => {
+        window.location.assign('/login');
+      }, 250);
+
+      return Promise.resolve();
+    } catch (error) {
+      console.error('Error deleting account:', error);
+      toast({
+        title: "Error",
+        description: `Failed to delete account: ${error instanceof Error ? error.message : String(error)}`,
+        variant: "destructive",
+      });
+      return Promise.reject(error);
+    }
+  }, [deleteAccount, isAuthenticated, logout, onLibraryCleared, toast, updateBooks]);
+
+  const onClearLocalCache = useCallback(async () => {
+    try {
+      if (!isAuthenticated) {
+        throw new Error('Local cache clearing is only available for authenticated sessions.');
+      }
+
+      await clearAllClientLibraryData();
+
+      toast({
+        title: "Local Cache Cleared",
+        description: "Browser cache was cleared. Your account data in MongoDB was not changed.",
+      });
+
+      setTimeout(() => window.location.reload(), 500);
+
+      return Promise.resolve();
+    } catch (error) {
+      console.error('Error clearing local cache:', error);
+      toast({
+        title: "Error",
+        description: `Failed to clear local cache: ${error instanceof Error ? error.message : String(error)}`,
+        variant: "destructive",
+      });
+      return Promise.reject(error);
+    }
+  }, [isAuthenticated, toast]);
 
   const onImportCSV = useCallback(async (file: File) => {
     try {
@@ -264,27 +440,12 @@ export function useLibrarySettings(options: UseLibrarySettingsOptions = {}) {
 
       if (importResult.successful.length > 0) {
         try {
-          const { enhancedStorageService } = await import('@/services/storage/EnhancedStorageService');
-
-          const savedBooks: Book[] = [];
-          for (const book of importResult.successful) {
-            const indexedDBBook = {
-              ...book,
-              dateAdded: book.addedDate || new Date().toISOString(),
-              dateCompleted: book.completedDate,
-              lastModified: new Date().toISOString(),
-              syncStatus: 'synced',
-              progress: typeof book.progress === 'number' ? book.progress : 0
-            };
-            await enhancedStorageService.saveBook(indexedDBBook);
-            savedBooks.push(book);
-          }
-
-          updateBooks([...books, ...savedBooks]);
+          await upsertBooks(importResult.successful);
+          await reloadBooksFromRepository();
 
           toast({
             title: "Import Successful",
-            description: `${importResult.successful.length} books were imported successfully. ${importResult.failed.length > 0 ? `${importResult.failed.length} failed.` : ''}`
+            description: `${importResult.successful.length} books were imported into your ${isAuthenticated ? 'account library' : 'local library'}. ${importResult.failed.length > 0 ? `${importResult.failed.length} failed.` : ''}`
           });
 
           // Force page refresh so all views reflect the imported data
@@ -315,7 +476,7 @@ export function useLibrarySettings(options: UseLibrarySettingsOptions = {}) {
       });
       return Promise.reject(error);
     }
-  }, [toast, books, updateBooks]);
+  }, [isAuthenticated, reloadBooksFromRepository, toast, upsertBooks]);
 
   const onImportJSON = useCallback(async (file: File) => {
     try {
@@ -324,27 +485,12 @@ export function useLibrarySettings(options: UseLibrarySettingsOptions = {}) {
 
       if (importResult.successful.length > 0) {
         try {
-          const { enhancedStorageService } = await import('@/services/storage/EnhancedStorageService');
-
-          const savedBooks: Book[] = [];
-          for (const book of importResult.successful) {
-            const indexedDBBook = {
-              ...book,
-              dateAdded: book.addedDate || new Date().toISOString(),
-              dateCompleted: book.completedDate,
-              lastModified: new Date().toISOString(),
-              syncStatus: 'synced',
-              progress: typeof book.progress === 'number' ? book.progress : 0
-            };
-            await enhancedStorageService.saveBook(indexedDBBook);
-            savedBooks.push(book);
-          }
-
-          updateBooks([...books, ...savedBooks]);
+          await upsertBooks(importResult.successful);
+          await reloadBooksFromRepository();
 
           toast({
             title: "Import Successful",
-            description: `${importResult.successful.length} books were imported successfully. ${importResult.failed.length > 0 ? `${importResult.failed.length} failed.` : ''}`
+            description: `${importResult.successful.length} books were imported into your ${isAuthenticated ? 'account library' : 'local library'}. ${importResult.failed.length > 0 ? `${importResult.failed.length} failed.` : ''}`
           });
 
           // Force page refresh so all views reflect the imported data
@@ -375,17 +521,38 @@ export function useLibrarySettings(options: UseLibrarySettingsOptions = {}) {
       });
       return Promise.reject(error);
     }
-  }, [toast, books, updateBooks]);
+  }, [isAuthenticated, reloadBooksFromRepository, toast, upsertBooks]);
 
   const onCreateBackup = useCallback(async () => {
     try {
       const { createBackup } = await import('@/utils/backupUtils');
+      const [
+        { bookRepository },
+        { seriesRepository },
+        { collectionRepository },
+      ] = await Promise.all([
+        import('@/repositories/BookRepository'),
+        import('@/repositories/SeriesRepository'),
+        import('@/repositories/CollectionRepository'),
+      ]);
+
+      const [exportBooks, exportSeries, exportCollections] = await Promise.all([
+        bookRepository.getAll(),
+        seriesRepository.getAll(),
+        collectionRepository.getAll(),
+      ]);
+
       const preferredName = settings?.preferredName;
-      await createBackup(books, preferredName);
+      await createBackup(exportBooks, preferredName, {
+        series: exportSeries,
+        collections: exportCollections,
+        appVersion: '2.0.0',
+        storageScope: isAuthenticated ? 'remote-account' : 'local-browser',
+      });
 
       toast({
         title: "Backup Created",
-        description: `Successfully created a backup with ${books.length} books.`
+        description: `Successfully created a backup from your ${isAuthenticated ? 'account library' : 'local library'} with ${exportBooks.length} books.`
       });
 
       return Promise.resolve();
@@ -398,7 +565,7 @@ export function useLibrarySettings(options: UseLibrarySettingsOptions = {}) {
       });
       return Promise.reject(error);
     }
-  }, [toast, books, settings?.preferredName]);
+  }, [isAuthenticated, settings?.preferredName, toast]);
 
   const onRestoreBackup = useCallback(async (file: File) => {
     try {
@@ -407,83 +574,31 @@ export function useLibrarySettings(options: UseLibrarySettingsOptions = {}) {
 
       if (restoreResult.success && restoreResult.books.length > 0) {
         try {
-          const { enhancedStorageService } = await import('@/services/storage/EnhancedStorageService');
+          await upsertBooks(restoreResult.books);
 
-          // Save each book to IndexedDB
-          for (const book of restoreResult.books) {
-            const indexedDBBook = {
-              ...book,
-              dateAdded: book.addedDate || new Date().toISOString(),
-              dateCompleted: book.completedDate,
-              lastModified: new Date().toISOString(),
-              syncStatus: 'synced',
-              progress: typeof book.progress === 'number' ? book.progress : 0
-            };
-            await enhancedStorageService.saveBook(indexedDBBook);
-          }
-
-          // Process series data from the backup
           if (restoreResult.isEnhancedFormat && restoreResult.series && restoreResult.series.length > 0) {
-            console.log(`Restoring ${restoreResult.series.length} series from backup`);
-            for (const series of restoreResult.series) {
-              const uiSeries = {
-                ...series,
-                createdAt: new Date(series.timestamps?.created || new Date().toISOString()),
-                updatedAt: new Date(series.timestamps?.updated || new Date().toISOString())
-              };
-              await enhancedStorageService.saveSeries(uiSeries);
-            }
-          } else {
-            // For older backup format, extract series from book references
-            console.log('Extracting series from book references');
-            const seriesMap = new Map();
-            for (const book of restoreResult.books) {
-              if (book.isPartOfSeries && book.seriesId) {
-                if (!seriesMap.has(book.seriesId)) {
-                  seriesMap.set(book.seriesId, {
-                    id: book.seriesId,
-                    name: book._legacySeriesName || `Series ${seriesMap.size + 1}`,
-                    author: book.author || '',
-                    description: '',
-                    books: [],
-                    createdAt: new Date(),
-                    updatedAt: new Date(),
-                    genre: book.genre || [],
-                    status: 'ongoing',
-                    readingOrder: 'publication'
-                  });
-                }
-                const series = seriesMap.get(book.seriesId);
-                if (!series.books.includes(book.id)) {
-                  series.books.push(book.id);
-                }
-              }
-            }
-            console.log(`Extracted ${seriesMap.size} series from book references`);
-            for (const series of seriesMap.values()) {
-              await enhancedStorageService.saveSeries(series);
-            }
+            const normalizedSeries = restoreResult.series.map((series) => ({
+              ...series,
+              createdAt: new Date(series.timestamps?.created || new Date().toISOString()),
+              updatedAt: new Date(series.timestamps?.updated || new Date().toISOString()),
+            }));
+            await upsertSeries(normalizedSeries as Series[]);
           }
 
-          // If this is an enhanced backup with collections, restore them
           if (restoreResult.isEnhancedFormat && restoreResult.collections && restoreResult.collections.length > 0) {
-            console.log(`Restoring ${restoreResult.collections.length} collections from backup`);
-            for (const collection of restoreResult.collections) {
-              const uiCollection = {
-                ...collection,
-                createdAt: new Date(collection.createdAt || new Date().toISOString()),
-                updatedAt: new Date(collection.updatedAt || new Date().toISOString())
-              };
-              await enhancedStorageService.saveCollection(uiCollection);
-            }
+            const normalizedCollections = restoreResult.collections.map((collection) => ({
+              ...collection,
+              createdAt: new Date(collection.createdAt || new Date().toISOString()),
+              updatedAt: new Date(collection.updatedAt || new Date().toISOString()),
+            }));
+            await upsertCollections(normalizedCollections as Collection[]);
           }
 
-          // Replace the current book collection with the restored books
-          updateBooks(restoreResult.books);
+          await reloadBooksFromRepository();
 
           toast({
             title: "Restore Successful",
-            description: restoreResult.message
+            description: `${restoreResult.message} Data was restored into your ${isAuthenticated ? 'account library' : 'local library'}.`
           });
 
           // Force page refresh so all views reflect the restored data
@@ -514,13 +629,15 @@ export function useLibrarySettings(options: UseLibrarySettingsOptions = {}) {
       });
       return Promise.reject(error);
     }
-  }, [toast, updateBooks]);
+  }, [isAuthenticated, reloadBooksFromRepository, toast, upsertBooks, upsertCollections, upsertSeries]);
 
   /** All the props needed by the <Settings /> component */
   const settingsProps = {
     isOpen: showSettings,
     onClose: () => setShowSettings(false),
     books,
+    onClearLocalCache,
+    onDeleteAccount,
     onDeleteLibrary,
     onResetLibrary,
     onImportCSV,
@@ -537,6 +654,8 @@ export function useLibrarySettings(options: UseLibrarySettingsOptions = {}) {
     settingsProps,
     // Expose individual actions if pages need them directly
     onDeleteLibrary,
+    onDeleteAccount,
+    onClearLocalCache,
     onResetLibrary,
     onImportCSV,
     onImportJSON,

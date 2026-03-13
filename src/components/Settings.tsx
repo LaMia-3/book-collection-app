@@ -41,6 +41,8 @@ interface SettingsProps {
   onImportJSON?: (file: File) => Promise<void>;
   onCreateBackup?: () => Promise<void>;
   onRestoreBackup?: (file: File) => Promise<void>;
+  onClearLocalCache?: () => Promise<void>;
+  onDeleteAccount?: () => Promise<void>;
   onDeleteLibrary?: () => Promise<void>;
   onResetLibrary?: () => Promise<void>;
 }
@@ -53,17 +55,19 @@ export const Settings: React.FC<SettingsProps> = ({
   onImportJSON,
   onCreateBackup,
   onRestoreBackup,
+  onClearLocalCache,
+  onDeleteAccount,
   onDeleteLibrary,
   onResetLibrary
 }) => {
   const [activeTab, setActiveTab] = useState('general');
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
-  const [deleteMode, setDeleteMode] = useState<'delete' | 'reset'>('delete');
+  const [deleteMode, setDeleteMode] = useState<'delete' | 'reset' | 'account' | 'cache'>('delete');
   const [isRepairing, setIsRepairing] = useState(false);
   const [repairStatus, setRepairStatus] = useState<{success: boolean; message: string} | null>(null);
   const { settings, updateSettings, isLoading } = useSettings();
   const { colorMode, setColorMode } = useTheme();
-  const { logout } = useAuth();
+  const { isAuthenticated, logout } = useAuth();
   const navigate = useNavigate();
   
   // Local form state for settings
@@ -565,14 +569,14 @@ export const Settings: React.FC<SettingsProps> = ({
                 </h3>
                 
                 <p className="text-muted-foreground mb-6">
-                  Tools to help resolve issues with the application and database.
+                  Tools to help resolve issues with the application and browser storage.
                 </p>
                 
                 <Card className="p-6 mb-6">
                   <h4 className="font-medium mb-4">Database Repair</h4>
                   <p className="text-sm text-muted-foreground mb-4">
                     If you're experiencing issues with your book collection, such as missing data or errors when adding books, 
-                    you can try repairing the database. This will check for and fix common database issues.
+                    you can try repairing the local browser database. This only affects browser storage and does not modify your account data in MongoDB.
                   </p>
                   
                   {repairStatus && (
@@ -627,12 +631,42 @@ export const Settings: React.FC<SettingsProps> = ({
                   <div className="mt-4 text-xs text-muted-foreground">
                     <p className="font-medium">What this does:</p>
                     <ul className="list-disc pl-5 space-y-1 mt-1">
-                      <li>Checks for missing database stores</li>
-                      <li>Recreates any corrupted database structures</li>
-                      <li>Ensures proper database schema</li>
+                      <li>Checks for missing local browser database stores</li>
+                      <li>Recreates corrupted local database structures</li>
+                      <li>Does not delete remote account data</li>
                     </ul>
                   </div>
                 </Card>
+
+                {isAuthenticated && (
+                  <Card className="p-6 mb-6">
+                    <h4 className="font-medium mb-4">Clear Local Cache Only</h4>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      This clears IndexedDB and legacy browser cache data on this device only. Your account data in MongoDB will remain intact and will be reloaded after refresh.
+                    </p>
+
+                    <Button
+                      variant="outline"
+                      className="flex items-center gap-2"
+                      onClick={() => {
+                        setDeleteMode('cache');
+                        setShowDeleteConfirmation(true);
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Clear Local Cache
+                    </Button>
+
+                    <div className="mt-4 text-xs text-muted-foreground">
+                      <p className="font-medium">What this does:</p>
+                      <ul className="list-disc pl-5 space-y-1 mt-1">
+                        <li>Clears browser-only IndexedDB and legacy localStorage data</li>
+                        <li>Keeps your signed-in account and MongoDB library intact</li>
+                        <li>Forces a fresh reload from the remote source of truth</li>
+                      </ul>
+                    </div>
+                  </Card>
+                )}
               </TabsContent>
               
               <TabsContent value="delete-library" className="mt-0">
@@ -642,19 +676,24 @@ export const Settings: React.FC<SettingsProps> = ({
                 </h3>
                 
                 <p className="text-muted-foreground mb-6">
-                  Choose an option below to either delete your books or completely reset your library.
+                  Choose an option below to manage your {isAuthenticated ? 'remote account library' : 'local library'}. Browser-only cache repair stays in Troubleshooting so destructive actions here are easier to reason about.
                 </p>
                 
                 <div className="space-y-6">
                   <Card className="border-destructive/20 bg-destructive/5 p-6">
                     <h4 className="font-medium mb-2">Delete Library</h4>
                     <p className="text-sm text-muted-foreground mb-4">
-                      This will remove all books and remove all books from collections, but keep your series and collection structures intact.
+                      {isAuthenticated
+                        ? 'This will delete all books from your MongoDB-backed account library, remove their references from series and collections, delete book-linked notifications, and clear stale browser cache on this device.'
+                        : 'This will remove all books from your local library, clear book references from series and collections, and keep those series and collection structures intact.'}
                     </p>
                     <ul className="list-disc pl-5 space-y-2 text-sm text-muted-foreground mb-4">
-                      <li>All books will be deleted</li>
-                      <li>Books will be removed from collections</li>
+                      <li>{isAuthenticated ? 'All account-library books will be deleted from the remote source of truth' : 'All local books will be deleted'}</li>
+                      <li>Books will be removed from series and collections</li>
                       <li>Series and collection structures will be preserved</li>
+                      {isAuthenticated && (
+                        <li>This device&apos;s stale local cache will be cleared after the remote deletion completes</li>
+                      )}
                     </ul>
                     
                     <Button 
@@ -673,12 +712,13 @@ export const Settings: React.FC<SettingsProps> = ({
                   <Card className="border-destructive/20 bg-destructive/5 p-6">
                     <h4 className="font-medium mb-2">Reset Library</h4>
                     <p className="text-sm text-muted-foreground mb-4">
-                      This will completely reset your library by removing all books, series, and collections.
+                      This will completely reset your library by removing all books, series, collections, upcoming releases, and notifications.
                     </p>
                     <ul className="list-disc pl-5 space-y-2 text-sm text-muted-foreground mb-4">
                       <li>All books will be deleted</li>
                       <li>All series will be deleted</li>
                       <li>All collections will be deleted</li>
+                      <li>All upcoming releases and notifications will be deleted</li>
                       <li>You will start with a completely empty library</li>
                     </ul>
                     
@@ -694,6 +734,33 @@ export const Settings: React.FC<SettingsProps> = ({
                       Reset Library
                     </Button>
                   </Card>
+
+                  {isAuthenticated && (
+                    <Card className="border-destructive/20 bg-destructive/10 p-6">
+                      <h4 className="font-medium mb-2">Delete Account</h4>
+                      <p className="text-sm text-muted-foreground mb-4">
+                        This will permanently delete your account, your library, your settings, and all account-associated records.
+                      </p>
+                      <ul className="list-disc pl-5 space-y-2 text-sm text-muted-foreground mb-4">
+                        <li>Your user account will be deleted</li>
+                        <li>All books, series, collections, upcoming releases, and notifications will be deleted</li>
+                        <li>Your account settings and migration metadata will be deleted</li>
+                        <li>You will be signed out immediately</li>
+                      </ul>
+
+                      <Button
+                        variant="destructive"
+                        className="mt-2 flex items-center gap-2"
+                        onClick={() => {
+                          setDeleteMode('account');
+                          setShowDeleteConfirmation(true);
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        Delete Account
+                      </Button>
+                    </Card>
+                  )}
                 </div>
               </TabsContent>
             </div>
@@ -709,19 +776,39 @@ export const Settings: React.FC<SettingsProps> = ({
               <AlertDialogHeader>
                 <AlertDialogTitle className="text-destructive flex items-center gap-2">
                   <AlertTriangle className="h-5 w-5" /> 
-                  {deleteMode === 'delete' ? 'Delete Library?' : 'Reset Library?'}
+                  {deleteMode === 'delete'
+                    ? 'Delete Library?'
+                    : deleteMode === 'reset'
+                      ? 'Reset Library?'
+                      : deleteMode === 'account'
+                        ? 'Delete Account?'
+                        : 'Clear Local Cache?'}
                 </AlertDialogTitle>
                 {/* Use a custom description to avoid DOM nesting issues */}
                 <div className="text-sm text-muted-foreground">
                   {deleteMode === 'delete' ? (
                     <>
-                      <span className="block mb-2">Are you sure you want to delete all books from your library? This action <strong>cannot be undone</strong>.</span>
-                      <span className="block mb-4">All your books will be removed, but your series and collection structures will remain intact.</span>
+                      <span className="block mb-2">Are you sure you want to delete all books from your {isAuthenticated ? 'remote account library' : 'local library'}? This action <strong>cannot be undone</strong>.</span>
+                      <span className="block mb-4">
+                        {isAuthenticated
+                          ? 'All remote account-library books will be removed, book-linked notifications will be deleted, series and collection structures will remain intact, and this device cache will be cleared afterward.'
+                          : 'All books will be removed, but your series and collection structures will remain intact.'}
+                      </span>
+                    </>
+                  ) : deleteMode === 'reset' ? (
+                    <>
+                      <span className="block mb-2">Are you sure you want to completely reset your {isAuthenticated ? 'account library' : 'local library'}? This action <strong>cannot be undone</strong>.</span>
+                      <span className="block mb-4">All books, series, collections, upcoming releases, and notifications will be permanently deleted.</span>
+                    </>
+                  ) : deleteMode === 'account' ? (
+                    <>
+                      <span className="block mb-2">Are you sure you want to permanently delete your account? This action <strong>cannot be undone</strong>.</span>
+                      <span className="block mb-4">Your account, library, settings, migration history, and all account-associated records will be permanently deleted.</span>
                     </>
                   ) : (
                     <>
-                      <span className="block mb-2">Are you sure you want to completely reset your library? This action <strong>cannot be undone</strong>.</span>
-                      <span className="block mb-4">All your books, series, and collections will be permanently deleted.</span>
+                      <span className="block mb-2">Are you sure you want to clear this device&apos;s local cache? This will remove IndexedDB and legacy browser storage for this app.</span>
+                      <span className="block mb-4">Your signed-in account and remote MongoDB library will not be changed.</span>
                     </>
                   )}
                   <span className="block text-sm font-medium">We recommend exporting a backup before proceeding.</span>
@@ -736,11 +823,21 @@ export const Settings: React.FC<SettingsProps> = ({
                       onDeleteLibrary();
                     } else if (deleteMode === 'reset' && onResetLibrary) {
                       onResetLibrary();
+                    } else if (deleteMode === 'account' && onDeleteAccount) {
+                      onDeleteAccount();
+                    } else if (deleteMode === 'cache' && onClearLocalCache) {
+                      onClearLocalCache();
                     }
                     setShowDeleteConfirmation(false);
                   }}
                 >
-                  {deleteMode === 'delete' ? 'Yes, Delete Library' : 'Yes, Reset Library'}
+                  {deleteMode === 'delete'
+                    ? 'Yes, Delete Library'
+                    : deleteMode === 'reset'
+                      ? 'Yes, Reset Library'
+                      : deleteMode === 'account'
+                        ? 'Yes, Delete Account'
+                        : 'Yes, Clear Local Cache'}
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>

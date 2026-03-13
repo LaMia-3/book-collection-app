@@ -13,6 +13,7 @@ export type RegisterInput = LoginInput & {
 
 export type AuthContextValue = {
   authError: string | null;
+  deleteAccount: () => Promise<void>;
   isAuthenticated: boolean;
   isLoadingAuth: boolean;
   login: (input: LoginInput) => Promise<void>;

@@ -1,24 +1,18 @@
 import React, { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Database, Wrench, Zap, UserCircle, AlertCircle } from "lucide-react";
+import { AlertCircle, Database, HardDrive, RefreshCw, UserCircle, Wrench, Zap } from "lucide-react";
 import { PageHeader } from '@/components/ui/page-header';
-import { useToast } from '@/hooks/use-toast';
 import { DatabaseRepairUtility } from '@/components/debug/DatabaseRepairUtility';
+import { SessionDiagnostics } from '@/components/debug/SessionDiagnostics';
+import { MigrationDiagnostics } from '@/components/debug/MigrationDiagnostics';
 
-// Import components and utilities
 import { IndexedDBViewer } from '@/components/debug/IndexedDBViewer';
 import WorkflowTester from '@/components/debug/WorkflowTester';
 import { useSettings } from '@/contexts/SettingsContext';
-
-// Import services
-import { databaseService } from '@/services/DatabaseService';
-import { seriesService } from '@/services/SeriesService';
-import { upcomingReleasesService } from '@/services/UpcomingReleasesService';
-import { notificationService } from '@/services/NotificationService';
-import { readingOrderService } from '@/services/ReadingOrderService';
+import { useAuth } from '@/hooks/useAuth';
 
 /**
  * Admin Page
@@ -30,40 +24,43 @@ import { readingOrderService } from '@/services/ReadingOrderService';
  * 4. Workflow Test - Test library workflows
  */
 export default function AdminPage() {
-  const navigate = useNavigate();
-  const { toast } = useToast();
   // Get tab from URL query parameter if available
   const location = useLocation();
   const queryParams = new URLSearchParams(location.search);
   const tabParam = queryParams.get('tab');
   
-  const [activeTab, setActiveTab] = useState(tabParam || 'viewer');
+  const [activeTab, setActiveTab] = useState(tabParam || 'account');
   const { settings } = useSettings();
+  const { isAuthenticated } = useAuth();
   
 
   return (
     <div className="container py-8 max-w-7xl">
       <PageHeader
         title="Admin Dashboard"
-        subtitle="Manage your database and storage"
+        subtitle="Inspect account state, migration metadata, and browser cache diagnostics"
         backTo="/"
         backAriaLabel="Back to Library"
         className="mb-8"
       >
       
-      <Tabs defaultValue={activeTab} onValueChange={setActiveTab}>
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="flex w-full mb-8">
-          <TabsTrigger value="viewer" className="flex items-center gap-2">
-            <Database className="h-4 w-4" />
-            <span>Database Viewer</span>
-          </TabsTrigger>
-          <TabsTrigger value="settings" className="flex items-center gap-2">
+          <TabsTrigger value="account" className="flex items-center gap-2">
             <UserCircle className="h-4 w-4" />
-            <span>User Settings</span>
+            <span>Account</span>
+          </TabsTrigger>
+          <TabsTrigger value="migration" className="flex items-center gap-2">
+            <RefreshCw className="h-4 w-4" />
+            <span>Migration</span>
+          </TabsTrigger>
+          <TabsTrigger value="local-cache" className="flex items-center gap-2">
+            <HardDrive className="h-4 w-4" />
+            <span>Local Cache</span>
           </TabsTrigger>
           <TabsTrigger value="repair" className="flex items-center gap-2">
             <Wrench className="h-4 w-4" />
-            <span>Database Repair</span>
+            <span>Repair</span>
           </TabsTrigger>
           <TabsTrigger value="workflow-test" className="flex items-center gap-2">
             <Zap className="h-4 w-4" />
@@ -71,37 +68,21 @@ export default function AdminPage() {
           </TabsTrigger>
         </TabsList>
 
-        {/* Database Viewer Tab */}
-        <TabsContent value="viewer">
-          <Card>
-            <CardHeader>
-              <CardTitle>Database Viewer</CardTitle>
-              <CardDescription>
-                View and inspect your IndexedDB data stores
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <IndexedDBViewer />
-            </CardContent>
-          </Card>
-        </TabsContent>
+        <TabsContent value="account" className="space-y-6">
+          <SessionDiagnostics />
 
-
-
-        {/* User Settings Tab */}
-        <TabsContent value="settings">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center">
                 <UserCircle className="h-5 w-5 mr-2" />
-                User Settings
+                Settings Snapshot
               </CardTitle>
               <CardDescription>
-                View and manage user settings, including birthday information
+                Current settings resolved from {isAuthenticated ? 'the authenticated account document' : 'browser-local storage'}.
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-6">
+              <div className="grid gap-6 lg:grid-cols-2">
                 <Card className="p-4">
                   <h3 className="font-medium mb-4">General Settings</h3>
                   <div className="space-y-3">
@@ -154,10 +135,9 @@ export default function AdminPage() {
 
                 <Alert className="bg-blue-50 text-blue-800 border-blue-300 dark:bg-blue-950 dark:text-blue-200 dark:border-blue-900">
                   <AlertCircle className="h-4 w-4" />
-                  <AlertTitle>Birthday Information</AlertTitle>
+                  <AlertTitle>Operational Note</AlertTitle>
                   <AlertDescription>
-                    The birthday is stored in user settings and is used to display the birthday celebration. 
-                    The current format is: {settings.birthday ? `"${settings.birthday}"` : 'Not set'}
+                    This tab shows account/session resolution. Browser-local repair and IndexedDB inspection now live under separate admin tabs because they are no longer the primary data layer for authenticated users.
                   </AlertDescription>
                 </Alert>
               </div>
@@ -165,31 +145,44 @@ export default function AdminPage() {
           </Card>
         </TabsContent>
 
-        {/* Workflow Test Tab */}
-        <TabsContent value="workflow-test">
+        <TabsContent value="migration">
+          <MigrationDiagnostics />
+        </TabsContent>
+
+        <TabsContent value="local-cache" className="space-y-6">
+          <Alert className="bg-amber-50 text-amber-900 border-amber-300 dark:bg-amber-950 dark:text-amber-100 dark:border-amber-900">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Browser Cache Tools Only</AlertTitle>
+            <AlertDescription>
+              These diagnostics inspect IndexedDB and legacy browser storage on this device only. They do not read MongoDB directly and they do not change remote account records.
+            </AlertDescription>
+          </Alert>
+
           <Card>
             <CardHeader>
-              <CardTitle>Library Workflow Tester</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <Database className="h-5 w-5" />
+                Local Cache Inspector
+              </CardTitle>
               <CardDescription>
-                Add sample books from Google Books and Open Library APIs and organize them into series
+                Inspect IndexedDB object stores and local browser cache content for troubleshooting and migration support.
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <WorkflowTester />
+              <IndexedDBViewer />
             </CardContent>
           </Card>
         </TabsContent>
 
-        {/* Database Repair Tab */}
         <TabsContent value="repair">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center">
                 <Wrench className="h-5 w-5 mr-2" />
-                Database Repair Utility
+                Local Cache Repair
               </CardTitle>
               <CardDescription>
-                Diagnose and fix database issues
+                Diagnose and repair browser-local IndexedDB issues without touching remote account data.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -198,7 +191,19 @@ export default function AdminPage() {
           </Card>
         </TabsContent>
 
-        {/* Workflow Test is now the last tab */}
+        <TabsContent value="workflow-test">
+          <Card>
+            <CardHeader>
+              <CardTitle>Library Workflow Tester</CardTitle>
+              <CardDescription>
+                Development tool for exercising sample library flows. Use this to probe workflow behavior without assuming IndexedDB is the primary database.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <WorkflowTester />
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
       </PageHeader>
     </div>

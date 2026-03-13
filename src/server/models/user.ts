@@ -64,6 +64,16 @@ export const findUserById = async (
   return usersCollection.findOne({ _id: new ObjectId(id) });
 };
 
+export const deleteUserById = async (id: string): Promise<boolean> => {
+  if (!ObjectId.isValid(id)) {
+    return false;
+  }
+
+  const usersCollection = await getUsersCollection();
+  const result = await usersCollection.deleteOne({ _id: new ObjectId(id) });
+  return result.deletedCount === 1;
+};
+
 export const insertUser = async (
   input: CreateUserInput,
 ): Promise<UserDocument> => {

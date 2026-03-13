@@ -18,7 +18,15 @@ interface BackupData {
     appVersion: string;
     creationDate?: string;
     exportDate?: string;
+    storageScope?: 'remote-account' | 'local-browser';
   };
+}
+
+interface BackupOptions {
+  series?: Series[];
+  collections?: Collection[];
+  appVersion?: string;
+  storageScope?: 'remote-account' | 'local-browser';
 }
 
 /**
@@ -26,16 +34,24 @@ interface BackupData {
  * @param books Collection of books to backup
  * @returns Promise resolving to the backup data object
  */
-export async function createBackupData(books: Book[]): Promise<BackupData> {
+export async function createBackupData(
+  books: Book[],
+  options: BackupOptions = {},
+): Promise<BackupData> {
   const now = new Date();
   
   // Get series and collections data
-  const { enhancedStorageService } = await import('@/services/storage/EnhancedStorageService');
-  const series = await enhancedStorageService.getSeries();
-  const collections = await enhancedStorageService.getCollections();
+  let series = options.series;
+  let collections = options.collections;
+
+  if (!series || !collections) {
+    const { enhancedStorageService } = await import('@/services/storage/EnhancedStorageService');
+    series = series || await enhancedStorageService.getSeries();
+    collections = collections || await enhancedStorageService.getCollections();
+  }
   
   return {
-    version: '1.1.0', // Updated backup format version
+    version: '2.0.0',
     timestamp: now.toISOString(),
     books: books,
     series: series,
@@ -44,8 +60,10 @@ export async function createBackupData(books: Book[]): Promise<BackupData> {
       bookCount: books.length,
       seriesCount: series.length,
       collectionCount: collections.length,
-      appVersion: '1.0.0', // App version
+      appVersion: options.appVersion || '2.0.0',
       creationDate: now.toISOString(),
+      exportDate: now.toISOString(),
+      storageScope: options.storageScope,
     }
   };
 }
@@ -56,10 +74,14 @@ export async function createBackupData(books: Book[]): Promise<BackupData> {
  * @param preferredName Optional preferred name to use in the filename
  * @returns Promise that resolves when the backup is complete
  */
-export async function createBackup(books: Book[], preferredName?: string): Promise<void> {
+export async function createBackup(
+  books: Book[],
+  preferredName?: string,
+  options: BackupOptions = {},
+): Promise<void> {
   try {
     // Create backup data (now async)
-    const backupData = await createBackupData(books);
+    const backupData = await createBackupData(books, options);
     
     // Convert to JSON
     const backupJson = JSON.stringify(backupData, null, 2);
@@ -102,8 +124,8 @@ export async function createBackup(books: Book[], preferredName?: string): Promi
 export interface RestoreResult {
   success: boolean;
   books: Book[];
-  series?: any[];
-  collections?: any[];
+  series?: Series[];
+  collections?: Collection[];
   bookCount: number;
   seriesCount?: number;
   collectionCount?: number;

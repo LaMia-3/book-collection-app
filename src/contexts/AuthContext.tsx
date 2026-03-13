@@ -103,8 +103,29 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setAuthError(null);
   };
 
+  const deleteAccount = async () => {
+    setAuthError(null);
+    setIsLoadingAuth(true);
+
+    try {
+      await authApi.deleteAccount();
+      clearStoredAuthSession();
+      setUser(null);
+    } catch (error) {
+      setAuthError(
+        error instanceof ApiClientError
+          ? error.message
+          : "Account deletion failed.",
+      );
+      throw error;
+    } finally {
+      setIsLoadingAuth(false);
+    }
+  };
+
   const value: AuthContextValue = {
     authError,
+    deleteAccount,
     isAuthenticated: Boolean(user),
     isLoadingAuth,
     login,

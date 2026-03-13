@@ -1,11 +1,11 @@
 /**
  * ResetDatabaseUtil.ts
  * 
- * Utility for completely resetting the IndexedDB database and localStorage.
- * This is useful for testing, resetting to a clean state, or clearing all app data.
+ * Utility for resetting browser-local IndexedDB and localStorage.
+ * This is useful for testing, local cache recovery, or clearing browser data on a single device.
  * 
- * Important: This utility ensures that both IndexedDB and localStorage (including series data)
- * are properly cleared and all components are notified about the reset.
+ * Important: This only affects browser-local storage. It does not delete or modify
+ * remote MongoDB account data.
  */
 import { notifyStorageReset } from '../services/storage/CacheResetListener';
 
@@ -58,7 +58,7 @@ export const resetIndexedDB = (dbName: string = 'book-collection-db'): Promise<v
 };
 
 /**
- * Clears localStorage as well for a complete reset
+ * Clears browser localStorage for a local-only reset
  */
 export const resetLocalStorage = (): void => {
   try {
@@ -71,7 +71,7 @@ export const resetLocalStorage = (): void => {
 };
 
 /**
- * Resets both IndexedDB and localStorage for a complete clean slate
+ * Resets both IndexedDB and localStorage for a browser-local clean slate
  */
 export const resetAllStorage = async (): Promise<void> => {
   try {

@@ -7,11 +7,9 @@ import { ImportFormatHelp } from './ImportFormatHelp';
 
 import { Book } from '@/types/book';
 import { useImport } from '@/contexts/ImportContext';
-import { useSettings } from '@/contexts/SettingsContext';
 import { useAuth } from '@/hooks/useAuth';
 import { booksToCSV, booksToJSON, downloadFile } from '@/utils/exportUtils';
-import { importFromCSV, importFromJSON, ImportResult } from '@/utils/importUtils';
-import { createBackup, restoreFromBackup } from '@/utils/backupUtils';
+import { importFromCSV, importFromJSON } from '@/utils/importUtils';
 import {
   getLegacyImportSummary,
   importLegacyLibrary,
@@ -46,8 +44,6 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
 }) => {
   // Get import context functions for background processing
   const { startImport, updateImportProgress, completeImport, errorImport, setCancelCallback } = useImport();
-  // Get settings for preferred name
-  const { settings } = useSettings();
   const { isAuthenticated } = useAuth();
   
   // State for file inputs and operation status
@@ -85,6 +81,8 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
       }))
       .filter((row) => row.count > 0);
   }, [legacySummary]);
+
+  const dataScopeLabel = isAuthenticated ? 'your authenticated account library' : "this browser's local library";
 
   useEffect(() => {
     let isMounted = true;
@@ -166,8 +164,21 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
         message: 'Preparing CSV export...'
       });
       
+      const [
+        { bookRepository },
+        { collectionRepository },
+      ] = await Promise.all([
+        import('@/repositories/BookRepository'),
+        import('@/repositories/CollectionRepository'),
+      ]);
+
+      const [exportBooks, exportCollections] = await Promise.all([
+        bookRepository.getAll(),
+        collectionRepository.getAll(),
+      ]);
+
       // Generate CSV content
-      const csvContent = booksToCSV(books);
+      const csvContent = booksToCSV(exportBooks, exportCollections);
       
       // Create filename with current date and time
       const now = new Date();
@@ -183,7 +194,7 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
       
       setStatusMessage({
         type: 'success',
-        message: 'CSV exported successfully!'
+        message: `CSV exported successfully from ${dataScopeLabel}.`
       });
     } catch (error) {
       setStatusMessage({
@@ -204,8 +215,21 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
         message: 'Preparing JSON export...'
       });
       
+      const [
+        { bookRepository },
+        { collectionRepository },
+      ] = await Promise.all([
+        import('@/repositories/BookRepository'),
+        import('@/repositories/CollectionRepository'),
+      ]);
+
+      const [exportBooks, exportCollections] = await Promise.all([
+        bookRepository.getAll(),
+        collectionRepository.getAll(),
+      ]);
+
       // Generate JSON content
-      const jsonContent = booksToJSON(books);
+      const jsonContent = booksToJSON(exportBooks, exportCollections);
       
       // Create filename with current date and time
       const now = new Date();
@@ -221,7 +245,7 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
       
       setStatusMessage({
         type: 'success',
-        message: 'JSON exported successfully!'
+        message: `JSON exported successfully from ${dataScopeLabel}.`
       });
     } catch (error) {
       setStatusMessage({
@@ -306,7 +330,7 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
           // Show a success message with summary
           setStatusMessage({
             type: importResult.failed.length > 0 ? 'info' : 'success',
-            message: `Import completed: ${importResult.successful.length} books imported successfully, ${importResult.failed.length} failed.`
+            message: `Import completed into ${dataScopeLabel}: ${importResult.successful.length} books imported successfully, ${importResult.failed.length} failed.`
           });
           
           // Clear the file input
@@ -394,6 +418,10 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
             `Found ${importResult.total} books`, 
             `${importResult.successful.length} valid, ${importResult.failed.length} with issues`
           );
+
+          if ('series' in importResult || 'collections' in importResult) {
+            throw new Error('This JSON file includes full-library backup data. Use Restore Backup instead of JSON Import.');
+          }
           
           // If we have an onImportJSON callback, call it with the successful imports
           if (!signal.aborted && onImportJSON && importResult.successful.length > 0) {
@@ -415,7 +443,7 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
           // Show a success message with summary
           setStatusMessage({
             type: importResult.failed.length > 0 ? 'info' : 'success',
-            message: `Import completed: ${importResult.successful.length} books imported successfully, ${importResult.failed.length} failed.`
+            message: `Import completed into ${dataScopeLabel}: ${importResult.successful.length} books imported successfully, ${importResult.failed.length} failed.`
           });
           
           // Clear the file input
@@ -460,17 +488,15 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
         message: 'Creating backup...'
       });
       
-      // Create and download the backup (now async) with preferred name
-      await createBackup(books, settings?.preferredName);
-      
-      // Call the onCreateBackup prop if provided
       if (onCreateBackup) {
         await onCreateBackup();
+      } else {
+        throw new Error('Backup creation is not configured.');
       }
       
       setStatusMessage({
         type: 'success',
-        message: 'Backup created and downloaded successfully!'
+        message: `Backup created and downloaded successfully from ${dataScopeLabel}.`
       });
     } catch (error) {
       setStatusMessage({
@@ -499,15 +525,12 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
         message: `Restoring from ${backupFile.name}...`
       });
       
-      // Attempt to restore from the backup file
-      const result = await restoreFromBackup(backupFile);
-      
-      if (result.success && onRestoreBackup) {
+      if (onRestoreBackup) {
         await onRestoreBackup(backupFile);
         
         setStatusMessage({
           type: 'success',
-          message: result.message || 'Backup restored successfully!'
+          message: `Backup restored successfully into ${dataScopeLabel}.`
         });
         
         // Clear the file input
@@ -516,10 +539,7 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
           backupInputRef.current.value = '';
         }
       } else {
-        setStatusMessage({
-          type: 'error',
-          message: result.message || 'Failed to restore backup.'
-        });
+        throw new Error('Backup restore is not configured.');
       }
     } catch (error) {
       setStatusMessage({
@@ -590,8 +610,18 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
     <div>
       <h2 className="text-xl font-semibold mb-6">Import & Export</h2>
       <p className="text-gray-600 mb-6">
-        Import books from CSV/JSON files or export your collection for backup or sharing.
+        Import, export, and restore data for {dataScopeLabel}. Legacy browser migration is separate from normal file import.
       </p>
+
+      <div className="mb-6 rounded-md border bg-muted/20 px-4 py-3 text-sm text-gray-700">
+        <p>
+          <strong>Current source of truth:</strong>{' '}
+          {isAuthenticated ? 'MongoDB-backed account data' : 'browser-local IndexedDB data'}
+        </p>
+        <p className="mt-1">
+          CSV and JSON import are book-import tools. Full-library restore belongs in <strong>Backup & Restore</strong>. Legacy browser migration belongs in <strong>Legacy Browser Data</strong>.
+        </p>
+      </div>
       
       {/* Status Message */}
       {statusMessage && (
@@ -624,7 +654,7 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
         <Card className="p-6">
           <h2 className="text-xl font-semibold mb-4">Export</h2>
           <p className="text-gray-600 mb-4">
-            Export your library data (books, series, and collections) to CSV or JSON format.
+            Export book data from {dataScopeLabel}. Use Backup if you want a full library snapshot with books, series, and collections.
           </p>
           
           <div className="flex flex-col gap-6">
@@ -632,13 +662,13 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
               <div>
                 <h3 className="text-lg font-medium">CSV Export</h3>
                 <p className="text-gray-600 text-sm">
-                  Export your books to CSV format for use in spreadsheet applications. Includes collection references.
+                  Export books to CSV format for spreadsheets. This export includes book rows and collection-name references only.
                 </p>
               </div>
               <div className="mt-auto pt-4">
                 <Button 
                   onClick={handleExportCSV}
-                  disabled={isLoading !== null || books.length === 0}
+                  disabled={isLoading !== null}
                   className="w-full flex items-center justify-center gap-2"
                   variant="outline"
                 >
@@ -653,13 +683,13 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
               <div>
                 <h3 className="text-lg font-medium">JSON Export</h3>
                 <p className="text-gray-600 text-sm">
-                  Export your collection to JSON format with complete series and collection data. Recommended for full backups.
+                  Export books to JSON format with book metadata and collection-name references. This is not a full-library backup.
                 </p>
               </div>
               <div className="mt-auto pt-4">
                 <Button 
                   onClick={handleExportJSON}
-                  disabled={isLoading !== null || books.length === 0}
+                  disabled={isLoading !== null}
                   className="w-full flex items-center justify-center gap-2"
                   variant="outline"
                 >
@@ -679,7 +709,7 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
             <ImportFormatHelp />
           </div>
           <p className="text-gray-600 mb-4">
-            Import books from CSV files or import complete library data (books, series, and collections) from JSON files.
+            Import books from CSV or JSON files into {dataScopeLabel}. For full-library backups with series and collections, use Backup Restore instead.
           </p>
           
           <div className="flex flex-col gap-6">
@@ -688,7 +718,7 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
                 <div>
                   <h3 className="text-lg font-medium">Legacy Browser Data</h3>
                   <p className="text-gray-600 text-sm">
-                    Detect and import data from older IndexedDB and localStorage browser stores into your authenticated library.
+                    Detect and import data from older IndexedDB and localStorage browser stores into your authenticated account library.
                   </p>
                 </div>
 
@@ -783,7 +813,7 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
             <div className="space-y-4">
               <h3 className="text-lg font-medium">CSV Import</h3>
               <p className="text-gray-600 text-sm">
-                Import books from a CSV file.
+                Import books from a CSV file into {dataScopeLabel}.
               </p>
               <input 
                 type="file" 
@@ -824,7 +854,7 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
             <div className="space-y-4">
               <h3 className="text-lg font-medium">JSON Import</h3>
               <p className="text-gray-600 text-sm">
-                Import books, series, and collections from a JSON file. Supports both simple book arrays and enhanced format with complete library data.
+                Import books from a JSON array or exported book JSON into {dataScopeLabel}. Full-library backup files should be restored from the Backup & Restore section instead.
               </p>
               <input 
                 type="file" 
@@ -868,18 +898,18 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
         <Card className="p-6 md:col-span-2">
           <h2 className="text-xl font-semibold mb-4">Backup & Restore</h2>
           <p className="text-gray-600 mb-4">
-            Create backups of your entire collection or restore from a previous backup.
+            Create or restore a full-library snapshot for {dataScopeLabel}.
           </p>
           
           <div className="flex flex-col gap-6">
             <div className="space-y-4">
               <h3 className="text-lg font-medium">Create Backup</h3>
               <p className="text-gray-600 text-sm">
-                Download a complete backup file of your entire library, including books, series, and collections that you can restore later.
+                Download a complete backup file of your books, series, and collections from {dataScopeLabel}.
               </p>
               <Button 
                 onClick={handleCreateBackup}
-                disabled={isLoading !== null || books.length === 0}
+                disabled={isLoading !== null}
                 className="flex items-center gap-2"
               >
                 <Archive size={18} />
@@ -891,8 +921,8 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
             <div className="space-y-4">
               <h3 className="text-lg font-medium">Restore Backup</h3>
               <p className="text-gray-600 text-sm">
-                Restore your entire library (books, series, and collections) from a previously created backup file.
-                <strong className="block text-red-600 mt-1">Warning:</strong> This will replace your current library data.
+                Restore books, series, and collections from a previously created backup into {dataScopeLabel}.
+                <strong className="block text-red-600 mt-1">Warning:</strong> This may overwrite records with matching IDs in your current library.
               </p>
               <div>
                 <input 

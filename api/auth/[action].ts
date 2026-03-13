@@ -13,9 +13,16 @@ import { UnauthorizedError, requireAuthenticatedUser } from "../../src/server/mi
 import {
   findUserByEmail,
   findUserById,
+  deleteUserById,
   insertUser,
   toPublicUser,
 } from "../../src/server/models/user.js";
+import { getBooksCollection } from "../../src/server/models/book.js";
+import { getSeriesCollection } from "../../src/server/models/series.js";
+import { getCollectionsCollection } from "../../src/server/models/collection.js";
+import { getUpcomingReleasesCollection } from "../../src/server/models/upcoming-release.js";
+import { getNotificationsCollection } from "../../src/server/models/notification.js";
+import { getUserSettingsCollection } from "../../src/server/models/user-settings.js";
 
 type AuthRequestBody = {
   email?: string;
@@ -137,6 +144,55 @@ const handleMe = async (
   return sendJson(response, 200, toPublicUser(user));
 };
 
+const handleDeleteAccount = async (
+  request: VercelRequest,
+  response: VercelResponse,
+): Promise<VercelResponse> => {
+  if (request.method !== "DELETE") {
+    return methodNotAllowed(response, ["DELETE"]);
+  }
+
+  const authUser = requireAuthenticatedUser(request);
+  const user = await findUserById(authUser.sub);
+
+  if (!user) {
+    throw new ApiError(404, "NOT_FOUND", "User not found.");
+  }
+
+  const [
+    booksCollection,
+    seriesCollection,
+    collectionsCollection,
+    upcomingReleasesCollection,
+    notificationsCollection,
+    userSettingsCollection,
+  ] = await Promise.all([
+    getBooksCollection(),
+    getSeriesCollection(),
+    getCollectionsCollection(),
+    getUpcomingReleasesCollection(),
+    getNotificationsCollection(),
+    getUserSettingsCollection(),
+  ]);
+
+  await Promise.all([
+    booksCollection.deleteMany({ userId: authUser.sub }),
+    seriesCollection.deleteMany({ userId: authUser.sub }),
+    collectionsCollection.deleteMany({ userId: authUser.sub }),
+    upcomingReleasesCollection.deleteMany({ userId: authUser.sub }),
+    notificationsCollection.deleteMany({ userId: authUser.sub }),
+    userSettingsCollection.deleteMany({ userId: authUser.sub }),
+  ]);
+
+  const userDeleted = await deleteUserById(authUser.sub);
+
+  if (!userDeleted) {
+    throw new ApiError(500, "INTERNAL_SERVER_ERROR", "Failed to delete account.");
+  }
+
+  return sendJson(response, 200, { success: true });
+};
+
 export default async function handler(
   request: VercelRequest,
   response: VercelResponse,
@@ -154,6 +210,10 @@ export default async function handler(
 
     if (action === "me") {
       return handleMe(request, response);
+    }
+
+    if (action === "account") {
+      return handleDeleteAccount(request, response);
     }
 
     throw new ApiError(404, "NOT_FOUND", "Auth route not found.");

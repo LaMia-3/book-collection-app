@@ -3,7 +3,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, BookOpen, Bug, Shield, Heart, ExternalLink, Sparkles } from 'lucide-react';
 
-const TABS = ['changelog', 'known-issues', 'privacy', 'about'] as const;
+const TABS = ['changelog', 'known-issues', 'privacy', 'roadmap', 'about'] as const;
 type TabValue = typeof TABS[number];
 
 const AboutPage = () => {
@@ -63,8 +63,42 @@ const AboutPage = () => {
             <div className="bg-card rounded-lg p-6 shadow-elegant space-y-8">
               <div>
                 <div className="flex items-center gap-3 mb-3">
-                  <span className="text-sm font-semibold bg-primary/10 text-primary px-2.5 py-0.5 rounded-full">v1.2.2</span>
+                  <span className="text-sm font-semibold bg-primary/10 text-primary px-2.5 py-0.5 rounded-full">v2.0.0</span>
                   <span className="text-sm text-muted-foreground">Latest</span>
+                </div>
+                <h3 className="text-lg font-semibold mb-2">Authenticated Library Release</h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  This release moves the app from a browser-only library manager to an authenticated app with MongoDB-backed storage and Vercel API functions.
+                </p>
+                <div className="space-y-5">
+                  <div>
+                    <h4 className="text-sm font-semibold mb-1.5">Completed</h4>
+                    <ul className="space-y-1.5 text-sm text-muted-foreground list-disc list-inside">
+                      <li>Added account registration, login, logout, and authenticated session restore</li>
+                      <li>Added protected Vercel API routes backed by MongoDB</li>
+                      <li>Moved books, series, collections, upcoming releases, notifications, and user settings to per-user remote storage</li>
+                      <li>Added ownership enforcement so one user cannot access another user&apos;s records</li>
+                      <li>Added one-time legacy IndexedDB import with migration summary, retry flow, and duplicate protection</li>
+                      <li>Added delete library, reset library, clear local cache, and delete account actions for authenticated users</li>
+                      <li>Updated destructive-action confirmations to reflect actual account and storage scope</li>
+                    </ul>
+                  </div>
+
+                  <div>
+                    <h4 className="text-sm font-semibold mb-1.5">Still To Be Completed</h4>
+                    <ul className="space-y-1.5 text-sm text-muted-foreground list-disc list-inside">
+                      <li>Admin and troubleshooting audit for remote-versus-local assumptions</li>
+                      <li>Import and export UX updates that clearly distinguish remote data, local cache, and legacy migration</li>
+                      <li>Final cleanup of delete-library wording and operational boundaries</li>
+                      <li>Expanded test coverage for auth, migration, and destructive actions</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center gap-3 mb-3">
+                  <span className="text-sm font-semibold bg-muted text-muted-foreground px-2.5 py-0.5 rounded-full">v1.2.2</span>
                 </div>
                 <h3 className="text-lg font-semibold mb-2">Bug Fix — Book Editing</h3>
                 <ul className="space-y-1.5 text-sm text-muted-foreground list-disc list-inside">
@@ -178,7 +212,7 @@ const AboutPage = () => {
                   <div>
                     <h4 className="text-sm font-semibold mb-1.5">Data & Storage</h4>
                     <ul className="space-y-1.5 text-sm text-muted-foreground list-disc list-inside">
-                      <li>All data stored locally in IndexedDB — no server, no account required</li>
+                      <li>Local-first IndexedDB storage with no server or account requirement</li>
                       <li>Database preloading for fast startup</li>
                       <li>Database repair utility for troubleshooting</li>
                     </ul>
@@ -241,21 +275,35 @@ const AboutPage = () => {
           <TabsContent value="roadmap" className="space-y-6">
             <div className="bg-card rounded-lg p-6 shadow-elegant space-y-6">
               <p className="text-sm text-muted-foreground">
-                Features and improvements we're planning for future releases:
+                Remaining v2 work and upcoming improvements:
               </p>
 
               <div className="space-y-4">
                 <div className="border-l-4 border-purple-500 pl-4 py-1">
-                  <h4 className="font-medium text-sm">Improved series auto-detection</h4>
+                  <h4 className="font-medium text-sm">Admin and diagnostics cleanup</h4>
                   <p className="text-sm text-muted-foreground">
-                    Better series matching using multiple data sources and smarter title parsing to automatically detect when books belong to a series.
+                    Separate remote account diagnostics from local cache diagnostics, and update admin/debug tools that still assume IndexedDB is the source of truth.
                   </p>
                 </div>
 
                 <div className="border-l-4 border-purple-500 pl-4 py-1">
-                  <h4 className="font-medium text-sm">New book release notifications</h4>
+                  <h4 className="font-medium text-sm">Import and export clarity</h4>
                   <p className="text-sm text-muted-foreground">
-                    Get notified when a new book is coming out in a series you're tracking, so you never miss the next installment.
+                    Make export and import explicit about whether they operate on remote MongoDB data, local cache data, or legacy browser migration data.
+                  </p>
+                </div>
+
+                <div className="border-l-4 border-purple-500 pl-4 py-1">
+                  <h4 className="font-medium text-sm">Testing and hardening</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Add automated coverage for auth, ownership enforcement, migration, and destructive actions, then complete full manual QA for the authenticated app.
+                  </p>
+                </div>
+
+                <div className="border-l-4 border-purple-500 pl-4 py-1">
+                  <h4 className="font-medium text-sm">Future product work</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Continue improving series detection, release tracking, and other reading-management features once the v2 platform migration is fully stabilized.
                   </p>
                 </div>
               </div>
@@ -270,21 +318,31 @@ const AboutPage = () => {
           <TabsContent value="privacy" className="space-y-6">
             <div className="bg-card rounded-lg p-6 shadow-elegant space-y-6">
               <div>
-                <h3 className="text-lg font-semibold mb-2">Your Data Stays With You</h3>
+                <h3 className="text-lg font-semibold mb-2">Account-Based Storage</h3>
                 <p className="text-sm text-muted-foreground">
-                  This app stores all your data locally in your browser using IndexedDB.
-                  No data is sent to any server, and no account is required.
+                  This app now stores account and library data on a remote MongoDB database through Vercel-hosted API functions.
+                  An account is required to use the authenticated app experience.
                 </p>
               </div>
 
               <div>
                 <h3 className="text-lg font-semibold mb-2">What We Store</h3>
                 <ul className="space-y-1.5 text-sm text-muted-foreground list-disc list-inside">
+                  <li><strong>Account data</strong> — email address, password hash, timestamps, and optional preferred name</li>
                   <li><strong>Books</strong> — title, author, status, dates, ratings, notes, and cover images</li>
                   <li><strong>Series</strong> — series names, reading order, and book assignments</li>
                   <li><strong>Collections</strong> — collection names, descriptions, and book assignments</li>
-                  <li><strong>Settings</strong> — your display preferences and reading goals</li>
+                  <li><strong>Upcoming releases and notifications</strong> — tracked release data and in-app notification state</li>
+                  <li><strong>Settings</strong> — your display preferences, reading goals, and migration status metadata</li>
                 </ul>
+              </div>
+
+              <div>
+                <h3 className="text-lg font-semibold mb-2">Local Browser Storage</h3>
+                <p className="text-sm text-muted-foreground">
+                  The app may also use local browser storage such as IndexedDB or localStorage for legacy migration support,
+                  short-lived cache behavior, and troubleshooting utilities on a specific device. Local browser storage is not the primary source of truth for authenticated accounts.
+                </p>
               </div>
 
               <div>
@@ -297,25 +355,28 @@ const AboutPage = () => {
                   <li><strong>Open Library API</strong> — search, book metadata, cover images, and series detection</li>
                 </ul>
                 <p className="text-sm text-muted-foreground mt-2">
-                  No personal data is sent to either service — only your search queries. You can choose your
-                  preferred provider in Settings.
+                  Search queries and book lookup requests may be sent to those providers when you use related features.
+                  Your account password is not sent to those services. You can choose your preferred provider in Settings.
                 </p>
               </div>
 
               <div>
                 <h3 className="text-lg font-semibold mb-2">Data Portability</h3>
                 <p className="text-sm text-muted-foreground">
-                  You can export all your data at any time via Settings → Create Backup. This creates a
-                  JSON file you can use to restore your library on any device. CSV export is also available
-                  for book data.
+                  You can export library data via Settings. Backup and export behavior is being updated as part of v2 so the app can more clearly distinguish remote account data, local browser cache data, and legacy migration data.
                 </p>
               </div>
 
               <div>
-                <h3 className="text-lg font-semibold mb-2">Clearing Your Data</h3>
-                <p className="text-sm text-muted-foreground">
-                  You can delete or reset your library at any time via Settings. Clearing your browser data
-                  will also remove all app data. There is no way to recover data once deleted unless you have a backup.
+                <h3 className="text-lg font-semibold mb-2">Deleting Your Data</h3>
+                <ul className="space-y-1.5 text-sm text-muted-foreground list-disc list-inside">
+                  <li><strong>Delete Library</strong> removes books while preserving series and collection structures</li>
+                  <li><strong>Reset Library</strong> removes library records for the signed-in account</li>
+                  <li><strong>Clear Local Cache</strong> removes browser-only data on the current device without changing remote account data</li>
+                  <li><strong>Delete Account</strong> removes the user account and all associated remote data</li>
+                </ul>
+                <p className="text-sm text-muted-foreground mt-2">
+                  Deleted data cannot be recovered unless you have an export or backup.
                 </p>
               </div>
             </div>
@@ -346,7 +407,7 @@ const AboutPage = () => {
                   </p>
                 </blockquote>
                 <p className="text-sm text-muted-foreground mt-3">
-                  So that's exactly what we built. No accounts, no subscriptions, no tracking — just you and your books.
+                  So that&apos;s exactly what we built. The app started as a local-only bookshelf and is now evolving into an authenticated reading tracker with account-backed storage and migration support.
                 </p>
               </div>
 
@@ -361,7 +422,7 @@ const AboutPage = () => {
               <div>
                 <h3 className="text-lg font-semibold mb-2">Built With</h3>
                 <div className="flex flex-wrap gap-2">
-                  {['React', 'TypeScript', 'Tailwind CSS', 'Radix UI', 'IndexedDB', 'Vite'].map((tech) => (
+                  {['React', 'TypeScript', 'Tailwind CSS', 'Radix UI', 'Vite', 'Vercel Functions', 'MongoDB', 'IndexedDB'].map((tech) => (
                     <span
                       key={tech}
                       className="text-xs bg-muted text-muted-foreground px-2.5 py-1 rounded-full"

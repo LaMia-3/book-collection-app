@@ -227,6 +227,11 @@ export const authApi = {
     apiRequest<AuthUser>("/auth/me", {
       auth: true,
     }),
+  deleteAccount: () =>
+    apiRequest<{ success: boolean }>("/auth/account", {
+      auth: true,
+      method: "DELETE",
+    }),
 };
 
 export const booksApi = {
