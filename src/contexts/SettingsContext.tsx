@@ -1,43 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import storageService from '@/services/storage/StorageService';
-
-// Define the settings types
-export interface UserSettings {
-  preferredName?: string;
-  birthday?: string;
-  celebrateBirthday?: boolean;
-  defaultView?: 'shelf' | 'list' | 'cover' | 'insights';
-  defaultApi?: 'google' | 'openlibrary';
-  defaultStatus?: 'want-to-read' | 'reading' | 'completed';
-  goals?: {
-    enabled: boolean;
-    monthlyTarget: number;
-  };
-  displayOptions?: {
-    groupSpecialStatuses: boolean; // true to group DNF/On Hold with Completed books, false to show separately
-    disableHoverEffect: boolean; // true to disable book spine hover animations, false to enable
-    shelfOrder: string[]; // custom order for shelves in bookshelf view
-  };
-}
-
-// Default settings values
-export const defaultSettings: UserSettings = {
-  preferredName: '',
-  birthday: '',
-  celebrateBirthday: true,
-  defaultView: 'shelf',
-  defaultApi: 'google',
-  defaultStatus: 'want-to-read',
-  goals: {
-    enabled: false,
-    monthlyTarget: 4, // Default to 4 books per month
-  },
-  displayOptions: {
-    groupSpecialStatuses: false, // Default to showing DNF/On Hold books separately
-    disableHoverEffect: false, // Default to enabling hover effects
-    shelfOrder: ['reading', 'want-to-read', 'completed', 'on-hold', 'dnf'], // Default shelf order
-  },
-};
+import { userSettingsRepository } from '@/repositories/UserSettingsRepository';
+import { UserSettings, defaultSettings, mergeUserSettings } from '@/types/user-settings';
 
 // Context interface
 interface SettingsContextType {
@@ -66,12 +29,8 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const loadSettings = async () => {
       try {
         setIsLoading(true);
-        const storedSettings = await storageService.getSettings();
-        
-        if (storedSettings) {
-          // Merge stored settings with defaults to ensure all fields exist
-          setSettings({ ...defaultSettings, ...storedSettings });
-        }
+        const storedSettings = await userSettingsRepository.get();
+        setSettings(mergeUserSettings(defaultSettings, storedSettings));
         setError(null);
       } catch (err) {
         console.error('Failed to load settings:', err);
@@ -87,9 +46,9 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   // Update settings in storage and state
   const updateSettings = async (newSettings: Partial<UserSettings>) => {
     try {
-      const updatedSettings = { ...settings, ...newSettings };
-      await storageService.saveSettings(updatedSettings);
-      setSettings(updatedSettings);
+      const updatedSettings = mergeUserSettings(settings, newSettings);
+      const persistedSettings = await userSettingsRepository.update(updatedSettings);
+      setSettings(persistedSettings);
       setError(null);
     } catch (err) {
       console.error('Failed to save settings:', err);

@@ -1,6 +1,40 @@
 import { Notification, NotificationType } from '@/types/notification';
 import { DatabaseService } from '@/services/DatabaseService';
 import { v4 as uuidv4 } from 'uuid';
+import { getStoredAuthToken } from '@/lib/auth-storage';
+import { notificationsApi, NotificationRecord } from '@/lib/apiClient';
+
+const isAuthenticatedSession = (): boolean => Boolean(getStoredAuthToken());
+
+const normalizeRemoteNotification = (
+  notification: NotificationRecord,
+): Notification => ({
+  id: notification.id,
+  title: notification.title,
+  message: notification.message,
+  type: notification.type,
+  createdAt: new Date(notification.createdAt),
+  isRead: notification.isRead,
+  isDismissed: notification.isDismissed,
+  seriesId: notification.seriesId,
+  bookId: notification.bookId,
+  actionUrl: notification.actionUrl,
+});
+
+const serializeNotification = (
+  notification: Notification,
+): NotificationRecord => ({
+  id: notification.id,
+  title: notification.title,
+  message: notification.message,
+  type: notification.type,
+  createdAt: notification.createdAt.toISOString(),
+  isRead: notification.isRead,
+  isDismissed: notification.isDismissed,
+  seriesId: notification.seriesId,
+  bookId: notification.bookId,
+  actionUrl: notification.actionUrl,
+});
 
 /**
  * Repository for managing notifications in the database
@@ -17,6 +51,11 @@ export class NotificationRepository {
    * Get all notifications
    */
   async getAll(): Promise<Notification[]> {
+    if (isAuthenticatedSession()) {
+      const notifications = await notificationsApi.getAll();
+      return notifications.map(normalizeRemoteNotification);
+    }
+
     return this.dbService.getAll<Notification>(this.storeName);
   }
   
@@ -24,6 +63,11 @@ export class NotificationRepository {
    * Get a notification by ID
    */
   async getById(id: string): Promise<Notification | null> {
+    if (isAuthenticatedSession()) {
+      const notification = await notificationsApi.getById(id);
+      return normalizeRemoteNotification(notification);
+    }
+
     return this.dbService.getById<Notification>(this.storeName, id);
   }
   
@@ -66,6 +110,13 @@ export class NotificationRepository {
       isRead: false,
       isDismissed: false
     };
+
+    if (isAuthenticatedSession()) {
+      const createdNotification = await notificationsApi.create(
+        serializeNotification(newNotification),
+      );
+      return normalizeRemoteNotification(createdNotification);
+    }
     
     await this.dbService.add(this.storeName, newNotification);
     return newNotification;
@@ -82,6 +133,14 @@ export class NotificationRepository {
       ...notification,
       isRead: true
     };
+
+    if (isAuthenticatedSession()) {
+      const remoteNotification = await notificationsApi.update(
+        id,
+        serializeNotification(updatedNotification),
+      );
+      return normalizeRemoteNotification(remoteNotification);
+    }
     
     await this.dbService.update(this.storeName, id, updatedNotification);
     return updatedNotification;
@@ -111,6 +170,14 @@ export class NotificationRepository {
       ...notification,
       isDismissed: true
     };
+
+    if (isAuthenticatedSession()) {
+      const remoteNotification = await notificationsApi.update(
+        id,
+        serializeNotification(updatedNotification),
+      );
+      return normalizeRemoteNotification(remoteNotification);
+    }
     
     await this.dbService.update(this.storeName, id, updatedNotification);
     return updatedNotification;
@@ -120,6 +187,11 @@ export class NotificationRepository {
    * Delete a notification
    */
   async delete(id: string): Promise<boolean> {
+    if (isAuthenticatedSession()) {
+      const result = await notificationsApi.delete(id);
+      return result.success;
+    }
+
     return this.dbService.delete(this.storeName, id);
   }
   

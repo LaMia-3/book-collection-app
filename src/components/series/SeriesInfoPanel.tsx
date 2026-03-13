@@ -7,6 +7,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { ChevronRight, Calendar, BookOpen, Library } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { bookRepository } from '@/repositories/BookRepository';
 
 interface SeriesInfoPanelProps {
   seriesId: string;
@@ -41,18 +42,9 @@ export const SeriesInfoPanel = ({
         
         setSeries(seriesData);
         
-        // Try to load books in the series
-        const booksInSeries: Book[] = [];
         if (seriesData.books && seriesData.books.length > 0) {
-          // Load books from IndexedDB - the exclusive source of truth
           try {
-            const { enhancedStorageService } = await import('@/services/storage/EnhancedStorageService');
-            await enhancedStorageService.initialize();
-            
-            // Get all books from IndexedDB
-            const allBooks = await enhancedStorageService.getBooks();
-            
-            // Filter books that are in this series
+            const allBooks = await bookRepository.getAll();
             const filteredBooks = allBooks
               .filter(book => seriesData.books.includes(book.id))
               .map(book => ({
@@ -60,11 +52,11 @@ export const SeriesInfoPanel = ({
                 // Use properties that already exist in the Book interface
                 addedDate: book.addedDate || "",
                 completedDate: book.completedDate || ""
-              }));
+            }));
               
             setSeriesBooks(filteredBooks as Book[]);
           } catch (error) {
-            console.error('Error loading books from IndexedDB:', error);
+            console.error('Error loading series books:', error);
           }    
         }
       } catch (error) {

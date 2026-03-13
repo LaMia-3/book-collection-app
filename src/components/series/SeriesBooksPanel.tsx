@@ -8,6 +8,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { BookDetails } from '@/components/BookDetails';
 import { BookOpen, ListOrdered } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { bookRepository } from '@/repositories/BookRepository';
+import { seriesRepository } from '@/repositories/SeriesRepository';
 
 interface SeriesBooksPanelProps {
   series: Series;
@@ -19,17 +21,13 @@ export const SeriesBooksPanel = ({ series }: SeriesBooksPanelProps) => {
   const [selectedBook, setSelectedBook] = useState<Book | null>(null);
   const [showBookDetails, setShowBookDetails] = useState(false);
 
-  // Load books in this series from IndexedDB
+  // Load books in this series through the repository so authenticated sessions use the API path.
   useEffect(() => {
     const loadBooks = async () => {
       setIsLoading(true);
       
       try {
-        // Import the storage service
-        const { enhancedStorageService } = await import('@/services/storage/EnhancedStorageService');
-        
-        // Get all books from IndexedDB
-        const allBooks = await enhancedStorageService.getBooks();
+        const allBooks = await bookRepository.getAll();
         
         // Filter books that are in this series
         const seriesBooks = allBooks.filter(book => 
@@ -47,7 +45,7 @@ export const SeriesBooksPanel = ({ series }: SeriesBooksPanelProps) => {
         
         setBooks(sortedBooks);
       } catch (error) {
-        console.error('Error loading books from IndexedDB:', error);
+        console.error('Error loading books:', error);
         setBooks([]);
       } finally {
         setIsLoading(false);
@@ -77,77 +75,27 @@ export const SeriesBooksPanel = ({ series }: SeriesBooksPanelProps) => {
 
   /**
    * Handle updating a book from the BookDetails dialog
-   * Ensures series data integrity in both the book and series objects
-   * Updates the data in IndexedDB as the exclusive source of truth
+   * Keeps the panel state in sync after BookDetails persists the book update.
    */
   const handleBookUpdate = async (updatedBook: Book) => {
     const bookWithSeriesInfo = { ...updatedBook, isPartOfSeries: true, seriesId: series.id };
     
-    try {
-      // Import the storage service
-      const { enhancedStorageService } = await import('@/services/storage/EnhancedStorageService');
-      
-      // Update book in IndexedDB
-      const bookForIndexedDB = {
-        ...bookWithSeriesInfo,
-        dateAdded: bookWithSeriesInfo.addedDate || new Date().toISOString(),
-        dateCompleted: bookWithSeriesInfo.completedDate,
-        lastModified: new Date().toISOString(),
-        syncStatus: 'synced' as const,
-        progress: typeof bookWithSeriesInfo.progress === 'number' ? bookWithSeriesInfo.progress : 0
-      };
-      
-      await enhancedStorageService.saveBook(bookForIndexedDB as any);
-      
-      // Update the book in our local state
-      setBooks(prevBooks => 
-        prevBooks.map(book => book.id === updatedBook.id ? bookWithSeriesInfo : book)
-      );
-      
-      // Ensure correct series relationships in IndexedDB
-      // Get the current series to modify
-      const currentSeries = await enhancedStorageService.getSeriesById(series.id);
-      if (currentSeries) {
-        // Make sure the book is in this series' books array
-        if (!currentSeries.books.includes(updatedBook.id)) {
-          const updatedSeriesBooks = [...currentSeries.books, updatedBook.id];
-          
-          // Update the series with the new book
-          await enhancedStorageService.saveSeries({
-            ...currentSeries,
-            books: updatedSeriesBooks,
-            lastModified: new Date().toISOString()
-          });
-        }
-      }
-      
-      console.log('Successfully updated book in series using IndexedDB');
-    } catch (error) {
-      console.error('Error updating book in series:', error);
-    }
-    
+    setBooks(prevBooks => 
+      prevBooks.map(book => book.id === updatedBook.id ? bookWithSeriesInfo : book)
+    );
     // Close the dialog
     setShowBookDetails(false);
   };
 
   const handleBookDelete = async (bookId: string) => {
     try {
-      // Import the storage service
-      const { enhancedStorageService } = await import('@/services/storage/EnhancedStorageService');
+      await bookRepository.delete(bookId);
       
-      // Delete the book from IndexedDB
-      await enhancedStorageService.deleteBook(bookId);
-      
-      // Update series in IndexedDB to remove the book reference
-      const currentSeries = await enhancedStorageService.getSeriesById(series.id);
+      const currentSeries = await seriesRepository.getById(series.id);
       if (currentSeries && currentSeries.books.includes(bookId)) {
-        // Remove the book from the series' books array
-        const updatedSeriesBooks = currentSeries.books.filter(id => id !== bookId);
-        
-        // Update the series without the deleted book
-        await enhancedStorageService.saveSeries({
+        await seriesRepository.update(series.id, {
           ...currentSeries,
-          books: updatedSeriesBooks,
+          books: currentSeries.books.filter(id => id !== bookId),
           lastModified: new Date().toISOString()
         });
       }
@@ -155,7 +103,7 @@ export const SeriesBooksPanel = ({ series }: SeriesBooksPanelProps) => {
       // Remove the book from our local state
       setBooks(prevBooks => prevBooks.filter(book => book.id !== bookId));
       
-      console.log('Successfully deleted book from series using IndexedDB');
+      console.log('Successfully deleted book from series');
     } catch (error) {
       console.error('Error deleting book from series:', error);
     }

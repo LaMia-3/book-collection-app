@@ -23,9 +23,10 @@ import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { seriesDetectionService } from "@/services/api/SeriesDetectionService";
 import { Checkbox } from "@/components/ui/checkbox";
 import { SeriesFilterPanel, SeriesFilter } from "@/components/filters/SeriesFilterPanel";
-import { enhancedStorageService } from "@/services/storage/EnhancedStorageService";
 import { PageHeader, HeaderActionButton } from "@/components/ui/page-header";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { bookRepository } from "@/repositories/BookRepository";
+import { seriesRepository } from "@/repositories/SeriesRepository";
 
 /**
  * Series management page component
@@ -99,7 +100,7 @@ const SeriesPage = () => {
     // Apply status filter
     if (filter.statuses && filter.statuses.length > 0) {
       result = result.filter(s => 
-        s.status && filter.statuses?.includes(s.status as any)
+        s.status !== undefined && filter.statuses.includes(s.status)
       );
     }
     
@@ -123,68 +124,19 @@ const SeriesPage = () => {
     ? `${settings.preferredName}'s Series`
     : "My Series";
     
-  // Load books and series from IndexedDB as the sole source of truth
+  // Load books through the repository so authenticated sessions use the API path.
   useEffect(() => {
     setIsLoading(true);
     
     const loadData = async () => {
       try {
-        // Initialize the enhanced storage service
-        await enhancedStorageService.initialize();
-        
-        // Load books data from IndexedDB
-        const booksFromDB = await enhancedStorageService.getBooks();
-        
-        // Books are already in the correct format thanks to the adapter
-        const convertedBooks = booksFromDB.map(book => {
-          // For debug: log series-related fields from IndexedDB
-          console.log(`IndexedDB Book "${book.title}": seriesId=${book.seriesId}, isPartOfSeries=${book.isPartOfSeries}`);
-          
-          const adaptedBook: Book = {
-            id: book.id,
-            title: book.title,
-            author: book.author,
-            genre: book.genre,
-            description: book.description,
-            publishedDate: book.publishedDate,
-            pageCount: book.pageCount,
-            thumbnail: book.thumbnail,
-            googleBooksId: book.sourceId, // Map from new field to old field
-            status: book.status as any, // Convert status enum
-            completedDate: (book as any).dateCompleted,
-            rating: book.rating,
-            notes: book.notes,
-            // CRITICAL FIX: Handle series fields properly for filtering in CreateSeriesDialog
-            isPartOfSeries: !!book.seriesId || book.isPartOfSeries === true ? true : false,
-            seriesId: book.seriesId || undefined,
-            // Use safe type assertions for fields that might not exist in the type
-            _legacySeriesName: (book as any).seriesName || undefined, // Add legacy series name if it exists
-            volumeNumber: (book as any).volumeNumber || (book as any).seriesPosition, // Use either field with type assertion
-            seriesPosition: (book as any).seriesPosition,
-            spineColor: (book as any).spineColor,
-            // Use dateAdded if available, otherwise addedDate or current date
-            addedDate: (book as any).dateAdded || (book as any).addedDate || new Date().toISOString()
-          };
-          return adaptedBook;
-        });
-        
-        console.log('Books from IndexedDB:', booksFromDB.length);
-        console.log('Converted books for UI:', convertedBooks.length);
-        console.log('Books NOT in series:', convertedBooks.filter(b => !b.isPartOfSeries && !b.seriesId).length);
-        
-        setBooks(convertedBooks);
-        
-        // Load series data from IndexedDB and convert to expected format if needed
-        const seriesFromDB = await enhancedStorageService.getSeries();
-        const convertedSeries = seriesFromDB.map(series => ({
-          ...series,
-          // Ensure required fields exist
-          createdAt: new Date(series.dateAdded || new Date().toISOString()),
-          updatedAt: new Date(series.lastModified || new Date().toISOString())
-        }));
-        setSeries(convertedSeries as Series[]);
+        const repositoryBooks = await bookRepository.getAll();
+        setBooks(repositoryBooks);
+
+        const storedSeries = await seriesRepository.getAll();
+        setSeries(storedSeries);
       } catch (error) {
-        console.error("Error loading data from IndexedDB:", error);
+        console.error("Error loading series data:", error);
         toast({
           title: "Error",
           description: "There was a problem loading your series data.",
@@ -200,48 +152,14 @@ const SeriesPage = () => {
     };
     
     loadData();
-  }, []);
-  
-  // Sync changes to IndexedDB whenever series changes
-  useEffect(() => {
-    if (series.length > 0 && !isLoading) {
-      // Update IndexedDB as the sole source of truth
-      const updateIndexedDB = async () => {
-        try {
-          // Update each series individually for better error isolation
-          for (const uiSeries of series) {
-            try {
-              await enhancedStorageService.saveSeries(uiSeries);
-            } catch (error) {
-              console.error(`Error updating series ${uiSeries.id} in IndexedDB:`, error);
-              toast({
-                title: "Error",
-                description: `Could not update series ${uiSeries.name}`,
-                variant: "destructive"
-              });
-            }
-          }
-        } catch (error) {
-          console.error('Error in batch update of series in IndexedDB:', error);
-          toast({
-            title: "Error",
-            description: "Could not save all series changes",
-            variant: "destructive"
-          });
-        }
-      };
-      
-      updateIndexedDB();
-    }
-  }, [series, isLoading, toast]);
+  }, [setBooks, toast]);
   
   // Handle deleting a series
   const handleDeleteSeries = async (seriesId: string) => {
     setIsLoading(true);
     
     try {
-      // Delete from IndexedDB using enhancedStorageService
-      await enhancedStorageService.deleteSeries(seriesId);
+      await seriesRepository.delete(seriesId);
       
       // Update local state
       setSeries(prev => prev.filter(s => s.id !== seriesId));
@@ -286,19 +204,7 @@ const SeriesPage = () => {
       // Update state
       setSeries(updatedSeries);
       
-      // Update IndexedDB as the sole source of truth
-      enhancedStorageService.saveSeries(updatedSeriesItem)
-        .then(() => {
-          console.log(`Series ${updatedSeriesItem.id} updated in IndexedDB`);
-        })
-        .catch(error => {
-          console.error(`Error updating series ${updatedSeriesItem.id} in IndexedDB:`, error);
-          toast({
-            title: "Error",
-            description: "Could not update series tracking status in database",
-            variant: "destructive"
-          });
-        });
+      await seriesRepository.update(updatedSeriesItem.id, updatedSeriesItem);
       
       toast({
         title: tracked ? "Series Tracking Enabled" : "Series Tracking Disabled",
@@ -371,14 +277,14 @@ const SeriesPage = () => {
       
       // Update IndexedDB as the sole source of truth
       try {
-        for (const seriesItem of updatedSeries) {
-          await enhancedStorageService.saveSeries(seriesItem);
+        for (const seriesItem of detectedSeries) {
+          await seriesRepository.add(seriesItem);
         }
       } catch (error) {
-        console.error('Error updating IndexedDB:', error);
+        console.error('Error saving detected series:', error);
         toast({
           title: "Error",
-          description: "Could not save all series changes",
+          description: "Could not save all detected series changes",
           variant: "destructive"
         });
       }
@@ -671,20 +577,6 @@ const SeriesPage = () => {
             // Add the new series to state
             setSeries(prev => [...prev, newSeries]);
             setIsCreatingNewSeries(false);
-            
-            // Save to IndexedDB
-            enhancedStorageService.saveSeries(newSeries)
-              .then(() => {
-                console.log(`Series ${newSeries.id} saved to IndexedDB`);
-              })
-              .catch(error => {
-                console.error(`Error saving series ${newSeries.id} to IndexedDB:`, error);
-                toast({
-                  title: "Error",
-                  description: "Could not save the new series to database",
-                  variant: "destructive"
-                });
-              });
           }}
           books={books}
         />

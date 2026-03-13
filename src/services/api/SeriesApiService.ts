@@ -8,6 +8,24 @@ export interface SeriesDetectionResult {
   matchedBooks?: Book[]; // Other books that might be in the same series
 }
 
+type GoogleBooksSeriesCandidate = {
+  volumeInfo?: {
+    title?: string;
+    description?: string;
+    seriesInfo?: {
+      seriesTitle?: string;
+      booksInSeries?: number;
+      seriesComplete?: boolean;
+    };
+    authors?: string[];
+    imageLinks?: {
+      thumbnail?: string;
+    };
+    categories?: string[];
+    publishedDate?: string;
+  };
+};
+
 /**
  * Service for fetching series data from external APIs
  */
@@ -94,7 +112,7 @@ export class SeriesApiService {
       }
       
       // Look for books that mention "series" in the title or description
-      const seriesBooks = data.items.filter((item: any) => {
+      const seriesBooks = (data.items as GoogleBooksSeriesCandidate[]).filter((item) => {
         const volumeInfo = item.volumeInfo || {};
         const seriesInfo = volumeInfo.seriesInfo;
         const description = volumeInfo.description || '';
@@ -369,14 +387,8 @@ export class SeriesApiService {
    */
   private async detectSeriesFromExistingCollection(title: string, author: string): Promise<SeriesDetectionResult | null> {
     try {
-      // Load existing series from IndexedDB (the exclusive source of truth)
-      const { enhancedStorageService } = await import('@/services/storage/EnhancedStorageService');
-      
-      // Initialize storage if needed
-      await enhancedStorageService.initialize();
-      
-      // Get all series from IndexedDB
-      const existingSeries = await enhancedStorageService.getSeries();
+      const { seriesRepository } = await import('@/repositories/SeriesRepository');
+      const existingSeries = await seriesRepository.getAll();
       if (!existingSeries || existingSeries.length === 0) {
         return null;
       }
@@ -392,16 +404,8 @@ export class SeriesApiService {
       for (const series of seriesToCheck) {
         // Check if title directly contains series name
         if (series.name && title.toLowerCase().includes(series.name.toLowerCase())) {
-          // Create a series object with required UI properties
-          const uiSeries: Series = {
-            ...series,
-            // Add UI-specific fields if they don't exist in the IndexedDB series
-            createdAt: new Date(series.dateAdded || new Date().toISOString()),
-            updatedAt: new Date(series.lastModified || new Date().toISOString())
-          };
-          
           return {
-            series: uiSeries,
+            series,
             confidence: 90, // Very high confidence for direct name match
             source: 'collection_exact'
           };
@@ -658,7 +662,7 @@ export class SeriesApiService {
   /**
    * Try to infer the status of a series based on available books
    */
-  private inferSeriesStatus(seriesBooks: any[]): 'ongoing' | 'completed' | 'cancelled' {
+  private inferSeriesStatus(seriesBooks: GoogleBooksSeriesCandidate[]): 'ongoing' | 'completed' | 'cancelled' {
     if (!seriesBooks || seriesBooks.length === 0) return 'ongoing'; // Default to ongoing if we can't determine
     
     // Check for recent publications
@@ -693,7 +697,7 @@ export class SeriesApiService {
   /**
    * Estimate total books in a series based on available information
    */
-  private estimateTotalBooks(seriesBooks: any[]): number | undefined {
+  private estimateTotalBooks(seriesBooks: GoogleBooksSeriesCandidate[]): number | undefined {
     if (!seriesBooks || seriesBooks.length === 0) return undefined;
     
     // Find the highest volume number mentioned in titles

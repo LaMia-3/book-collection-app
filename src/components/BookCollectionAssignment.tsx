@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Check, Plus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Collection } from '@/types/collection';
 import { Book } from '@/types/book';
 import { collectionRepository } from '@/repositories/CollectionRepository';
-import { enhancedStorageService } from '@/services/storage/EnhancedStorageService';
+import { bookRepository } from '@/repositories/BookRepository';
 import { useToast } from '@/components/ui/use-toast';
 
 interface BookCollectionAssignmentProps {
@@ -34,10 +34,10 @@ const BookCollectionAssignment: React.FC<BookCollectionAssignmentProps> = ({
   // Load collections when component mounts or dialog opens
   useEffect(() => {
     loadCollections();
-  }, []);
+  }, [loadCollections]);
   
   // Load all collections and determine which ones contain this book
-  const loadCollections = async () => {
+  const loadCollections = useCallback(async () => {
     setIsLoading(true);
     try {
       // Get all collections
@@ -59,7 +59,7 @@ const BookCollectionAssignment: React.FC<BookCollectionAssignmentProps> = ({
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [book.id, toast]);
   
   // Toggle book's membership in a collection
   const toggleCollection = async (collection: Collection) => {
@@ -88,11 +88,10 @@ const BookCollectionAssignment: React.FC<BookCollectionAssignmentProps> = ({
         setBookCollections(prev => [...prev, collection]);
         
         // Update book's collectionIds
-        const updatedBook = { ...book };
-        updatedBook.collectionIds = updatedBook.collectionIds || [];
-        if (!updatedBook.collectionIds.includes(collection.id)) {
-          updatedBook.collectionIds.push(collection.id);
-          await enhancedStorageService.saveBook(updatedBook);
+        const nextCollectionIds = [...(book.collectionIds || [])];
+        if (!nextCollectionIds.includes(collection.id)) {
+          nextCollectionIds.push(collection.id);
+          await bookRepository.update(book.id, { collectionIds: nextCollectionIds });
         }
       }
       
@@ -133,11 +132,10 @@ const BookCollectionAssignment: React.FC<BookCollectionAssignmentProps> = ({
       });
       
       // Update book's collectionIds
-      const updatedBook = { ...book };
-      updatedBook.collectionIds = updatedBook.collectionIds || [];
-      if (!updatedBook.collectionIds.includes(newCollection.id)) {
-        updatedBook.collectionIds.push(newCollection.id);
-        await enhancedStorageService.saveBook(updatedBook);
+      const nextCollectionIds = [...(book.collectionIds || [])];
+      if (!nextCollectionIds.includes(newCollection.id)) {
+        nextCollectionIds.push(newCollection.id);
+        await bookRepository.update(book.id, { collectionIds: nextCollectionIds });
       }
       
       // Update UI

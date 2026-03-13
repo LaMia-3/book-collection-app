@@ -1,5 +1,6 @@
 import { Notification, NotificationType } from '@/types/notification';
 import { notificationRepository } from '@/repositories/NotificationRepository';
+import { upcomingReleasesService } from '@/services/UpcomingReleasesService';
 
 /**
  * Service for managing notifications
@@ -77,9 +78,11 @@ export class NotificationService {
     
     return notificationRepository.clearOlderThan(cutoffDate);
   }
+
+  async checkForUpcomingReleases(): Promise<number> {
+    return upcomingReleasesService.checkAllTrackedSeries();
+  }
   
-  // All methods related to upcoming books functionality have been removed.
-  // The notification system remains intact for other types of notifications.
 }
 
 // Export a singleton instance

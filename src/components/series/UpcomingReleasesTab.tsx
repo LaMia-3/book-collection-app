@@ -10,6 +10,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Calendar, CalendarClock, Plus, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { upcomingReleasesRepository } from '@/repositories/UpcomingReleasesRepository';
+import { upcomingReleasesService } from '@/services/UpcomingReleasesService';
 
 interface UpcomingReleasesTabProps {
   seriesId: string;
@@ -43,12 +45,7 @@ export const UpcomingReleasesTab = ({
     const loadUpcomingBooks = async () => {
       setIsLoading(true);
       try {
-        // Load upcoming books from IndexedDB - the exclusive source of truth
-        const { enhancedStorageService } = await import('@/services/storage/EnhancedStorageService');
-        await enhancedStorageService.initialize();
-        
-        // Get upcoming releases for this series from IndexedDB
-        const upcomingReleases = await enhancedStorageService.getUpcomingReleasesBySeriesId(seriesId);
+        const upcomingReleases = await upcomingReleasesRepository.getBySeriesId(seriesId);
         
         if (upcomingReleases && upcomingReleases.length > 0) {
           setUpcomingBooks(upcomingReleases);
@@ -100,16 +97,22 @@ export const UpcomingReleasesTab = ({
         isUserContributed: true,
         amazonProductId: undefined
       };
-      
-      // Add to IndexedDB - the exclusive source of truth
-      const { enhancedStorageService } = await import('@/services/storage/EnhancedStorageService');
-      await enhancedStorageService.initialize();
-      
-      // Save the upcoming book to IndexedDB
-      await enhancedStorageService.saveUpcomingRelease(newBook);
+
+      const createdBook = await upcomingReleasesService.addManualRelease({
+        title: newBook.title,
+        seriesId: newBook.seriesId,
+        seriesName: newBook.seriesName,
+        volumeNumber: newBook.volumeNumber,
+        author: newBook.author,
+        expectedReleaseDate: newBook.expectedReleaseDate,
+        coverImageUrl: newBook.coverImageUrl,
+        preOrderLink: newBook.preOrderLink,
+        synopsis: newBook.synopsis,
+        amazonProductId: newBook.amazonProductId,
+      });
       
       // Update state
-      setUpcomingBooks(prev => [...prev, newBook]);
+      setUpcomingBooks(prev => [...prev, createdBook]);
       
       // Reset form
       setNewBookData({
@@ -143,12 +146,7 @@ export const UpcomingReleasesTab = ({
   const handleDeleteBook = async (bookId: string) => {
     if (confirm("Are you sure you want to remove this upcoming book?")) {
       try {
-        // Remove from IndexedDB - the exclusive source of truth
-        const { enhancedStorageService } = await import('@/services/storage/EnhancedStorageService');
-        await enhancedStorageService.initialize();
-        
-        // Delete the upcoming book from IndexedDB
-        await enhancedStorageService.deleteUpcomingRelease(bookId);
+        await upcomingReleasesService.deleteRelease(bookId);
         
         // Update state
         setUpcomingBooks(prev => prev.filter(book => book.id !== bookId));

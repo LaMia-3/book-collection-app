@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Settings } from '@/components/Settings';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Filter, SortAsc, SortDesc, Grid, List, Trash2, Edit, Image, ChevronLeft, Search, X, Grid3X3 } from 'lucide-react';
@@ -47,17 +47,8 @@ const CollectionsPage: React.FC = () => {
   const { toast } = useToast();
   
   // Load collections on component mount
-  useEffect(() => {
-    loadCollections();
-  }, []);
-  
-  // Filter and sort collections when collections, searchQuery, or sortOrder changes
-  useEffect(() => {
-    filterAndSortCollections();
-  }, [collections, searchQuery, sortOrder]);
-  
   // Load collections from repository
-  const loadCollections = async () => {
+  const loadCollections = useCallback(async () => {
     setIsLoading(true);
     try {
       const allCollections = await collectionRepository.getAll();
@@ -80,10 +71,10 @@ const CollectionsPage: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [toast]);
   
   // Filter and sort collections based on search query and sort order
-  const filterAndSortCollections = () => {
+  const filterAndSortCollections = useCallback(() => {
     let filtered = [...collections];
     
     // Apply search filter if query exists
@@ -103,7 +94,16 @@ const CollectionsPage: React.FC = () => {
     }
     
     setFilteredCollections(filtered);
-  };
+  }, [collections, searchQuery, sortOrder]);
+
+  useEffect(() => {
+    loadCollections();
+  }, [loadCollections]);
+  
+  // Filter and sort collections when collections, searchQuery, or sortOrder changes
+  useEffect(() => {
+    filterAndSortCollections();
+  }, [filterAndSortCollections]);
   
   // Handle creating a new collection
   const handleCreateCollection = async () => {

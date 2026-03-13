@@ -17,7 +17,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Collection } from '@/types/collection';
 import { Book } from '@/types/book';
 import { collectionRepository } from '@/repositories/CollectionRepository';
-import { enhancedStorageService } from '@/services/storage/EnhancedStorageService';
+import { bookRepository } from '@/repositories/BookRepository';
 
 const CollectionDetailPage: React.FC = () => {
   const { collectionId } = useParams<{ collectionId: string }>();
@@ -58,9 +58,6 @@ const CollectionDetailPage: React.FC = () => {
     const loadCollectionAndBooks = async () => {
       setIsLoading(true);
       try {
-        // Initialize storage service
-        await enhancedStorageService.initialize();
-        
         // Load collection
         const collectionData = await collectionRepository.getById(collectionId);
         if (!collectionData) {
@@ -82,7 +79,7 @@ const CollectionDetailPage: React.FC = () => {
         });
         
         // Load all books for reference
-        const allBooksData = await enhancedStorageService.getBooks();
+        const allBooksData = await bookRepository.getAll();
         setAllBooks(allBooksData);
         
         // Load books in this collection
@@ -246,12 +243,17 @@ const CollectionDetailPage: React.FC = () => {
   // Handle updating a book
   const handleUpdateBook = async (updatedBook: Book) => {
     try {
-      await enhancedStorageService.saveBook(updatedBook);
-      
       // Update local state
       setBooks(prevBooks => 
         prevBooks.map(book => book.id === updatedBook.id ? updatedBook : book)
       );
+      setFilteredBooks(prevBooks =>
+        prevBooks.map(book => book.id === updatedBook.id ? updatedBook : book)
+      );
+      setAllBooks(prevBooks =>
+        prevBooks.map(book => book.id === updatedBook.id ? updatedBook : book)
+      );
+      setSelectedBookForDetails(updatedBook);
       
       toast({
         title: "Book updated",
@@ -263,7 +265,7 @@ const CollectionDetailPage: React.FC = () => {
       console.error("Error updating book:", error);
       toast({
         title: "Error",
-        description: "Failed to update book details.",
+        description: error instanceof Error ? error.message : "Failed to update book details.",
         variant: "destructive"
       });
     }

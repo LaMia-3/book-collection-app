@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { Dispatch, SetStateAction, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSettings } from "@/contexts/SettingsContext";
 import { Book } from "@/types/book";
@@ -49,6 +49,14 @@ import { SimpleSearch } from "@/components/SimpleSearch";
 import { GoalTracker } from "@/components/GoalTracker";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { useLibrarySettings } from '@/hooks/useLibrarySettings';
+import { bookRepository } from '@/repositories/BookRepository';
+
+declare global {
+  interface Window {
+    setShowSearch?: Dispatch<SetStateAction<boolean>>;
+    setShowManualAddDialog?: Dispatch<SetStateAction<boolean>>;
+  }
+}
 
 const Index = () => {
   const navigate = useNavigate();
@@ -71,14 +79,12 @@ const Index = () => {
   
   // Expose state setters to window object for the dropdown menu
   useEffect(() => {
-    // Expose state setters to window object
-    (window as any).setShowSearch = setShowSearchDialog;
-    (window as any).setShowManualAddDialog = setShowManualAddDialog;
+    window.setShowSearch = setShowSearchDialog;
+    window.setShowManualAddDialog = setShowManualAddDialog;
     
-    // Cleanup function
     return () => {
-      delete (window as any).setShowSearch;
-      delete (window as any).setShowManualAddDialog;
+      delete window.setShowSearch;
+      delete window.setShowManualAddDialog;
     };
   }, []);
   // Use default view from settings or fallback to 'shelf'
@@ -102,40 +108,18 @@ const Index = () => {
     ? `${settings.preferredName}'s Personal Library`
     : "My Personal Library";
 
-  // Function to map IndexedDB Book to UI Book type
-  const mapIndexedDBBookToUIBook = (indexedDBBook: any): Book => {
-    return {
-      ...indexedDBBook,
-      // Map fields with different names
-      addedDate: indexedDBBook.dateAdded || new Date().toISOString(),
-      completedDate: indexedDBBook.dateCompleted,
-      // Ensure all required fields are present
-      isPartOfSeries: indexedDBBook.isPartOfSeries || false,
-      spineColor: indexedDBBook.spineColor || 1
-    };
-  };
-
-  // Load books from IndexedDB on component mount
   useEffect(() => {
-    const loadBooksFromIndexedDB = async () => {
+    const loadBooks = async () => {
       try {
-        // Import the storage service
-        const { enhancedStorageService } = await import('@/services/storage/EnhancedStorageService');
+        const loadedBooks = await bookRepository.getAll();
         
-        // Get books from IndexedDB
-        const indexedDBBooks = await enhancedStorageService.getBooks();
+        setBooks(loadedBooks);
+        setFilteredBooks(loadedBooks);
         
-        // Convert to UI book format
-        const uiBooks = indexedDBBooks.map(mapIndexedDBBookToUIBook);
-        
-        setBooks(uiBooks);
-        setFilteredBooks(uiBooks);
-        
-        // Initialize the search index with the books
         searchService.clearIndex();
-        searchService.indexBooks(uiBooks);
+        searchService.indexBooks(loadedBooks);
       } catch (error) {
-        console.error("Error loading books from IndexedDB:", error);
+        console.error("Error loading books:", error);
         toast({
           title: "Error Loading Books",
           description: "There was an error loading your books. Please refresh the page.",
@@ -146,8 +130,8 @@ const Index = () => {
       }
     };
     
-    loadBooksFromIndexedDB();
-  }, []);
+    loadBooks();
+  }, [toast]);
   
   // Calculate books completed in the current month whenever books change
   useEffect(() => {
@@ -178,54 +162,23 @@ const Index = () => {
 
   const addBook = async (newBook: Book) => {
     try {
-      // Import the storage service directly to avoid import cycle issues
-      const { enhancedStorageService } = await import('@/services/storage/EnhancedStorageService');
+      const savedBook = await bookRepository.create(newBook);
       
-      // Convert UI book to IndexedDB format
-      // We need to adapt the UI book model to the IndexedDB format that the service expects
-      const indexedDBBook = {
-        ...newBook,
-        // Map required fields for IndexedDB
-        dateAdded: newBook.addedDate || new Date().toISOString(),
-        dateCompleted: newBook.completedDate,
-        lastModified: new Date().toISOString(),
-        syncStatus: 'synced' as const,
-        // Default to 0 progress if not specified
-        // @ts-ignore - progress field exists in the IndexedDB Book type but not UI Book type
-        progress: 0
-      };
-      
-      // Save to IndexedDB first
-      const bookId = await enhancedStorageService.saveBook(indexedDBBook as any);
-      
-      // Update the book with the returned ID if needed
-      const savedBook = {
-        ...newBook,
-        id: bookId || newBook.id
-      };
-      
-      // Then update local state
       setBooks((prev) => [...prev, savedBook]);
-      
-      // Add the new book to the search index
       searchService.indexBook(savedBook);
       
-      // If there's an active search, update filtered results
       if (searchQuery) {
         handleSearch(searchQuery, searchOptions);
       } else {
         setFilteredBooks(prev => [...prev, savedBook]);
       }
       
-      // Close the search dialog
       setShowSearchDialog(false);
-      
-      console.log('Book successfully saved to IndexedDB with ID:', bookId);
     } catch (error) {
-      console.error('Error saving book to IndexedDB:', error);
+      console.error('Error saving book:', error);
       toast({
         title: "Error Saving Book",
-        description: `Failed to save book to database: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        description: `Failed to save book: ${error instanceof Error ? error.message : 'Unknown error'}`,
         variant: "destructive"
       });
     }
@@ -251,13 +204,8 @@ const Index = () => {
 
   const deleteBook = async (bookId: string) => {
     try {
-      // Import the storage service
-      const { enhancedStorageService } = await import('@/services/storage/EnhancedStorageService');
+      await bookRepository.delete(bookId);
       
-      // Delete book from IndexedDB
-      await enhancedStorageService.deleteBook(bookId);
-      
-      // Update local state
       setBooks((prevBooks) => prevBooks.filter((book) => book.id !== bookId));
       setSelectedBook(null);
       

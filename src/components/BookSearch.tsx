@@ -14,7 +14,8 @@ import { seriesApiService, SeriesDetectionResult } from "@/services/api/SeriesAp
 import { seriesService } from "@/services/SeriesService";
 import { SeriesAssignmentDialog } from "@/components/dialogs/SeriesAssignmentDialog";
 import { Badge } from "@/components/ui/badge";
-import { enhancedStorageService } from "@/services/storage/EnhancedStorageService";
+import { bookRepository } from "@/repositories/BookRepository";
+import { seriesRepository } from "@/repositories/SeriesRepository";
 
 interface BookSearchProps {
   onAddBook: (book: Book) => void;
@@ -66,8 +67,8 @@ export const BookSearch = ({ onAddBook, existingBooks, maxResultsHeight }: BookS
         // Check if this book already exists in the user's library
         // First check by provider-specific ID
         const existsById = apiBook.id && existingBooks.some(existingBook => 
-          (existingBook as any).googleBooksId === apiBook.id || // Legacy field
-          (existingBook as any).sourceId === apiBook.id // New field
+          existingBook.googleBooksId === apiBook.id ||
+          existingBook.sourceId === apiBook.id
         );
         
         if (existsById) return false;
@@ -218,12 +219,16 @@ export const BookSearch = ({ onAddBook, existingBooks, maxResultsHeight }: BookS
       // Update the onAddBook callback with the updated book
       onAddBook(updatedBook);
       
-      // Initialize storage service and add the book to series
-      await enhancedStorageService.initialize();
-      await enhancedStorageService.addBookToSeries(book.id, seriesId, volumeNumber);
+      await seriesService.addBookToSeries(seriesId, book.id);
+      await bookRepository.update(book.id, {
+        isPartOfSeries: true,
+        seriesId,
+        volumeNumber,
+        seriesPosition: volumeNumber,
+      });
       
       // Get the series name for the toast
-      const series = await enhancedStorageService.getSeriesById(seriesId);
+      const series = await seriesRepository.getById(seriesId);
       const seriesName = series?.name || 'selected series';
       
       toast({
@@ -262,20 +267,6 @@ export const BookSearch = ({ onAddBook, existingBooks, maxResultsHeight }: BookS
         hasUpcoming: false
       });
       
-      // Initialize storage service
-      await enhancedStorageService.initialize();
-      
-      // Convert the series to IndexedDB format and save it
-      const indexedDbSeries = {
-        ...newSeries,
-        readingProgress: 0,
-        completedBooks: 0,
-        dateAdded: new Date().toISOString(),
-        lastModified: new Date().toISOString()
-      };
-      
-      await enhancedStorageService.saveSeries(indexedDbSeries as any);
-      
       // Update the book with series information
       const updatedBook = {
         ...book,
@@ -288,8 +279,13 @@ export const BookSearch = ({ onAddBook, existingBooks, maxResultsHeight }: BookS
       // In our revised flow, the book has not been added yet in automatic mode
       onAddBook(updatedBook);
       
-      // Add book to series in IndexedDB
-      await enhancedStorageService.addBookToSeries(book.id, newSeries.id, volumeNumber);
+      await seriesService.addBookToSeries(newSeries.id, book.id);
+      await bookRepository.update(book.id, {
+        isPartOfSeries: true,
+        seriesId: newSeries.id,
+        volumeNumber,
+        seriesPosition: volumeNumber,
+      });
       
       toast({
         title: "New Series Created",

@@ -56,10 +56,12 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { GenreDisplay } from "@/components/GenreDisplay";
 import { genreToEditString, editStringToGenreArray } from "@/utils/genreUtils";
 import { seriesService } from "@/services/SeriesService";
-import { seriesApiService } from "@/services/api/SeriesApiService";
+import { seriesApiService, SeriesDetectionResult } from "@/services/api/SeriesApiService";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/use-toast";
 import { enhancedStorageService } from "@/services/storage/EnhancedStorageService";
+import { bookRepository } from "@/repositories/BookRepository";
+import { seriesRepository } from "@/repositories/SeriesRepository";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -70,6 +72,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { SeriesCreationData } from "@/types/series";
 
 interface BookDetailsProps {
   book: Book;
@@ -124,7 +127,7 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
   const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
   const [showMetadataInfo, setShowMetadataInfo] = useState(false);
   const [showCollectionsInfo, setShowCollectionsInfo] = useState(true);
-  const [seriesDetectionResult, setSeriesDetectionResult] = useState<any>(null);
+  const [seriesDetectionResult, setSeriesDetectionResult] = useState<SeriesDetectionResult | null>(null);
   // Format date for HTML date input (YYYY-MM-DD)
   const formatDateForInput = (dateString?: string): string => {
     if (!dateString) return "";
@@ -279,34 +282,27 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
       // Initialize storage
       await enhancedStorageService.initialize();
       
-      // First, update the series in IndexedDB
-      const seriesInDb = await enhancedStorageService.getSeriesById(book.seriesId);
+      const seriesInDb = await seriesRepository.getById(book.seriesId);
       if (seriesInDb) {
         // Update series books list
         const updatedSeriesForDb = {
           ...seriesInDb,
           books: seriesInDb.books.filter(id => id !== book.id),
-          lastModified: new Date().toISOString()
+          lastModified: new Date().toISOString(),
+          updatedAt: new Date(),
         };
         
-        await enhancedStorageService.saveSeries(updatedSeriesForDb);
-        console.log('Updated series in IndexedDB:', updatedSeriesForDb.id);
+        await seriesRepository.update(updatedSeriesForDb.id, updatedSeriesForDb);
+        console.log('Updated series:', updatedSeriesForDb.id);
       }
       
-      // Update the book in IndexedDB to remove series association
-      const bookInDb = await enhancedStorageService.getBookById(book.id);
-      if (bookInDb) {
-        const updatedBookForDb = {
-          ...bookInDb,
-          seriesId: undefined,
-          isPartOfSeries: false,
-          seriesPosition: undefined,
-          lastModified: new Date().toISOString()
-        };
-        
-        await enhancedStorageService.saveBook(updatedBookForDb);
-        console.log('Updated book in IndexedDB, removed series association');
-      }
+      const updatedBook = await bookRepository.update(book.id, {
+        seriesId: undefined,
+        isPartOfSeries: false,
+        volumeNumber: undefined,
+        seriesPosition: undefined,
+      });
+      console.log('Updated book, removed series association');
       
       // Update UI state
       setSelectedSeriesId(null);
@@ -325,13 +321,7 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
       setAvailableSeries(updatedSeries);
       
       // Call the parent's update function to update the book in the UI
-      onUpdate({
-        ...book,
-        seriesId: undefined,
-        isPartOfSeries: false,
-        volumeNumber: undefined,
-        seriesPosition: undefined
-      });
+      onUpdate(updatedBook);
       
       toast({
         title: "Series removed",
@@ -363,7 +353,7 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
   };
   
   // Handle series creation from dialog
-  const handleCreateNewSeries = async (seriesData: Partial<any>, bookToUpdate: Book, volumeNumber?: number) => {
+  const handleCreateNewSeries = async (seriesData: Partial<SeriesCreationData>, _bookToUpdate: Book, volumeNumber?: number) => {
     setIsSaving(true);
     try {
       // Initialize storage
@@ -394,32 +384,25 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
         lastModified: new Date().toISOString()
       };
       
-      // Save the series to IndexedDB
-      await enhancedStorageService.saveSeries(newSeriesForIndexedDB as any);
-      console.log('New series saved to IndexedDB:', newSeriesId);
-      
-      // Update the book in IndexedDB to associate with this series
-      const bookInDb = await enhancedStorageService.getBookById(book.id);
-      if (bookInDb) {
-        const updatedBook = {
-          ...bookInDb,
-          seriesId: newSeriesId,
-          isPartOfSeries: true,
-          seriesPosition: volumeNumber || 1,
-          lastModified: new Date().toISOString()
-        };
-        await enhancedStorageService.saveBook(updatedBook);
-        console.log('Book updated with series association in IndexedDB');
-      }
-      
       // Create a UI-friendly version of the series
-      const newUISeriesObject = {
+      const newUISeriesObject: Series = {
         ...newSeriesForIndexedDB,
         createdAt: new Date(),
         updatedAt: new Date(),
         // Copy categories to genre for UI compatibility
         genre: newSeriesForIndexedDB.categories
       };
+
+      await seriesRepository.add(newUISeriesObject);
+      console.log('New series saved:', newSeriesId);
+      
+      await bookRepository.update(book.id, {
+        seriesId: newSeriesId,
+        isPartOfSeries: true,
+        volumeNumber: volumeNumber || 1,
+        seriesPosition: volumeNumber || 1,
+      });
+      console.log('Book updated with series association');
       
       // Update local state
       const updatedSeries = [...availableSeries, newUISeriesObject];
@@ -456,32 +439,19 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
     const loadSeries = async () => {
       setLoadingSeries(true);
       try {
-        console.log('Loading series data from IndexedDB...');
-        
-        // Initialize the enhanced storage service
-        await enhancedStorageService.initialize();
-        
-        // Get all series directly from IndexedDB - the only source of truth
-        const seriesFromDB = await enhancedStorageService.getSeries();
-        console.log(`Found ${seriesFromDB.length} series in IndexedDB`);
+        console.log('Loading series data...');
+        const seriesFromDB = await seriesRepository.getAll();
+        console.log(`Found ${seriesFromDB.length} series`);
         
         if (seriesFromDB.length === 0) {
           console.log('No series found in the database');
           setAvailableSeries([]);
         } else {
-          // Convert IndexedDB format to UI format
-          const uiSeriesList = seriesFromDB.map(s => ({
-            ...s,
-            // Convert date strings to Date objects for UI
-            createdAt: new Date(s.dateAdded || s.timestamps?.created || new Date().toISOString()),
-            updatedAt: new Date(s.lastModified || s.timestamps?.updated || new Date().toISOString())
-          }));
-          
-          console.log('Series loaded for UI:', uiSeriesList);
-          setAvailableSeries(uiSeriesList);
+          console.log('Series loaded for UI:', seriesFromDB);
+          setAvailableSeries(seriesFromDB);
         }
       } catch (error) {
-        console.error('Error loading series from IndexedDB:', error);
+        console.error('Error loading series:', error);
         setAvailableSeries([]);
       } finally {
         setLoadingSeries(false);
@@ -562,18 +532,8 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
       // If a series was selected, make sure the book is added to that series
       if (selectedSeriesId) {
         try {
-          // Update using seriesService (which updates IndexedDB - exclusive source of truth)
           await seriesService.addBookToSeries(selectedSeriesId, book.id);
-          
-          // Also update directly in IndexedDB for data consistency
-          // addBookToSeries reads the book from DB, updates series fields, and saves it
-          try {
-            await enhancedStorageService.initialize();
-            await enhancedStorageService.addBookToSeries(book.id, selectedSeriesId, volumeNumber);
-          } catch (indexedDBError) {
-            console.error('Error updating book-series relationship in IndexedDB:', indexedDBError);
-          }
-          
+
           toast({
             title: "Series Updated",
             description: "Book successfully added to series."
@@ -588,25 +548,15 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
         }
       }
 
-      // Update UI state via parent callback
-      onUpdate(updatedBook);
+      const persistedBook = await bookRepository.update(updatedBook.id, updatedBook);
 
-      // Save to IndexedDB — single save with the clean book object
-      // (addBookToSeries above only updates series fields; we still need to persist
-      //  other edits like title, author, notes, rating, etc.)
-      try {
-        await enhancedStorageService.initialize();
-        await enhancedStorageService.saveBook(updatedBook);
-        log.info('Book saved to IndexedDB successfully', {
-          bookId: book.id,
-          title: updatedBook.title
-        });
-      } catch (indexedDBError) {
-        log.error('Error saving book to IndexedDB', {
-          bookId: book.id,
-          error: indexedDBError.message || String(indexedDBError)
-        });
-      }
+      // Update UI state via parent callback
+      onUpdate(persistedBook);
+
+      log.info('Book saved successfully', {
+        bookId: book.id,
+        title: persistedBook.title
+      });
 
       // Close the dialog
       onClose();
@@ -630,7 +580,20 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
       setIsSaving(false);
       log.debug('Save operation completed', { bookId: book.id });
     }
-  }, [editedBook, isSaving, onUpdate, onClose, selectedSeriesId, toast]);
+  }, [
+    book.author,
+    book.id,
+    book.pageCount,
+    book.seriesId,
+    book.title,
+    editedBook,
+    isSaving,
+    onClose,
+    onUpdate,
+    selectedSeriesId,
+    toast,
+    volumeNumber,
+  ]);
 
   // Delete confirmation and handling
   const handleDeleteConfirmation = useCallback((e: React.MouseEvent) => {
@@ -664,7 +627,7 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
     } finally {
       setIsDeleting(false);
     }
-  }, [book.id, isDeleting, onDelete, toast]);
+  }, [book.id, book.title, isDeleting, onDelete, toast]);
 
   // Title editing functions
   const startTitleEdit = useCallback(() => {

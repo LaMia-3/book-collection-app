@@ -1,5 +1,7 @@
 import { useState, useCallback } from 'react';
-import storageService from '@/services/storage/StorageService';
+import { userSettingsRepository } from '@/repositories/UserSettingsRepository';
+
+type SettingsRecord = Record<string, unknown>;
 
 /**
  * Hook for using the storage service with React components
@@ -10,16 +12,16 @@ export const useStorage = () => {
   const [error, setError] = useState<Error | null>(null);
 
   // Get an item from storage
-  const getItem = useCallback(async (key: string): Promise<any> => {
+  const getItem = useCallback(async (key: string): Promise<unknown> => {
     try {
       setIsLoading(true);
       setError(null);
       
       // Get settings where most key/value pairs are stored
-      const settings = await storageService.getSettings();
+      const settings = await userSettingsRepository.get();
       if (settings) {
         // Cast to Record<string, any> to allow string indexing
-        const settingsObj = settings as Record<string, any>;
+        const settingsObj = settings as SettingsRecord;
         return settingsObj[key] !== undefined ? settingsObj[key] : null;
       }
       return null;
@@ -33,22 +35,22 @@ export const useStorage = () => {
   }, []);
 
   // Set an item in storage
-  const setItem = useCallback(async (key: string, value: any): Promise<void> => {
+  const setItem = useCallback(async (key: string, value: unknown): Promise<void> => {
     try {
       setIsLoading(true);
       setError(null);
       
       // Get current settings
-      const settings = await storageService.getSettings() || {};
+      const settings = await userSettingsRepository.get() || {};
       
       // Update with new value using type assertion for index signature
       const updatedSettings = {
         ...settings,
         [key]: value
-      } as Record<string, any>;
+      } as SettingsRecord;
       
       // Save back to storage
-      await storageService.saveSettings(updatedSettings);
+      await userSettingsRepository.update(updatedSettings);
     } catch (err) {
       console.error('Error setting item in storage:', err);
       setError(err instanceof Error ? err : new Error('Failed to set item in storage'));
@@ -65,16 +67,16 @@ export const useStorage = () => {
       setError(null);
       
       // Get current settings
-      const settings = await storageService.getSettings() || {};
+      const settings = await userSettingsRepository.get() || {};
       
       // Remove the key
-      if (settings && (settings as Record<string, any>)[key] !== undefined) {
+      if (settings && (settings as SettingsRecord)[key] !== undefined) {
         // Cast to Record<string, any> to allow indexing with string
-        const settingsObj = settings as Record<string, any>;
+        const settingsObj = settings as SettingsRecord;
         const { [key]: removed, ...updatedSettings } = settingsObj;
         
         // Save back to storage
-        await storageService.saveSettings(updatedSettings);
+        await userSettingsRepository.update(updatedSettings);
       }
     } catch (err) {
       console.error('Error removing item from storage:', err);
