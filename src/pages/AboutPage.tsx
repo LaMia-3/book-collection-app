@@ -287,16 +287,16 @@ const AboutPage = () => {
                 </div>
 
                 <div className="border-l-4 border-purple-500 pl-4 py-1">
-                  <h4 className="font-medium text-sm">Import and export clarity</h4>
+                  <h4 className="font-medium text-sm">System update announcements</h4>
                   <p className="text-sm text-muted-foreground">
-                    Make export and import explicit about whether they operate on remote MongoDB data, local cache data, or legacy browser migration data.
+                    Add an in-app announcement layer for app updates, maintenance notices, and other product messages without mixing them into book-release notifications.
                   </p>
                 </div>
 
                 <div className="border-l-4 border-purple-500 pl-4 py-1">
                   <h4 className="font-medium text-sm">Testing and hardening</h4>
                   <p className="text-sm text-muted-foreground">
-                    Add automated coverage for auth, ownership enforcement, migration, and destructive actions, then complete full manual QA for the authenticated app.
+                    Add automated coverage for auth, ownership enforcement, migration, destructive actions, and announcement targeting, then complete full manual QA for the authenticated app.
                   </p>
                 </div>
 

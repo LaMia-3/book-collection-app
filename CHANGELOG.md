@@ -20,9 +20,7 @@ This release moves the app from a browser-only library manager to an authenticat
 
 ### In Progress
 
-- Admin and debug tooling audit for remote-versus-local assumptions
-- Import and export UX clarification for remote data versus legacy/local data
-- Final destructive-action cleanup and explicit remote-library wording across the UI
+- In-app system update announcements for app releases, maintenance notices, and product messages
 - Expanded automated and manual test coverage for auth, migration, and destructive actions
 
 ## [1.2.2]

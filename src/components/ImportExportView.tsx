@@ -7,6 +7,7 @@ import { ImportFormatHelp } from './ImportFormatHelp';
 
 import { Book } from '@/types/book';
 import { useImport } from '@/contexts/ImportContext';
+import { useSettings } from '@/contexts/SettingsContext';
 import { useAuth } from '@/hooks/useAuth';
 import { booksToCSV, booksToJSON, downloadFile } from '@/utils/exportUtils';
 import { importFromCSV, importFromJSON } from '@/utils/importUtils';
@@ -45,6 +46,7 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
   // Get import context functions for background processing
   const { startImport, updateImportProgress, completeImport, errorImport, setCancelCallback } = useImport();
   const { isAuthenticated } = useAuth();
+  const { settings } = useSettings();
   
   // State for file inputs and operation status
   const [csvFile, setCsvFile] = useState<File | null>(null);
