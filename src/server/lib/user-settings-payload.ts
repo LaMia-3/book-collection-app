@@ -25,6 +25,27 @@ export type UserSettingsPayload = {
     shelfOrder: string[];
   };
   notifications?: Record<string, boolean>;
+  migration?: {
+    legacyImport?: {
+      status: "not-started" | "in-progress" | "completed" | "failed";
+      sourceDatabases: Array<"book-collection-db" | "bookCollectionDb" | "localStorage">;
+      entityCounts: Partial<
+        Record<
+          "settings" | "series" | "books" | "collections" | "upcomingReleases" | "notifications",
+          number
+        >
+      >;
+      duplicateStrategy: "prefer-primary-indexeddb-then-fallback-upsert-by-id";
+      canonicalImportOrder: Array<
+        "settings" | "series" | "books" | "collections" | "upcomingReleases" | "notifications"
+      >;
+      lastDetectedAt?: string;
+      lastAttemptAt?: string;
+      completedAt?: string;
+      postMigrationLocalCacheState?: "retained" | "stale" | "cleared";
+      lastError?: string;
+    };
+  };
 };
 
 type RawSettingsPayload = Partial<UserSettingsPayload> & Record<string, unknown>;
@@ -195,6 +216,206 @@ const normalizeNotifications = (
   return normalizedNotifications;
 };
 
+const LEGACY_MIGRATION_STATUS_VALUES = [
+  "not-started",
+  "in-progress",
+  "completed",
+  "failed",
+] as const;
+const LEGACY_MIGRATION_SOURCE_VALUES = [
+  "book-collection-db",
+  "bookCollectionDb",
+  "localStorage",
+] as const;
+const LEGACY_ENTITY_VALUES = [
+  "settings",
+  "series",
+  "books",
+  "collections",
+  "upcomingReleases",
+  "notifications",
+] as const;
+const LEGACY_CACHE_STATE_VALUES = ["retained", "stale", "cleared"] as const;
+
+const normalizeStringArray = (
+  value: unknown,
+  fieldName: string,
+): string[] | undefined => {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+
+  if (!Array.isArray(value)) {
+    throw new ApiError(400, "BAD_REQUEST", `${fieldName} must be an array.`);
+  }
+
+  return value
+    .map((entry) => normalizeOptionalString(entry, `${fieldName} item`))
+    .filter((entry): entry is string => Boolean(entry));
+};
+
+const normalizeStringEnum = <T extends readonly string[]>(
+  value: unknown,
+  fieldName: string,
+  allowedValues: T,
+): T[number] | undefined => {
+  const normalized = normalizeOptionalString(value, fieldName);
+
+  if (!normalized) {
+    return undefined;
+  }
+
+  if (!allowedValues.includes(normalized as T[number])) {
+    throw new ApiError(400, "BAD_REQUEST", `${fieldName} is invalid.`);
+  }
+
+  return normalized as T[number];
+};
+
+const normalizeEntityCounts = (
+  value: unknown,
+): UserSettingsPayload["migration"] extends { legacyImport?: infer T }
+  ? T extends { entityCounts: infer E }
+    ? E
+    : never
+  : never => {
+  if (value === undefined || value === null) {
+    return {};
+  }
+
+  const rawValue = assertObject(value, "migration.legacyImport.entityCounts must be an object.");
+  const normalizedCounts: Partial<Record<(typeof LEGACY_ENTITY_VALUES)[number], number>> = {};
+
+  Object.entries(rawValue).forEach(([key, entryValue]) => {
+    if (!LEGACY_ENTITY_VALUES.includes(key as (typeof LEGACY_ENTITY_VALUES)[number])) {
+      throw new ApiError(
+        400,
+        "BAD_REQUEST",
+        `migration.legacyImport.entityCounts.${key} is invalid.`,
+      );
+    }
+
+    if (
+      typeof entryValue !== "number" ||
+      Number.isNaN(entryValue) ||
+      !Number.isInteger(entryValue) ||
+      entryValue < 0
+    ) {
+      throw new ApiError(
+        400,
+        "BAD_REQUEST",
+        `migration.legacyImport.entityCounts.${key} must be a positive whole number.`,
+      );
+    }
+
+    normalizedCounts[key as (typeof LEGACY_ENTITY_VALUES)[number]] = entryValue;
+  });
+
+  return normalizedCounts as UserSettingsPayload["migration"] extends { legacyImport?: infer T }
+    ? T extends { entityCounts: infer E }
+      ? E
+      : never
+    : never;
+};
+
+const normalizeLegacyImport = (
+  value: unknown,
+): UserSettingsPayload["migration"] extends { legacyImport?: infer T } ? T | undefined : never => {
+  if (value === undefined || value === null) {
+    return undefined as UserSettingsPayload["migration"] extends { legacyImport?: infer T }
+      ? T | undefined
+      : never;
+  }
+
+  const rawValue = assertObject(value, "migration.legacyImport must be an object.");
+  const sourceDatabases =
+    normalizeStringArray(
+      rawValue.sourceDatabases,
+      "migration.legacyImport.sourceDatabases",
+    ) || [];
+  const canonicalImportOrder =
+    normalizeStringArray(
+      rawValue.canonicalImportOrder,
+      "migration.legacyImport.canonicalImportOrder",
+    ) || [];
+
+  sourceDatabases.forEach((entry) => {
+    if (!LEGACY_MIGRATION_SOURCE_VALUES.includes(entry as (typeof LEGACY_MIGRATION_SOURCE_VALUES)[number])) {
+      throw new ApiError(
+        400,
+        "BAD_REQUEST",
+        `migration.legacyImport.sourceDatabases contains an invalid value: ${entry}.`,
+      );
+    }
+  });
+
+  canonicalImportOrder.forEach((entry) => {
+    if (!LEGACY_ENTITY_VALUES.includes(entry as (typeof LEGACY_ENTITY_VALUES)[number])) {
+      throw new ApiError(
+        400,
+        "BAD_REQUEST",
+        `migration.legacyImport.canonicalImportOrder contains an invalid value: ${entry}.`,
+      );
+    }
+  });
+
+  const duplicateStrategy = normalizeOptionalString(
+    rawValue.duplicateStrategy,
+    "migration.legacyImport.duplicateStrategy",
+  );
+
+  if (
+    duplicateStrategy &&
+    duplicateStrategy !== "prefer-primary-indexeddb-then-fallback-upsert-by-id"
+  ) {
+    throw new ApiError(
+      400,
+      "BAD_REQUEST",
+      "migration.legacyImport.duplicateStrategy is invalid.",
+    );
+  }
+
+  return {
+    status:
+      normalizeStringEnum(
+        rawValue.status,
+        "migration.legacyImport.status",
+        LEGACY_MIGRATION_STATUS_VALUES,
+      ) || "not-started",
+    sourceDatabases:
+      sourceDatabases as Array<(typeof LEGACY_MIGRATION_SOURCE_VALUES)[number]>,
+    entityCounts: normalizeEntityCounts(rawValue.entityCounts),
+    duplicateStrategy:
+      (duplicateStrategy ||
+        "prefer-primary-indexeddb-then-fallback-upsert-by-id") as "prefer-primary-indexeddb-then-fallback-upsert-by-id",
+    canonicalImportOrder:
+      canonicalImportOrder as Array<(typeof LEGACY_ENTITY_VALUES)[number]>,
+    lastDetectedAt: normalizeOptionalString(rawValue.lastDetectedAt, "migration.legacyImport.lastDetectedAt"),
+    lastAttemptAt: normalizeOptionalString(rawValue.lastAttemptAt, "migration.legacyImport.lastAttemptAt"),
+    completedAt: normalizeOptionalString(rawValue.completedAt, "migration.legacyImport.completedAt"),
+    postMigrationLocalCacheState: normalizeStringEnum(
+      rawValue.postMigrationLocalCacheState,
+      "migration.legacyImport.postMigrationLocalCacheState",
+      LEGACY_CACHE_STATE_VALUES,
+    ),
+    lastError: normalizeOptionalString(rawValue.lastError, "migration.legacyImport.lastError"),
+  } as UserSettingsPayload["migration"] extends { legacyImport?: infer T } ? T : never;
+};
+
+const normalizeMigration = (
+  value: unknown,
+): UserSettingsPayload["migration"] | undefined => {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+
+  const rawValue = assertObject(value, "migration must be an object.");
+
+  return {
+    legacyImport: normalizeLegacyImport(rawValue.legacyImport),
+  };
+};
+
 export const validateUpdateUserSettingsPayload = (
   value: unknown,
 ): UserSettingsPayload => {
@@ -213,5 +434,6 @@ export const validateUpdateUserSettingsPayload = (
     goals: normalizeGoals(rawPayload.goals),
     displayOptions: normalizeDisplayOptions(rawPayload.displayOptions),
     notifications: normalizeNotifications(rawPayload.notifications),
+    migration: normalizeMigration(rawPayload.migration),
   };
 };

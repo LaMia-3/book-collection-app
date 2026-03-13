@@ -127,13 +127,13 @@ export class CollectionRepository {
    * Add a new collection to the database
    */
   async add(collection: CollectionCreationData): Promise<Collection> {
-    const now = new Date();
+    const now = collection.updatedAt || collection.createdAt || new Date();
     const newCollection: Collection = {
       ...collection,
-      id: `collection-${uuidv4()}`,
+      id: collection.id || `collection-${uuidv4()}`,
       bookIds: collection.bookIds || [],
-      createdAt: now,
-      updatedAt: now
+      createdAt: collection.createdAt || now,
+      updatedAt: collection.updatedAt || now
     };
     
     if (isAuthenticatedSession()) {

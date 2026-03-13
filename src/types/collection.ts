@@ -28,11 +28,14 @@ export interface CollectionWithStats extends Collection {
  * Collection creation data
  */
 export interface CollectionCreationData {
+  id?: string;
   name: string;
   description?: string;
   bookIds?: string[];
   color?: string;
   imageUrl?: string;
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 /**

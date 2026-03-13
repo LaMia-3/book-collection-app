@@ -100,15 +100,22 @@ export class NotificationRepository {
   /**
    * Add a new notification
    */
-  async add(notification: Omit<Notification, 'id' | 'createdAt' | 'isRead' | 'isDismissed'>): Promise<Notification> {
-    const now = new Date();
+  async add(
+    notification: Omit<Notification, 'id' | 'createdAt' | 'isRead' | 'isDismissed'> & {
+      id?: string;
+      createdAt?: Date;
+      isRead?: boolean;
+      isDismissed?: boolean;
+    },
+  ): Promise<Notification> {
+    const now = notification.createdAt || new Date();
     
     const newNotification: Notification = {
-      id: `notification-${uuidv4()}`,
+      id: notification.id || `notification-${uuidv4()}`,
       ...notification,
       createdAt: now,
-      isRead: false,
-      isDismissed: false
+      isRead: notification.isRead ?? false,
+      isDismissed: notification.isDismissed ?? false
     };
 
     if (isAuthenticatedSession()) {
@@ -142,6 +149,28 @@ export class NotificationRepository {
       return normalizeRemoteNotification(remoteNotification);
     }
     
+    await this.dbService.update(this.storeName, id, updatedNotification);
+    return updatedNotification;
+  }
+
+  async update(id: string, updates: Partial<Notification>): Promise<Notification | null> {
+    const notification = await this.getById(id);
+    if (!notification) return null;
+
+    const updatedNotification: Notification = {
+      ...notification,
+      ...updates,
+      id,
+    };
+
+    if (isAuthenticatedSession()) {
+      const remoteNotification = await notificationsApi.update(
+        id,
+        serializeNotification(updatedNotification),
+      );
+      return normalizeRemoteNotification(remoteNotification);
+    }
+
     await this.dbService.update(this.storeName, id, updatedNotification);
     return updatedNotification;
   }

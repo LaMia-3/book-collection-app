@@ -1,15 +1,33 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { Download, Upload, FileJson, FileSpreadsheet, Archive, RefreshCw, AlertTriangle, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { Progress } from '@/components/ui/progress';
 import { ImportFormatHelp } from './ImportFormatHelp';
 
 import { Book } from '@/types/book';
 import { useImport } from '@/contexts/ImportContext';
 import { useSettings } from '@/contexts/SettingsContext';
+import { useAuth } from '@/hooks/useAuth';
 import { booksToCSV, booksToJSON, downloadFile } from '@/utils/exportUtils';
 import { importFromCSV, importFromJSON, ImportResult } from '@/utils/importUtils';
 import { createBackup, restoreFromBackup } from '@/utils/backupUtils';
+import {
+  getLegacyImportSummary,
+  importLegacyLibrary,
+  LEGACY_IMPORT_ORDER,
+  type LegacyImportExecutionResult,
+} from '@/services/migration/legacyLibraryImport';
+import type { LegacyLibrarySnapshot, LegacyMigrationEntity } from '@/services/migration/legacyLibraryMigration';
+
+const LEGACY_ENTITY_LABELS: Record<LegacyMigrationEntity, string> = {
+  settings: 'Settings',
+  series: 'Series',
+  books: 'Books',
+  collections: 'Collections',
+  upcomingReleases: 'Upcoming Releases',
+  notifications: 'Notifications',
+};
 
 type ImportExportViewProps = {
   books: Book[];
@@ -30,6 +48,7 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
   const { startImport, updateImportProgress, completeImport, errorImport, setCancelCallback } = useImport();
   // Get settings for preferred name
   const { settings } = useSettings();
+  const { isAuthenticated } = useAuth();
   
   // State for file inputs and operation status
   const [csvFile, setCsvFile] = useState<File | null>(null);
@@ -40,11 +59,68 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
     type: 'success' | 'error' | 'info';
     message: string;
   } | null>(null);
+  const [legacySummary, setLegacySummary] = useState<LegacyLibrarySnapshot | null>(null);
+  const [legacyImportResult, setLegacyImportResult] = useState<LegacyImportExecutionResult | null>(null);
+  const [legacyProgress, setLegacyProgress] = useState({
+    progress: 0,
+    summary: '',
+    details: '',
+  });
 
   // Input references
   const csvInputRef = React.useRef<HTMLInputElement>(null);
   const jsonInputRef = React.useRef<HTMLInputElement>(null);
   const backupInputRef = React.useRef<HTMLInputElement>(null);
+
+  const legacySummaryRows = useMemo(() => {
+    if (!legacySummary) {
+      return [];
+    }
+
+    return LEGACY_IMPORT_ORDER
+      .map((entity) => ({
+        entity,
+        label: LEGACY_ENTITY_LABELS[entity],
+        count: legacySummary.totalCounts[entity] || 0,
+      }))
+      .filter((row) => row.count > 0);
+  }, [legacySummary]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadLegacySummary = async () => {
+      if (!isAuthenticated) {
+        if (isMounted) {
+          setLegacySummary(null);
+          setLegacyImportResult(null);
+          setLegacyProgress({ progress: 0, summary: '', details: '' });
+        }
+        return;
+      }
+
+      try {
+        const summary = await getLegacyImportSummary();
+
+        if (isMounted) {
+          setLegacySummary(summary);
+        }
+      } catch (error) {
+        if (isMounted) {
+          setStatusMessage({
+            type: 'error',
+            message: `Failed to inspect legacy browser data: ${error instanceof Error ? error.message : String(error)}`,
+          });
+        }
+      }
+    };
+
+    loadLegacySummary();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isAuthenticated]);
 
   // Handle file input changes
   const handleCsvFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -455,6 +531,61 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
     }
   };
 
+  const handleImportLegacyBrowserData = async () => {
+    if (!legacySummary?.hasLegacyData) {
+      setStatusMessage({
+        type: 'info',
+        message: 'No legacy browser data was detected for this device.',
+      });
+      return;
+    }
+
+    try {
+      setIsLoading('legacyImport');
+      setLegacyImportResult(null);
+      setLegacyProgress({
+        progress: 0,
+        summary: 'Preparing legacy import',
+        details: 'Collecting browser data snapshot',
+      });
+
+      const result = await importLegacyLibrary({
+        snapshot: legacySummary,
+        onProgress: (progress, summary, details) => {
+          setLegacyProgress({
+            progress,
+            summary,
+            details: details || '',
+          });
+        },
+      });
+
+      setLegacyImportResult(result);
+      setLegacySummary(await getLegacyImportSummary());
+      setStatusMessage({
+        type:
+          result.status === 'completed'
+            ? 'success'
+            : result.status === 'failed'
+              ? 'error'
+              : 'info',
+        message:
+          result.status === 'completed'
+            ? 'Legacy browser data imported successfully.'
+            : result.status === 'failed'
+              ? `Legacy import finished with ${result.failures.length} failed record(s).`
+              : 'Legacy import was skipped.',
+      });
+    } catch (error) {
+      setStatusMessage({
+        type: 'error',
+        message: `Failed to import legacy browser data: ${error instanceof Error ? error.message : String(error)}`,
+      });
+    } finally {
+      setIsLoading(null);
+    }
+  };
+
   return (
     <div>
       <h2 className="text-xl font-semibold mb-6">Import & Export</h2>
@@ -552,6 +683,103 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
           </p>
           
           <div className="flex flex-col gap-6">
+            {isAuthenticated && (
+              <div className="space-y-4 border rounded-lg p-4 bg-muted/20">
+                <div>
+                  <h3 className="text-lg font-medium">Legacy Browser Data</h3>
+                  <p className="text-gray-600 text-sm">
+                    Detect and import data from older IndexedDB and localStorage browser stores into your authenticated library.
+                  </p>
+                </div>
+
+                {legacySummary ? (
+                  <>
+                    <div className="text-sm text-gray-600">
+                      <p>
+                        Detection status:{' '}
+                        <strong>{legacySummary.hasLegacyData ? 'legacy data found' : 'no legacy data found'}</strong>
+                      </p>
+                      {legacySummary.sourceDatabases.length > 0 && (
+                        <p>Sources: {legacySummary.sourceDatabases.join(', ')}</p>
+                      )}
+                      <p>
+                        Last migration status:{' '}
+                        <strong>{settings.migration?.legacyImport?.status || 'not-started'}</strong>
+                      </p>
+                      <p>Post-migration local cache policy: retained</p>
+                    </div>
+
+                    {legacySummaryRows.length > 0 && (
+                      <div className="grid grid-cols-2 gap-3 text-sm">
+                        {legacySummaryRows.map((row) => (
+                          <div key={row.entity} className="rounded border px-3 py-2 bg-background">
+                            <span className="font-medium">{row.label}</span>
+                            <span className="ml-2 text-gray-600">{row.count}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="text-sm text-gray-600">
+                      <p>Import order: {LEGACY_IMPORT_ORDER.map((entity) => LEGACY_ENTITY_LABELS[entity]).join(' -> ')}</p>
+                      <p>Duplicate handling: upsert by stable ID, preferring the primary IndexedDB source first.</p>
+                    </div>
+
+                    {isLoading === 'legacyImport' && (
+                      <div className="space-y-2">
+                        <Progress value={legacyProgress.progress} className="h-2" />
+                        <p className="text-sm font-medium">{legacyProgress.summary}</p>
+                        {legacyProgress.details && (
+                          <p className="text-sm text-gray-600">{legacyProgress.details}</p>
+                        )}
+                      </div>
+                    )}
+
+                    {legacyImportResult && (
+                      <div className="space-y-2 text-sm">
+                        <p>
+                          Import result:{' '}
+                          <strong>{legacyImportResult.status}</strong>
+                        </p>
+                        <p>
+                          Imported: {Object.values(legacyImportResult.importedCounts).reduce((sum, count) => sum + (count || 0), 0)} records
+                          {' '}| Updated: {Object.values(legacyImportResult.updatedCounts).reduce((sum, count) => sum + (count || 0), 0)} records
+                        </p>
+                        {legacyImportResult.failures.length > 0 && (
+                          <div className="rounded border border-amber-300 bg-amber-50 p-3 text-amber-900">
+                            <p className="font-medium">
+                              {legacyImportResult.failures.length} record(s) failed during import
+                            </p>
+                            {legacyImportResult.failures.slice(0, 5).map((failure, index) => (
+                              <p key={`${failure.entity}-${failure.id || index}`}>
+                                {LEGACY_ENTITY_LABELS[failure.entity]}{failure.id ? ` (${failure.id})` : ''}: {failure.reason}
+                              </p>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    <Button
+                      onClick={handleImportLegacyBrowserData}
+                      disabled={isLoading !== null || !legacySummary.hasLegacyData}
+                      className="flex items-center gap-2"
+                    >
+                      <Download size={18} />
+                      <span>
+                        {settings.migration?.legacyImport?.status === 'failed'
+                          ? 'Retry Legacy Import'
+                          : 'Import Legacy Browser Data'}
+                      </span>
+                      {isLoading === 'legacyImport' && <RefreshCw className="animate-spin" size={18} />}
+                    </Button>
+                  </>
+                ) : (
+                  <p className="text-sm text-gray-600">Inspecting local browser data...</p>
+                )}
+              </div>
+            )}
+
             <div className="space-y-4">
               <h3 className="text-lg font-medium">CSV Import</h3>
               <p className="text-gray-600 text-sm">

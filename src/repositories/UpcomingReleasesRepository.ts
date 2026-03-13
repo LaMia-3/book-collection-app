@@ -109,9 +109,9 @@ export class UpcomingReleasesRepository {
   /**
    * Add a new upcoming book release
    */
-  async add(upcomingBook: Omit<UpcomingBook, 'id'>): Promise<UpcomingBook> {
+  async add(upcomingBook: Omit<UpcomingBook, 'id'> & { id?: string }): Promise<UpcomingBook> {
     const newBook: UpcomingBook = {
-      id: `upcoming-${uuidv4()}`,
+      id: upcomingBook.id || `upcoming-${uuidv4()}`,
       ...upcomingBook
     };
 
