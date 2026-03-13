@@ -4,7 +4,7 @@ import { DatabaseService } from '@/services/DatabaseService';
 import { enhancedStorageService } from '@/services/storage/EnhancedStorageService';
 import { v4 as uuidv4 } from 'uuid';
 import { getStoredAuthToken } from '@/lib/auth-storage';
-import { seriesApi, SeriesRecord } from '@/lib/apiClient';
+import { ApiClientError, seriesApi, SeriesRecord } from '@/lib/apiClient';
 
 const isAuthenticatedSession = (): boolean => Boolean(getStoredAuthToken());
 
@@ -126,8 +126,16 @@ export class SeriesRepository {
    */
   async getById(id: string): Promise<Series | null> {
     if (isAuthenticatedSession()) {
-      const remoteSeries = await seriesApi.getById(id);
-      return normalizeRemoteSeries(remoteSeries);
+      try {
+        const remoteSeries = await seriesApi.getById(id);
+        return normalizeRemoteSeries(remoteSeries);
+      } catch (error) {
+        if (error instanceof ApiClientError && error.status === 404) {
+          return null;
+        }
+
+        throw error;
+      }
     }
 
     try {

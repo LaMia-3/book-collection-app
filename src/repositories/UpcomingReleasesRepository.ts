@@ -2,7 +2,7 @@ import { UpcomingBook } from '@/types/series';
 import { DatabaseService } from '@/services/DatabaseService';
 import { v4 as uuidv4 } from 'uuid';
 import { getStoredAuthToken } from '@/lib/auth-storage';
-import { upcomingReleasesApi, UpcomingReleaseRecord } from '@/lib/apiClient';
+import { ApiClientError, upcomingReleasesApi, UpcomingReleaseRecord } from '@/lib/apiClient';
 
 const isAuthenticatedSession = (): boolean => Boolean(getStoredAuthToken());
 
@@ -78,8 +78,16 @@ export class UpcomingReleasesRepository {
    */
   async getById(id: string): Promise<UpcomingBook | null> {
     if (isAuthenticatedSession()) {
-      const release = await upcomingReleasesApi.getById(id);
-      return normalizeRemoteUpcomingRelease(release);
+      try {
+        const release = await upcomingReleasesApi.getById(id);
+        return normalizeRemoteUpcomingRelease(release);
+      } catch (error) {
+        if (error instanceof ApiClientError && error.status === 404) {
+          return null;
+        }
+
+        throw error;
+      }
     }
 
     return this.dbService.getById<UpcomingBook>(this.storeName, id);

@@ -1,4 +1,4 @@
-import { booksApi } from "@/lib/apiClient";
+import { ApiClientError, booksApi } from "@/lib/apiClient";
 import { getStoredAuthToken } from "@/lib/auth-storage";
 import { Book } from "@/types/book";
 import { enhancedStorageService } from "@/services/storage/EnhancedStorageService";
@@ -35,8 +35,16 @@ export class BookRepository {
 
   async getById(id: string): Promise<Book | null> {
     if (isAuthenticatedSession()) {
-      const remoteBook = await booksApi.getById(id);
-      return normalizeRemoteBook(remoteBook as Book);
+      try {
+        const remoteBook = await booksApi.getById(id);
+        return normalizeRemoteBook(remoteBook as Book);
+      } catch (error) {
+        if (error instanceof ApiClientError && error.status === 404) {
+          return null;
+        }
+
+        throw error;
+      }
     }
 
     const localBook = await enhancedStorageService.getBookById(id);

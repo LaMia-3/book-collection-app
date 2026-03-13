@@ -4,7 +4,7 @@ import { DatabaseService } from '@/services/DatabaseService';
 import { enhancedStorageService } from '@/services/storage/EnhancedStorageService';
 import { bookRepository } from '@/repositories/BookRepository';
 import { v4 as uuidv4 } from 'uuid';
-import { collectionsApi, CollectionRecord } from '@/lib/apiClient';
+import { ApiClientError, collectionsApi, CollectionRecord } from '@/lib/apiClient';
 import { getStoredAuthToken } from '@/lib/auth-storage';
 
 type StoredCollection = Collection & {
@@ -86,8 +86,16 @@ export class CollectionRepository {
    */
   async getById(id: string): Promise<Collection | null> {
     if (isAuthenticatedSession()) {
-      const collection = await collectionsApi.getById(id);
-      return normalizeRemoteCollection(collection);
+      try {
+        const collection = await collectionsApi.getById(id);
+        return normalizeRemoteCollection(collection);
+      } catch (error) {
+        if (error instanceof ApiClientError && error.status === 404) {
+          return null;
+        }
+
+        throw error;
+      }
     }
 
     try {

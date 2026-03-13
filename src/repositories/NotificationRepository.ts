@@ -2,7 +2,7 @@ import { Notification, NotificationType } from '@/types/notification';
 import { DatabaseService } from '@/services/DatabaseService';
 import { v4 as uuidv4 } from 'uuid';
 import { getStoredAuthToken } from '@/lib/auth-storage';
-import { notificationsApi, NotificationRecord } from '@/lib/apiClient';
+import { ApiClientError, notificationsApi, NotificationRecord } from '@/lib/apiClient';
 
 const isAuthenticatedSession = (): boolean => Boolean(getStoredAuthToken());
 
@@ -64,8 +64,16 @@ export class NotificationRepository {
    */
   async getById(id: string): Promise<Notification | null> {
     if (isAuthenticatedSession()) {
-      const notification = await notificationsApi.getById(id);
-      return normalizeRemoteNotification(notification);
+      try {
+        const notification = await notificationsApi.getById(id);
+        return normalizeRemoteNotification(notification);
+      } catch (error) {
+        if (error instanceof ApiClientError && error.status === 404) {
+          return null;
+        }
+
+        throw error;
+      }
     }
 
     return this.dbService.getById<Notification>(this.storeName, id);
