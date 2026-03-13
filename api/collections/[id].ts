@@ -1,14 +1,14 @@
 import { VercelRequest, VercelResponse } from "@vercel/node";
 
-import { ApiError, methodNotAllowed, sendError, sendJson } from "../lib/api-response.js";
-import { validateUpdateCollectionPayload } from "../lib/collection-payload.js";
-import { UnauthorizedError, requireAuthenticatedUser } from "../middleware/auth.js";
+import { ApiError, methodNotAllowed, sendError, sendJson } from "../../src/server/lib/api-response.js";
+import { validateUpdateCollectionPayload } from "../../src/server/lib/collection-payload.js";
+import { UnauthorizedError, requireAuthenticatedUser } from "../../src/server/middleware/auth.js";
 import {
   deleteCollection,
   findCollectionById,
   toPublicCollection,
   updateCollection,
-} from "../models/collection.js";
+} from "../../src/server/models/collection.js";
 
 const getCollectionIdFromRequest = (request: VercelRequest): string => {
   const rawId = request.query.id;

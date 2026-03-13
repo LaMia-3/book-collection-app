@@ -1,13 +1,13 @@
 import { VercelRequest, VercelResponse } from "@vercel/node";
 
-import { ApiError, methodNotAllowed, sendError, sendJson } from "./lib/api-response.js";
-import { validateUpdateUserSettingsPayload } from "./lib/user-settings-payload.js";
-import { UnauthorizedError, requireAuthenticatedUser } from "./middleware/auth.js";
+import { ApiError, methodNotAllowed, sendError, sendJson } from "../src/server/lib/api-response.js";
+import { validateUpdateUserSettingsPayload } from "../src/server/lib/user-settings-payload.js";
+import { UnauthorizedError, requireAuthenticatedUser } from "../src/server/middleware/auth.js";
 import {
   findUserSettingsByUserId,
   toPublicUserSettings,
   upsertUserSettings,
-} from "./models/user-settings.js";
+} from "../src/server/models/user-settings.js";
 
 export default async function handler(
   request: VercelRequest,

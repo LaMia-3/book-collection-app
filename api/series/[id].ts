@@ -1,14 +1,14 @@
 import { VercelRequest, VercelResponse } from "@vercel/node";
 
-import { ApiError, methodNotAllowed, sendError, sendJson } from "../lib/api-response.js";
-import { validateUpdateSeriesPayload } from "../lib/series-payload.js";
-import { UnauthorizedError, requireAuthenticatedUser } from "../middleware/auth.js";
+import { ApiError, methodNotAllowed, sendError, sendJson } from "../../src/server/lib/api-response.js";
+import { validateUpdateSeriesPayload } from "../../src/server/lib/series-payload.js";
+import { UnauthorizedError, requireAuthenticatedUser } from "../../src/server/middleware/auth.js";
 import {
   deleteSeries,
   findSeriesById,
   toPublicSeries,
   updateSeries,
-} from "../models/series.js";
+} from "../../src/server/models/series.js";
 
 const getSeriesIdFromRequest = (request: VercelRequest): string => {
   const rawId = request.query.id;

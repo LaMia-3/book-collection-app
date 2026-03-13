@@ -1,14 +1,14 @@
 import { VercelRequest, VercelResponse } from "@vercel/node";
 
-import { ApiError, methodNotAllowed, sendError, sendJson } from "../lib/api-response.js";
-import { validateCreateCollectionPayload } from "../lib/collection-payload.js";
-import { UnauthorizedError, requireAuthenticatedUser } from "../middleware/auth.js";
+import { ApiError, methodNotAllowed, sendError, sendJson } from "../../src/server/lib/api-response.js";
+import { validateCreateCollectionPayload } from "../../src/server/lib/collection-payload.js";
+import { UnauthorizedError, requireAuthenticatedUser } from "../../src/server/middleware/auth.js";
 import {
   findCollectionById,
   insertCollection,
   listCollectionsByUserId,
   toPublicCollection,
-} from "../models/collection.js";
+} from "../../src/server/models/collection.js";
 
 export default async function handler(
   request: VercelRequest,

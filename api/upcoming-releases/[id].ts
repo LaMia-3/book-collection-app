@@ -1,16 +1,16 @@
 import { VercelRequest, VercelResponse } from "@vercel/node";
 
-import { ApiError, methodNotAllowed, sendError, sendJson } from "../lib/api-response.js";
+import { ApiError, methodNotAllowed, sendError, sendJson } from "../../src/server/lib/api-response.js";
 import {
   validateUpdateUpcomingReleasePayload,
-} from "../lib/upcoming-release-payload.js";
-import { UnauthorizedError, requireAuthenticatedUser } from "../middleware/auth.js";
+} from "../../src/server/lib/upcoming-release-payload.js";
+import { UnauthorizedError, requireAuthenticatedUser } from "../../src/server/middleware/auth.js";
 import {
   deleteUpcomingRelease,
   findUpcomingReleaseById,
   toPublicUpcomingRelease,
   updateUpcomingRelease,
-} from "../models/upcoming-release.js";
+} from "../../src/server/models/upcoming-release.js";
 
 const resolveUpcomingReleaseId = (request: VercelRequest): string => {
   const value = request.query.id;

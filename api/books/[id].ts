@@ -1,14 +1,14 @@
 import { VercelRequest, VercelResponse } from "@vercel/node";
 
-import { ApiError, methodNotAllowed, sendError, sendJson } from "../lib/api-response.js";
-import { validateUpdateBookPayload } from "../lib/book-payload.js";
-import { UnauthorizedError, requireAuthenticatedUser } from "../middleware/auth.js";
+import { ApiError, methodNotAllowed, sendError, sendJson } from "../../src/server/lib/api-response.js";
+import { validateUpdateBookPayload } from "../../src/server/lib/book-payload.js";
+import { UnauthorizedError, requireAuthenticatedUser } from "../../src/server/middleware/auth.js";
 import {
   deleteBook,
   findBookById,
   toPublicBook,
   updateBook,
-} from "../models/book.js";
+} from "../../src/server/models/book.js";
 
 const getBookIdFromRequest = (request: VercelRequest): string => {
   const rawId = request.query.id;

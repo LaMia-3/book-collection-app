@@ -1,16 +1,16 @@
 import { VercelRequest, VercelResponse } from "@vercel/node";
 
-import { ApiError, methodNotAllowed, sendError, sendJson } from "../lib/api-response.js";
+import { ApiError, methodNotAllowed, sendError, sendJson } from "../../src/server/lib/api-response.js";
 import {
   validateCreateBookPayload,
-} from "../lib/book-payload.js";
-import { UnauthorizedError, requireAuthenticatedUser } from "../middleware/auth.js";
+} from "../../src/server/lib/book-payload.js";
+import { UnauthorizedError, requireAuthenticatedUser } from "../../src/server/middleware/auth.js";
 import {
   findBookById,
   insertBook,
   listBooksByUserId,
   toPublicBook,
-} from "../models/book.js";
+} from "../../src/server/models/book.js";
 
 export default async function handler(
   request: VercelRequest,
