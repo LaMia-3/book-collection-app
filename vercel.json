@@ -1,6 +1,30 @@
 {
   "routes": [
     {
+      "src": "/api/auth/(login|register|me)",
+      "dest": "/api/auth/[action]?action=$1"
+    },
+    {
+      "src": "/api/books/([^/]+)",
+      "dest": "/api/books/[id]?id=$1"
+    },
+    {
+      "src": "/api/collections/([^/]+)",
+      "dest": "/api/collections/[id]?id=$1"
+    },
+    {
+      "src": "/api/series/([^/]+)",
+      "dest": "/api/series/[id]?id=$1"
+    },
+    {
+      "src": "/api/notifications/([^/]+)",
+      "dest": "/api/notifications/[id]?id=$1"
+    },
+    {
+      "src": "/api/upcoming-releases/([^/]+)",
+      "dest": "/api/upcoming-releases/[id]?id=$1"
+    },
+    {
       "handle": "filesystem"
     },
     {
