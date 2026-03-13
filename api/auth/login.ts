@@ -1,13 +1,13 @@
 import { VercelRequest, VercelResponse } from "@vercel/node";
 
-import { ApiError, methodNotAllowed, sendError, sendJson } from "../lib/api-response";
-import { signAuthToken } from "../lib/auth";
+import { ApiError, methodNotAllowed, sendError, sendJson } from "../lib/api-response.js";
+import { signAuthToken } from "../lib/auth.js";
 import {
   CredentialValidationError,
   validateLoginCredentials,
   verifyPassword,
-} from "../lib/password";
-import { findUserByEmail, toPublicUser } from "../models/user";
+} from "../lib/password.js";
+import { findUserByEmail, toPublicUser } from "../models/user.js";
 
 type LoginRequestBody = {
   email?: string;

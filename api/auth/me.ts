@@ -1,8 +1,8 @@
 import { VercelRequest, VercelResponse } from "@vercel/node";
 
-import { ApiError, methodNotAllowed, sendError, sendJson } from "../lib/api-response";
-import { UnauthorizedError, requireAuthenticatedUser } from "../middleware/auth";
-import { findUserById, toPublicUser } from "../models/user";
+import { ApiError, methodNotAllowed, sendError, sendJson } from "../lib/api-response.js";
+import { UnauthorizedError, requireAuthenticatedUser } from "../middleware/auth.js";
+import { findUserById, toPublicUser } from "../models/user.js";
 
 export default async function handler(
   request: VercelRequest,

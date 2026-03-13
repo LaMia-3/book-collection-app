@@ -1,6 +1,6 @@
 import { IncomingHttpHeaders } from "http";
 
-import { AuthTokenPayload, verifyAuthToken } from "../lib/auth";
+import { AuthTokenPayload, verifyAuthToken } from "../lib/auth.js";
 
 type HeaderSource =
   | Headers

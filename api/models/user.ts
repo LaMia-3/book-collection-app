@@ -1,6 +1,6 @@
 import { Collection, ObjectId } from "mongodb";
 
-import { getMongoDb } from "../lib/mongodb";
+import { getMongoDb } from "../lib/mongodb.js";
 
 export const USERS_COLLECTION = "users";
 let ensureUserIndexesPromise: Promise<string> | null = null;
