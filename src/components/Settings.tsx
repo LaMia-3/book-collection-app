@@ -23,13 +23,15 @@ import { Separator } from '@/components/ui/separator';
 import { Card } from '@/components/ui/card';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
+import { useNavigate } from 'react-router-dom';
 import { ImportExportView } from './ImportExportView';
-import { Settings as SettingsIcon, Trash2, AlertTriangle, Palette, Trophy, BookOpen, ArrowUp, ArrowDown, ListOrdered, Wrench, Sun, Moon, Monitor, Sliders, FileUp, FileDown } from 'lucide-react';
+import { Settings as SettingsIcon, Trash2, AlertTriangle, Palette, Trophy, BookOpen, ArrowUp, ArrowDown, ListOrdered, Wrench, Sun, Moon, Monitor, Sliders, FileUp, FileDown, LogOut } from 'lucide-react';
 import { useSettings } from '@/contexts/SettingsContext';
 import { useTheme } from '@/components/ui-common/ThemeProvider';
 import { PaletteSelector } from '@/components/PaletteSelector';
 import { GoalsTab } from '@/components/GoalsTab';
 import { indexedDBService } from '@/services/storage/IndexedDBService';
+import { useAuth } from '@/hooks/useAuth';
 
 interface SettingsProps {
   isOpen: boolean;
@@ -61,6 +63,8 @@ export const Settings: React.FC<SettingsProps> = ({
   const [repairStatus, setRepairStatus] = useState<{success: boolean; message: string} | null>(null);
   const { settings, updateSettings, isLoading } = useSettings();
   const { colorMode, setColorMode } = useTheme();
+  const { logout } = useAuth();
+  const navigate = useNavigate();
   
   // Local form state for settings
   const [preferredName, setPreferredName] = useState('');
@@ -177,6 +181,12 @@ export const Settings: React.FC<SettingsProps> = ({
     }
   };
 
+  const handleLogout = () => {
+    logout();
+    onClose();
+    navigate('/login', { replace: true });
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
@@ -256,6 +266,16 @@ export const Settings: React.FC<SettingsProps> = ({
                   Delete Library
                 </span>
               </TabsTrigger>
+              <Button
+                variant="ghost"
+                className="justify-start w-40 px-3 text-amber-700 hover:text-amber-800"
+                onClick={handleLogout}
+              >
+                <span className="flex items-center gap-2">
+                  <LogOut className="h-4 w-4" />
+                  Log Out
+                </span>
+              </Button>
             </TabsList>
 
             <div className="flex-1 border-l pl-6">
