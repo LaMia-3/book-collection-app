@@ -8,11 +8,8 @@ import { Check, AlertCircle, Database } from 'lucide-react';
 import { Book } from '@/types/book';
 import { enhancedStorageService } from '@/services/storage/EnhancedStorageService';
 import { seriesService } from '@/services/SeriesService';
-import { bookRepository } from '@/repositories/BookRepository';
-import { seriesRepository } from '@/repositories/SeriesRepository';
-import { collectionRepository } from '@/repositories/CollectionRepository';
-import { Collection } from '@/types/collection';
-import { Series } from '@/types/series';
+import type { Collection } from '@/types/collection';
+import type { Series } from '@/types/series';
 import { useAuth } from '@/hooks/useAuth';
 import googleBooksProvider from '@/services/api/GoogleBooksProvider';
 import openLibraryProvider from '@/services/api/OpenLibraryProvider';
@@ -516,7 +513,26 @@ export function WorkflowTester() {
     ? 'MongoDB-backed account data through repositories'
     : 'the local repository path because there is no authenticated MongoDB session';
 
+  const loadRepositories = async () => {
+    const [
+      { bookRepository },
+      { seriesRepository },
+      { collectionRepository },
+    ] = await Promise.all([
+      import('@/repositories/BookRepository'),
+      import('@/repositories/SeriesRepository'),
+      import('@/repositories/CollectionRepository'),
+    ]);
+
+    return {
+      bookRepository,
+      seriesRepository,
+      collectionRepository,
+    };
+  };
+
   const upsertWorkflowBook = async (book: Book): Promise<Book> => {
+    const { bookRepository } = await loadRepositories();
     const existingBook = await bookRepository.getById(book.id);
     return existingBook
       ? (await bookRepository.update(book.id, book))
@@ -524,6 +540,7 @@ export function WorkflowTester() {
   };
 
   const upsertWorkflowSeries = async (series: Series): Promise<Series> => {
+    const { seriesRepository } = await loadRepositories();
     const existingSeries = await seriesRepository.getById(series.id);
     return existingSeries
       ? ((await seriesRepository.update(series.id, series)) || series)
@@ -531,6 +548,7 @@ export function WorkflowTester() {
   };
 
   const upsertWorkflowCollection = async (collection: Collection): Promise<Collection> => {
+    const { collectionRepository } = await loadRepositories();
     const existingCollection = await collectionRepository.getById(collection.id);
     return existingCollection
       ? ((await collectionRepository.update(collection.id, {
@@ -544,6 +562,7 @@ export function WorkflowTester() {
   };
 
   const cleanupWorkflowDataset = async () => {
+    const { bookRepository, seriesRepository, collectionRepository } = await loadRepositories();
     const [books, series, collections] = await Promise.all([
       bookRepository.getAll(),
       seriesRepository.getAll(),
@@ -659,6 +678,7 @@ export function WorkflowTester() {
   };
 
   const createRepositoryWorkflowSeries = async (books: Book[]) => {
+    const { bookRepository } = await loadRepositories();
     for (const seriesDefinition of SERIES_DEFINITIONS.slice(0, 4)) {
       const seriesBooks = books.filter((book) =>
         seriesDefinition.searchTerms.some((term) =>
@@ -703,6 +723,7 @@ export function WorkflowTester() {
   };
 
   const createRepositoryWorkflowCollections = async (books: Book[]) => {
+    const { bookRepository } = await loadRepositories();
     for (const blueprint of WORKFLOW_COLLECTION_BLUEPRINTS) {
       const collectionBooks = books.filter(blueprint.matcher);
 
@@ -732,6 +753,7 @@ export function WorkflowTester() {
   };
 
   const verifyRepositoryWorkflowData = async () => {
+    const { bookRepository, seriesRepository, collectionRepository } = await loadRepositories();
     const [books, series, collections] = await Promise.all([
       bookRepository.getAll(),
       seriesRepository.getAll(),
