@@ -8,6 +8,12 @@ import { Check, AlertCircle, Database } from 'lucide-react';
 import { Book } from '@/types/book';
 import { enhancedStorageService } from '@/services/storage/EnhancedStorageService';
 import { seriesService } from '@/services/SeriesService';
+import { bookRepository } from '@/repositories/BookRepository';
+import { seriesRepository } from '@/repositories/SeriesRepository';
+import { collectionRepository } from '@/repositories/CollectionRepository';
+import { Collection } from '@/types/collection';
+import { Series } from '@/types/series';
+import { useAuth } from '@/hooks/useAuth';
 import googleBooksProvider from '@/services/api/GoogleBooksProvider';
 import openLibraryProvider from '@/services/api/OpenLibraryProvider';
 import { Badge } from '@/components/ui/badge';
@@ -396,11 +402,102 @@ interface TestResult {
   message: string;
 }
 
+const WORKFLOW_TEST_PREFIX = 'workflow-test';
+const LEGACY_SEED_PREFIX = 'legacy-migration-seed';
+const WORKFLOW_SEARCHES = [
+  ...GOOGLE_BOOK_SEARCHES.slice(0, 5).map((search) => ({ ...search, provider: 'google' as const })),
+  ...OPEN_LIBRARY_BOOK_SEARCHES.slice(0, 5).map((search) => ({ ...search, provider: 'openlib' as const })),
+];
+
+const WORKFLOW_COLLECTION_BLUEPRINTS = [
+  {
+    id: `${WORKFLOW_TEST_PREFIX}-collection-current-reads`,
+    name: 'Workflow Test Current Reads',
+    description: 'Repository-backed sample books that are still in progress.',
+    color: '#2563eb',
+    matcher: (book: Book) => book.status === 'reading' || book.status === 'want-to-read' || book.status === 'on-hold',
+  },
+  {
+    id: `${WORKFLOW_TEST_PREFIX}-collection-favorites`,
+    name: 'Workflow Test Favorites',
+    description: 'Repository-backed sample favorites for workflow coverage.',
+    color: '#d97706',
+    matcher: (book: Book) => book.status === 'completed' && (book.rating || 0) >= 4,
+  },
+];
+
+const LEGACY_SEED_BOOKS = [
+  { title: 'Legacy Seed Book One', author: 'Archive Author', status: 'completed', rating: 5, genre: ['fantasy'] },
+  { title: 'Legacy Seed Book Two', author: 'Archive Author', status: 'completed', rating: 4, genre: ['fantasy'] },
+  { title: 'Legacy Seed Book Three', author: 'Archive Author', status: 'reading', progress: 0.35, genre: ['fantasy'] },
+  { title: 'Legacy Seed Book Four', author: 'Migration Writer', status: 'want-to-read', genre: ['science fiction'] },
+  { title: 'Legacy Seed Book Five', author: 'Migration Writer', status: 'completed', rating: 4, genre: ['science fiction'] },
+  { title: 'Legacy Seed Book Six', author: 'Migration Writer', status: 'on-hold', progress: 0.5, genre: ['science fiction'] },
+  { title: 'Legacy Seed Book Seven', author: 'Browser Novelist', status: 'completed', rating: 3, genre: ['mystery'] },
+  { title: 'Legacy Seed Book Eight', author: 'Browser Novelist', status: 'dnf', genre: ['mystery'] },
+  { title: 'Legacy Seed Book Nine', author: 'Standalone Poet', status: 'want-to-read', genre: ['poetry'] },
+  { title: 'Legacy Seed Book Ten', author: 'Standalone Poet', status: 'completed', rating: 5, genre: ['poetry'] },
+] as const;
+
+const LEGACY_SEED_SERIES = [
+  {
+    id: `${LEGACY_SEED_PREFIX}-series-archive`,
+    name: 'Legacy Seed Archive',
+    author: 'Archive Author',
+    description: 'Local-only series data for migration testing.',
+    genre: ['fantasy'],
+    bookIndexes: [0, 1, 2],
+  },
+  {
+    id: `${LEGACY_SEED_PREFIX}-series-cosmos`,
+    name: 'Legacy Seed Cosmos',
+    author: 'Migration Writer',
+    description: 'Local-only science fiction series for migration testing.',
+    genre: ['science fiction'],
+    bookIndexes: [3, 4, 5],
+  },
+  {
+    id: `${LEGACY_SEED_PREFIX}-series-detective`,
+    name: 'Legacy Seed Detective Files',
+    author: 'Browser Novelist',
+    description: 'Local-only mystery series for migration testing.',
+    genre: ['mystery'],
+    bookIndexes: [6, 7],
+  },
+] as const;
+
+const LEGACY_SEED_COLLECTIONS = [
+  {
+    id: `${LEGACY_SEED_PREFIX}-collection-favorites`,
+    name: 'Legacy Seed Favorites',
+    description: 'Legacy browser collection for migration coverage.',
+    color: '#ea580c',
+    bookIndexes: [0, 4, 6, 9],
+  },
+  {
+    id: `${LEGACY_SEED_PREFIX}-collection-tbr`,
+    name: 'Legacy Seed TBR',
+    description: 'Legacy browser collection of unread or in-progress books.',
+    color: '#0891b2',
+    bookIndexes: [2, 3, 5, 8],
+  },
+] as const;
+
+const slugify = (value: string): string =>
+  value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+
+const buildWorkflowBookId = (provider: 'google' | 'openlib', sourceId: string): string =>
+  `${WORKFLOW_TEST_PREFIX}-book-${provider}-${slugify(sourceId)}`;
+
+const buildWorkflowSeriesId = (seriesName: string): string =>
+  `${WORKFLOW_TEST_PREFIX}-series-${slugify(seriesName)}`;
+
 /**
  * Workflow Tester Component
  * Tests multiple workflows by adding books from different API providers and creating series
  */
 export function WorkflowTester() {
+  const { isAuthenticated } = useAuth();
   const [running, setRunning] = useState(false);
   const [results, setResults] = useState<TestResult[]>([]);
   const [progress, setProgress] = useState(0);
@@ -413,6 +510,358 @@ export function WorkflowTester() {
   // Helper to add test result
   const addResult = (step: string, success: boolean, message: string) => {
     setResults(prev => [...prev, { step, success, message }]);
+  };
+
+  const workflowTargetLabel = isAuthenticated
+    ? 'MongoDB-backed account data through repositories'
+    : 'the local repository path because there is no authenticated MongoDB session';
+
+  const upsertWorkflowBook = async (book: Book): Promise<Book> => {
+    const existingBook = await bookRepository.getById(book.id);
+    return existingBook
+      ? (await bookRepository.update(book.id, book))
+      : (await bookRepository.create(book));
+  };
+
+  const upsertWorkflowSeries = async (series: Series): Promise<Series> => {
+    const existingSeries = await seriesRepository.getById(series.id);
+    return existingSeries
+      ? ((await seriesRepository.update(series.id, series)) || series)
+      : (await seriesRepository.add(series));
+  };
+
+  const upsertWorkflowCollection = async (collection: Collection): Promise<Collection> => {
+    const existingCollection = await collectionRepository.getById(collection.id);
+    return existingCollection
+      ? ((await collectionRepository.update(collection.id, {
+          name: collection.name,
+          description: collection.description,
+          bookIds: collection.bookIds,
+          color: collection.color,
+          imageUrl: collection.imageUrl,
+        })) || collection)
+      : (await collectionRepository.add(collection));
+  };
+
+  const cleanupWorkflowDataset = async () => {
+    const [books, series, collections] = await Promise.all([
+      bookRepository.getAll(),
+      seriesRepository.getAll(),
+      collectionRepository.getAll(),
+    ]);
+
+    for (const collection of collections.filter((item) => item.id.startsWith(WORKFLOW_TEST_PREFIX))) {
+      await collectionRepository.delete(collection.id);
+    }
+
+    for (const series of series.filter((item) => item.id.startsWith(WORKFLOW_TEST_PREFIX))) {
+      await seriesRepository.delete(series.id);
+    }
+
+    for (const book of books.filter((item) => item.id.startsWith(WORKFLOW_TEST_PREFIX))) {
+      await bookRepository.delete(book.id);
+    }
+  };
+
+  const cleanupLegacySeedDataset = async () => {
+    await enhancedStorageService.initialize();
+
+    const [books, series, collections] = await Promise.all([
+      enhancedStorageService.getBooks(),
+      enhancedStorageService.getSeries(),
+      enhancedStorageService.getCollections(),
+    ]);
+
+    for (const collection of collections.filter((item) => item.id.startsWith(LEGACY_SEED_PREFIX))) {
+      await enhancedStorageService.deleteCollection(collection.id);
+    }
+
+    for (const seriesItem of series.filter((item) => item.id.startsWith(LEGACY_SEED_PREFIX))) {
+      await enhancedStorageService.deleteSeries(seriesItem.id);
+    }
+
+    for (const book of books.filter((item) => item.id.startsWith(LEGACY_SEED_PREFIX))) {
+      await enhancedStorageService.deleteBook(book.id);
+    }
+  };
+
+  const fetchRepositoryWorkflowBooks = async (): Promise<Book[]> => {
+    addResult('Repository Workflow', true, `Writing sample workflow data into ${workflowTargetLabel}.`);
+    const importedBooks: Book[] = [];
+    const statusCycle: Array<Book['status']> = [
+      'reading',
+      'completed',
+      'want-to-read',
+      'completed',
+      'on-hold',
+      'completed',
+      'dnf',
+      'completed',
+      'want-to-read',
+      'completed',
+    ];
+
+    for (let index = 0; index < WORKFLOW_SEARCHES.length; index += 1) {
+      const search = WORKFLOW_SEARCHES[index];
+
+      try {
+        const provider = search.provider === 'google' ? googleBooksProvider : openLibraryProvider;
+        const providerName = search.provider === 'google' ? 'Google Books' : 'Open Library';
+        const searchResult = await provider.searchBooks({
+          query: search.query,
+          type: search.type as 'title' | 'author' | 'isbn',
+          limit: 1,
+        });
+
+        if (searchResult.books.length === 0) {
+          addResult(`${providerName} ${index + 1}`, false, `No results found for "${search.query}".`);
+          continue;
+        }
+
+        const bookItem = searchResult.books[0];
+        const bookDetails = await provider.getBookDetails(bookItem.id);
+        const matchedSeries = SERIES_DEFINITIONS.find((seriesDefinition) =>
+          seriesDefinition.searchTerms.some((term) =>
+            bookDetails.title.toLowerCase().includes(term.toLowerCase()),
+          ),
+        );
+        const status = statusCycle[index % statusCycle.length] || 'completed';
+        const persistedBook = await upsertWorkflowBook({
+          ...bookDetails,
+          id: buildWorkflowBookId(search.provider, bookItem.id),
+          sourceType: search.provider,
+          sourceId: bookItem.id,
+          status,
+          completedDate: status === 'completed' ? getRandomCompletionDate() : undefined,
+          rating: status === 'completed' ? ((index % 3) + 3) : undefined,
+          progress: status === 'reading' ? 0.4 : status === 'on-hold' ? 0.6 : undefined,
+          isPartOfSeries: Boolean(matchedSeries),
+          _legacySeriesName: matchedSeries?.name,
+          collectionIds: [],
+          spineColor: bookDetails.spineColor || ((index % 8) + 1),
+          addedDate: bookDetails.addedDate || new Date().toISOString(),
+        });
+
+        importedBooks.push(persistedBook);
+        addResult(`${providerName} ${index + 1}`, true, `Saved "${persistedBook.title}" to ${isAuthenticated ? 'MongoDB' : 'the local repository path'}.`);
+      } catch (error) {
+        addResult(
+          `${search.provider === 'google' ? 'Google Books' : 'Open Library'} ${index + 1}`,
+          false,
+          error instanceof Error ? error.message : String(error),
+        );
+      }
+
+      setProgress(20 + ((index + 1) / WORKFLOW_SEARCHES.length) * 35);
+    }
+
+    return importedBooks;
+  };
+
+  const createRepositoryWorkflowSeries = async (books: Book[]) => {
+    for (const seriesDefinition of SERIES_DEFINITIONS.slice(0, 4)) {
+      const seriesBooks = books.filter((book) =>
+        seriesDefinition.searchTerms.some((term) =>
+          book.title.toLowerCase().includes(term.toLowerCase()),
+        ),
+      );
+
+      if (seriesBooks.length === 0) {
+        continue;
+      }
+
+      const seriesId = buildWorkflowSeriesId(seriesDefinition.name);
+      await upsertWorkflowSeries({
+        id: seriesId,
+        name: seriesDefinition.name,
+        author: seriesDefinition.author,
+        description: seriesDefinition.description,
+        books: seriesBooks.map((book) => book.id),
+        totalBooks: seriesBooks.length,
+        readingOrder: 'publication',
+        status: seriesDefinition.status as 'ongoing' | 'completed' | 'cancelled',
+        genre: [...seriesDefinition.genre],
+        isTracked: false,
+        hasUpcoming: false,
+        coverImage: seriesBooks[0].thumbnail,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      for (const [bookIndex, book] of seriesBooks.entries()) {
+        await bookRepository.update(book.id, {
+          isPartOfSeries: true,
+          seriesId,
+          volumeNumber: bookIndex + 1,
+          seriesPosition: bookIndex + 1,
+          _legacySeriesName: seriesDefinition.name,
+        });
+      }
+
+      addResult(`Series: ${seriesDefinition.name}`, true, `Created or updated series with ${seriesBooks.length} repository-backed books.`);
+    }
+  };
+
+  const createRepositoryWorkflowCollections = async (books: Book[]) => {
+    for (const blueprint of WORKFLOW_COLLECTION_BLUEPRINTS) {
+      const collectionBooks = books.filter(blueprint.matcher);
+
+      if (collectionBooks.length === 0) {
+        continue;
+      }
+
+      await upsertWorkflowCollection({
+        id: blueprint.id,
+        name: blueprint.name,
+        description: blueprint.description,
+        bookIds: collectionBooks.map((book) => book.id),
+        color: blueprint.color,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      for (const book of collectionBooks) {
+        const nextCollectionIds = Array.from(new Set([...(book.collectionIds || []), blueprint.id]));
+        await bookRepository.update(book.id, {
+          collectionIds: nextCollectionIds,
+        });
+      }
+
+      addResult(`Collection: ${blueprint.name}`, true, `Created or updated collection with ${collectionBooks.length} books.`);
+    }
+  };
+
+  const verifyRepositoryWorkflowData = async () => {
+    const [books, series, collections] = await Promise.all([
+      bookRepository.getAll(),
+      seriesRepository.getAll(),
+      collectionRepository.getAll(),
+    ]);
+
+    const workflowBookCount = books.filter((book) => book.id.startsWith(WORKFLOW_TEST_PREFIX)).length;
+    const workflowSeriesCount = series.filter((item) => item.id.startsWith(WORKFLOW_TEST_PREFIX)).length;
+    const workflowCollectionCount = collections.filter((item) => item.id.startsWith(WORKFLOW_TEST_PREFIX)).length;
+
+    addResult(
+      'Repository Verification',
+      true,
+      `Verified ${workflowBookCount} books, ${workflowSeriesCount} series, and ${workflowCollectionCount} collections in ${isAuthenticated ? 'MongoDB-backed account data' : 'the local repository path'}.`,
+    );
+  };
+
+  const buildLegacySeedBooks = (): Book[] => {
+    return LEGACY_SEED_BOOKS.map((template, index) => {
+      const seriesDefinition = LEGACY_SEED_SERIES.find((seriesItem) =>
+        seriesItem.bookIndexes.includes(index),
+      );
+      const collectionIds = LEGACY_SEED_COLLECTIONS
+        .filter((collectionItem) => collectionItem.bookIndexes.includes(index))
+        .map((collectionItem) => collectionItem.id);
+
+      return {
+        id: `${LEGACY_SEED_PREFIX}-book-${index + 1}`,
+        title: template.title,
+        author: template.author,
+        genre: [...template.genre],
+        description: `${template.title} was generated directly in IndexedDB for migration testing.`,
+        status: template.status,
+        rating: template.rating,
+        progress: template.progress,
+        isPartOfSeries: Boolean(seriesDefinition),
+        seriesId: seriesDefinition?.id,
+        seriesPosition: seriesDefinition
+          ? seriesDefinition.bookIndexes.indexOf(index) + 1
+          : undefined,
+        volumeNumber: seriesDefinition
+          ? seriesDefinition.bookIndexes.indexOf(index) + 1
+          : undefined,
+        _legacySeriesName: seriesDefinition?.name,
+        collectionIds,
+        spineColor: ((index % 8) + 1),
+        addedDate: new Date(Date.now() - (index * 86400000)).toISOString(),
+      };
+    });
+  };
+
+  const runLegacyIndexedDbSeedTest = async () => {
+    setRunning(true);
+    setResults([]);
+    setProgress(0);
+
+    try {
+      addResult('Legacy Seed', true, 'Writing a migration-only dataset directly into IndexedDB.');
+      await cleanupLegacySeedDataset();
+      await enhancedStorageService.initialize();
+      setProgress(10);
+
+      const seededBooks = buildLegacySeedBooks();
+      for (const [index, book] of seededBooks.entries()) {
+        await enhancedStorageService.saveBook(book);
+        addResult(`Legacy Book ${index + 1}`, true, `Seeded "${book.title}" into IndexedDB.`);
+        setProgress(10 + ((index + 1) / seededBooks.length) * 45);
+      }
+
+      for (const seriesDefinition of LEGACY_SEED_SERIES) {
+        const seriesBooks = seededBooks.filter((book) => seriesDefinition.bookIndexes.includes(seededBooks.indexOf(book)));
+        await enhancedStorageService.saveSeries({
+          id: seriesDefinition.id,
+          name: seriesDefinition.name,
+          author: seriesDefinition.author,
+          description: seriesDefinition.description,
+          books: seriesBooks.map((book) => book.id),
+          totalBooks: seriesBooks.length,
+          readingOrder: 'publication',
+          status: 'ongoing',
+          genre: [...seriesDefinition.genre],
+          isTracked: false,
+          hasUpcoming: false,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          dateAdded: new Date().toISOString(),
+          lastModified: new Date().toISOString(),
+        });
+        addResult(`Legacy Series: ${seriesDefinition.name}`, true, `Seeded local series with ${seriesBooks.length} books.`);
+      }
+
+      setProgress(70);
+
+      for (const collectionDefinition of LEGACY_SEED_COLLECTIONS) {
+        const collectionBooks = seededBooks.filter((book) => collectionDefinition.bookIndexes.includes(seededBooks.indexOf(book)));
+        await enhancedStorageService.saveCollection({
+          id: collectionDefinition.id,
+          name: collectionDefinition.name,
+          description: collectionDefinition.description,
+          bookIds: collectionBooks.map((book) => book.id),
+          color: collectionDefinition.color,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        });
+        addResult(`Legacy Collection: ${collectionDefinition.name}`, true, `Seeded local collection with ${collectionBooks.length} books.`);
+      }
+
+      setProgress(90);
+
+      const [storedBooks, storedSeries, storedCollections] = await Promise.all([
+        enhancedStorageService.getBooks(),
+        enhancedStorageService.getSeries(),
+        enhancedStorageService.getCollections(),
+      ]);
+      const legacyBooksCount = storedBooks.filter((book) => book.id.startsWith(LEGACY_SEED_PREFIX)).length;
+      const legacySeriesCount = storedSeries.filter((seriesItem) => seriesItem.id.startsWith(LEGACY_SEED_PREFIX)).length;
+      const legacyCollectionsCount = storedCollections.filter((collectionItem) => collectionItem.id.startsWith(LEGACY_SEED_PREFIX)).length;
+
+      addResult(
+        'Legacy Verification',
+        true,
+        `Verified ${legacyBooksCount} IndexedDB books, ${legacySeriesCount} IndexedDB series, and ${legacyCollectionsCount} IndexedDB collections for migration testing.`,
+      );
+      setProgress(100);
+      addResult('Complete', true, 'Legacy migration seed completed successfully.');
+    } catch (error) {
+      addResult('Error', false, `Legacy seed failed: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setRunning(false);
+    }
   };
 
   // Add books from Google Books API - distributing the reading status appropriately
@@ -943,41 +1392,22 @@ export function WorkflowTester() {
     setProgress(0);
     
     try {
-      // Clear previous data
-      addResult("Database Reset", true, "Clearing previous test data...");
-      await enhancedStorageService.initialize();
-      
-      // Clear all books
-      const existingBooks = await enhancedStorageService.getBooks();
-      for (const book of existingBooks) {
-        if (book.id) {
-          await enhancedStorageService.deleteBook(book.id);
-        }
-      }
-      
-      // Clear all series
-      const existingSeries = await seriesService.getAllSeries();
-      for (const series of existingSeries) {
-        await seriesService.deleteSeries(series.id);
-      }
-      
-      // Initialize storage
-      addResult("Initialization", true, "Starting workflow test...");
-      
-      // Step 1: Import books from multiple API providers with alternating requests
-      setProgress(5);
-      await importBooksFromMultipleAPIs();
-      
-      // Step 2: Create series and assign books
-      setProgress(90);
-      await createAndAssignSeries();
-      
-      // Final step: Verify data
+      addResult('Initialization', true, 'Preparing a namespaced repository-backed workflow dataset.');
+      await cleanupWorkflowDataset();
+      setProgress(10);
+
+      const workflowBooks = await fetchRepositoryWorkflowBooks();
+      setProgress(60);
+
+      await createRepositoryWorkflowSeries(workflowBooks);
+      setProgress(80);
+
+      await createRepositoryWorkflowCollections(workflowBooks);
       setProgress(95);
-      await verifyData();
-      
+
+      await verifyRepositoryWorkflowData();
       setProgress(100);
-      addResult("Complete", true, "Workflow test completed successfully!");
+      addResult('Complete', true, 'Repository-backed workflow test completed successfully.');
       
     } catch (error) {
       console.error("Workflow test failed:", error);
@@ -998,7 +1428,8 @@ export function WorkflowTester() {
       
       <Tabs defaultValue="workflow" className="mb-6">
         <TabsList className="mb-4">
-          <TabsTrigger value="workflow">Book & Series Workflow</TabsTrigger>
+          <TabsTrigger value="workflow">Repository Workflow</TabsTrigger>
+          <TabsTrigger value="legacy-seed">Legacy Migration Seed</TabsTrigger>
           <TabsTrigger value="collections">
             <span className="flex items-center gap-1">
               <Database className="h-4 w-4" />
@@ -1010,7 +1441,10 @@ export function WorkflowTester() {
         <TabsContent value="workflow">
           <div className="space-y-4">
             <p className="text-muted-foreground">
-              Tests the complete workflow of adding books, creating series, and verifying data.
+              Writes a namespaced test dataset through repositories. In authenticated sessions this lands in MongoDB-backed account data; otherwise it uses the local repository fallback.
+            </p>
+            <p className="text-sm text-muted-foreground">
+              This workflow now creates books, series, and collections without clearing unrelated user data.
             </p>
             
             <Button 
@@ -1018,7 +1452,7 @@ export function WorkflowTester() {
               disabled={running}
               className="mb-4"
             >
-              {running ? 'Running...' : 'Run Workflow Test'}
+              {running ? 'Running...' : 'Run Repository Workflow Test'}
             </Button>
             
             {running && (
@@ -1032,6 +1466,62 @@ export function WorkflowTester() {
               <Card className="mb-4">
                 <CardHeader>
                   <CardTitle>Test Results</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    {results.map((result, index) => (
+                      <Alert key={index} variant={result.success ? "default" : "destructive"}>
+                        <div className="flex items-start gap-2">
+                          {result.success ? <Check className="h-5 w-5 text-green-500" /> : <AlertCircle className="h-5 w-5" />}
+                          <div>
+                            <AlertTitle className="flex items-center gap-2">
+                              {result.step}
+                              {result.success ? 
+                                <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">Success</Badge> : 
+                                <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">Failed</Badge>
+                              }
+                            </AlertTitle>
+                            <AlertDescription>{result.message}</AlertDescription>
+                          </div>
+                        </div>
+                      </Alert>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="legacy-seed">
+          <div className="space-y-4">
+            <p className="text-muted-foreground">
+              Writes 10 books plus related series and collections directly into browser IndexedDB for migration testing.
+            </p>
+            <p className="text-sm text-muted-foreground">
+              This path is intentionally local-only. It does not write to MongoDB and is meant to seed legacy browser data that can later be imported.
+            </p>
+
+            <Button
+              onClick={runLegacyIndexedDbSeedTest}
+              disabled={running}
+              className="mb-4"
+              variant="outline"
+            >
+              {running ? 'Running...' : 'Seed 10 IndexedDB Records for Migration'}
+            </Button>
+
+            {running && (
+              <div className="mb-4">
+                <Progress value={progress} className="mb-2" />
+                <p className="text-sm text-center">{progress.toFixed(0)}% complete</p>
+              </div>
+            )}
+
+            {results.length > 0 && (
+              <Card className="mb-4">
+                <CardHeader>
+                  <CardTitle>Legacy Seed Results</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-2">
