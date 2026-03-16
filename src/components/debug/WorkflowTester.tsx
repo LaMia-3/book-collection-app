@@ -514,15 +514,9 @@ export function WorkflowTester() {
     : 'the local repository path because there is no authenticated MongoDB session';
 
   const loadRepositories = async () => {
-    const [
-      { bookRepository },
-      { seriesRepository },
-      { collectionRepository },
-    ] = await Promise.all([
-      import('@/repositories/BookRepository'),
-      import('@/repositories/SeriesRepository'),
-      import('@/repositories/CollectionRepository'),
-    ]);
+    const { bookRepository } = await import('@/repositories/BookRepository');
+    const { seriesRepository } = await import('@/repositories/SeriesRepository');
+    const { collectionRepository } = await import('@/repositories/CollectionRepository');
 
     return {
       bookRepository,
