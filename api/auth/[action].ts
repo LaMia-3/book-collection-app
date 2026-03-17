@@ -71,6 +71,19 @@ const resolveAction = (request: VercelRequest): string => {
   return action;
 };
 
+const getQueryValue = (
+  request: VercelRequest,
+  key: string,
+): string => {
+  const value = request.query[key];
+
+  if (Array.isArray(value)) {
+    return value[0] || "";
+  }
+
+  return typeof value === "string" ? value : "";
+};
+
 const getResetOtp = (value: string | undefined): string => {
   return (value || "").trim();
 };
@@ -235,6 +248,72 @@ const handleAdminUsers = async (
     200,
     users.map((user) => toPublicUser(user)),
   );
+};
+
+const handleAdminUserDetail = async (
+  request: VercelRequest,
+  response: VercelResponse,
+): Promise<VercelResponse> => {
+  if (request.method !== "GET") {
+    return methodNotAllowed(response, ["GET"]);
+  }
+
+  await requireAdminUser(request);
+  const userId = getQueryValue(request, "userId").trim();
+
+  if (!userId) {
+    throw new ApiError(400, "BAD_REQUEST", "User ID is required.");
+  }
+
+  const user = await findUserById(userId);
+
+  if (!user) {
+    throw new ApiError(404, "NOT_FOUND", "User not found.");
+  }
+
+  const [
+    booksCollection,
+    seriesCollection,
+    collectionsCollection,
+    upcomingReleasesCollection,
+    notificationsCollection,
+    userSettingsCollection,
+  ] = await Promise.all([
+    getBooksCollection(),
+    getSeriesCollection(),
+    getCollectionsCollection(),
+    getUpcomingReleasesCollection(),
+    getNotificationsCollection(),
+    getUserSettingsCollection(),
+  ]);
+
+  const [
+    books,
+    series,
+    collections,
+    upcomingReleases,
+    notifications,
+    hasUserSettings,
+  ] = await Promise.all([
+    booksCollection.countDocuments({ userId }),
+    seriesCollection.countDocuments({ userId }),
+    collectionsCollection.countDocuments({ userId }),
+    upcomingReleasesCollection.countDocuments({ userId }),
+    notificationsCollection.countDocuments({ userId }),
+    userSettingsCollection.countDocuments({ userId }),
+  ]);
+
+  return sendJson(response, 200, {
+    user: toPublicUser(user),
+    counts: {
+      books,
+      series,
+      collections,
+      upcomingReleases,
+      notifications,
+    },
+    hasUserSettings: hasUserSettings > 0,
+  });
 };
 
 const handleChangeEmail = async (
@@ -490,6 +569,10 @@ export default async function handler(
 
     if (action === "admin-users") {
       return handleAdminUsers(request, response);
+    }
+
+    if (action === "admin-user-detail") {
+      return handleAdminUserDetail(request, response);
     }
 
     if (action === "change-email") {

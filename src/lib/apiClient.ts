@@ -247,6 +247,21 @@ export const authApi = {
       auth: true,
       method: "GET",
     }),
+  getAdminUserDetail: (userId: string) =>
+    apiRequest<{
+      user: AuthUser;
+      counts: {
+        books: number;
+        series: number;
+        collections: number;
+        upcomingReleases: number;
+        notifications: number;
+      };
+      hasUserSettings: boolean;
+    }>(`/auth/admin-user-detail?userId=${encodeURIComponent(userId)}`, {
+      auth: true,
+      method: "GET",
+    }),
   changeEmail: (payload: { currentPassword: string; email: string }) =>
     apiRequest<AuthResponse>("/auth/change-email", {
       auth: true,

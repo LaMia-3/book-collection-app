@@ -33,6 +33,20 @@ export default function AdminPage() {
   const [isLoadingUsers, setIsLoadingUsers] = useState(true);
   const [users, setUsers] = useState<AuthUser[]>([]);
   const [usersError, setUsersError] = useState<string | null>(null);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [selectedUserDetail, setSelectedUserDetail] = useState<{
+    user: AuthUser;
+    counts: {
+      books: number;
+      series: number;
+      collections: number;
+      upcomingReleases: number;
+      notifications: number;
+    };
+    hasUserSettings: boolean;
+  } | null>(null);
+  const [selectedUserError, setSelectedUserError] = useState<string | null>(null);
+  const [isLoadingSelectedUser, setIsLoadingSelectedUser] = useState(false);
   const { settings } = useSettings();
   const { isAuthenticated } = useAuth();
 
@@ -56,6 +70,34 @@ export default function AdminPage() {
 
     void loadUsers();
   }, []);
+
+  useEffect(() => {
+    if (!selectedUserId) {
+      setSelectedUserDetail(null);
+      setSelectedUserError(null);
+      return;
+    }
+
+    const loadSelectedUser = async () => {
+      try {
+        setIsLoadingSelectedUser(true);
+        setSelectedUserError(null);
+        const nextDetail = await authApi.getAdminUserDetail(selectedUserId);
+        setSelectedUserDetail(nextDetail);
+      } catch (error) {
+        setSelectedUserDetail(null);
+        setSelectedUserError(
+          error instanceof ApiClientError
+            ? error.message
+            : 'Unable to load user detail.',
+        );
+      } finally {
+        setIsLoadingSelectedUser(false);
+      }
+    };
+
+    void loadSelectedUser();
+  }, [selectedUserId]);
 
   return (
     <div className="container py-8 max-w-7xl">
@@ -111,7 +153,16 @@ export default function AdminPage() {
               ) : (
                 <div className="space-y-3">
                   {users.map((user) => (
-                    <div key={user.id} className="rounded-lg border p-4">
+                    <button
+                      key={user.id}
+                      type="button"
+                      onClick={() => setSelectedUserId(user.id)}
+                      className={`w-full rounded-lg border p-4 text-left transition-colors ${
+                        selectedUserId === user.id
+                          ? 'border-primary bg-primary/5'
+                          : 'hover:bg-muted/40'
+                      }`}
+                    >
                       <div className="flex flex-wrap items-center justify-between gap-3">
                         <div>
                           <p className="font-medium">{user.email}</p>
@@ -124,10 +175,74 @@ export default function AdminPage() {
                           <p><span className="font-medium">Created:</span> {new Date(user.createdAt).toLocaleDateString()}</p>
                         </div>
                       </div>
-                    </div>
+                    </button>
                   ))}
                 </div>
               )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <UserCircle className="h-5 w-5 mr-2" />
+                Selected User Detail
+              </CardTitle>
+              <CardDescription>
+                Inspection context for a chosen user account. This is read-only and does not impersonate the user session.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {selectedUserError ? (
+                <Alert variant="destructive">
+                  <AlertTitle>User Detail Error</AlertTitle>
+                  <AlertDescription>{selectedUserError}</AlertDescription>
+                </Alert>
+              ) : !selectedUserId ? (
+                <p className="text-sm text-muted-foreground">
+                  Select a user from the list above to inspect their account and record counts.
+                </p>
+              ) : isLoadingSelectedUser ? (
+                <p className="text-sm text-muted-foreground">Loading selected user…</p>
+              ) : selectedUserDetail ? (
+                <div className="space-y-6">
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-1 text-sm">
+                      <p><span className="font-medium">Email:</span> {selectedUserDetail.user.email}</p>
+                      <p><span className="font-medium">Role:</span> {selectedUserDetail.user.role}</p>
+                      <p><span className="font-medium">Preferred Name:</span> {selectedUserDetail.user.preferredName || 'Not set'}</p>
+                    </div>
+                    <div className="space-y-1 text-sm">
+                      <p><span className="font-medium">User ID:</span> {selectedUserDetail.user.id}</p>
+                      <p><span className="font-medium">Created:</span> {new Date(selectedUserDetail.user.createdAt).toLocaleString()}</p>
+                      <p><span className="font-medium">User Settings:</span> {selectedUserDetail.hasUserSettings ? 'Present' : 'None found'}</p>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                    <div className="rounded-lg border p-4">
+                      <p className="text-sm text-muted-foreground">Books</p>
+                      <p className="mt-2 text-2xl font-semibold">{selectedUserDetail.counts.books}</p>
+                    </div>
+                    <div className="rounded-lg border p-4">
+                      <p className="text-sm text-muted-foreground">Series</p>
+                      <p className="mt-2 text-2xl font-semibold">{selectedUserDetail.counts.series}</p>
+                    </div>
+                    <div className="rounded-lg border p-4">
+                      <p className="text-sm text-muted-foreground">Collections</p>
+                      <p className="mt-2 text-2xl font-semibold">{selectedUserDetail.counts.collections}</p>
+                    </div>
+                    <div className="rounded-lg border p-4">
+                      <p className="text-sm text-muted-foreground">Upcoming Releases</p>
+                      <p className="mt-2 text-2xl font-semibold">{selectedUserDetail.counts.upcomingReleases}</p>
+                    </div>
+                    <div className="rounded-lg border p-4">
+                      <p className="text-sm text-muted-foreground">Notifications</p>
+                      <p className="mt-2 text-2xl font-semibold">{selectedUserDetail.counts.notifications}</p>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
             </CardContent>
           </Card>
 
