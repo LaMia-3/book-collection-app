@@ -345,6 +345,15 @@ export const Settings: React.FC<SettingsProps> = ({
                 </span>
               </TabsTrigger>
               <TabsTrigger 
+                value="library-management" 
+                className="justify-start w-40 data-[state=active]:bg-muted"
+              >
+                <span className="flex items-center gap-2">
+                  <Trash2 className="h-4 w-4 text-destructive" />
+                  Library Management
+                </span>
+              </TabsTrigger>
+              <TabsTrigger 
                 value="account" 
                 className="justify-start w-40 data-[state=active]:bg-muted"
               >
@@ -629,13 +638,80 @@ export const Settings: React.FC<SettingsProps> = ({
                 />
               </TabsContent>
 
+              <TabsContent value="library-management" className="mt-0">
+                <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
+                  <Trash2 className="h-5 w-5 text-destructive" />
+                  Library Management
+                </h3>
+                <p className="text-muted-foreground mb-6">
+                  Manage destructive actions that affect your library data without changing your account credentials.
+                </p>
+
+                <div className="space-y-6">
+                  <Card className="border-destructive/20 bg-destructive/5 p-6">
+                    <h4 className="font-medium mb-2">Delete Library</h4>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      {isAuthenticated
+                        ? 'This will delete all books from your MongoDB-backed account library, remove their references from series and collections, delete book-linked notifications, and clear stale browser cache on this device.'
+                        : 'This will remove all books from your local library, clear book references from series and collections, and keep those series and collection structures intact.'}
+                    </p>
+                    <ul className="list-disc pl-5 space-y-2 text-sm text-muted-foreground mb-4">
+                      <li>{isAuthenticated ? 'All account-library books will be deleted from the remote source of truth' : 'All local books will be deleted'}</li>
+                      <li>Books will be removed from series and collections</li>
+                      <li>Series and collection structures will be preserved</li>
+                      {isAuthenticated && (
+                        <li>This device&apos;s stale local cache will be cleared after the remote deletion completes</li>
+                      )}
+                    </ul>
+
+                    <Button
+                      variant="destructive"
+                      className="mt-2 flex items-center gap-2"
+                      onClick={() => {
+                        setDeleteMode('delete');
+                        setShowDeleteConfirmation(true);
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Delete Library
+                    </Button>
+                  </Card>
+
+                  <Card className="border-destructive/20 bg-destructive/5 p-6">
+                    <h4 className="font-medium mb-2">Reset Library</h4>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      This will completely reset your library by removing all books, series, collections, upcoming releases, and notifications.
+                    </p>
+                    <ul className="list-disc pl-5 space-y-2 text-sm text-muted-foreground mb-4">
+                      <li>All books will be deleted</li>
+                      <li>All series will be deleted</li>
+                      <li>All collections will be deleted</li>
+                      <li>All upcoming releases and notifications will be deleted</li>
+                      <li>You will start with a completely empty library</li>
+                    </ul>
+
+                    <Button
+                      variant="destructive"
+                      className="mt-2 flex items-center gap-2"
+                      onClick={() => {
+                        setDeleteMode('reset');
+                        setShowDeleteConfirmation(true);
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Reset Library
+                    </Button>
+                  </Card>
+                </div>
+              </TabsContent>
+              
               <TabsContent value="account" className="mt-0">
                 <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
                   <Shield className="h-5 w-5 text-emerald-600" />
-                  Account Security
+                  Account
                 </h3>
                 <p className="text-muted-foreground mb-6">
-                  Manage the credentials tied to your account and the destructive actions related to your library.
+                  Manage the credentials tied to your account and account-level destructive actions.
                 </p>
 
                 <div className="space-y-6">
@@ -735,61 +811,6 @@ export const Settings: React.FC<SettingsProps> = ({
                         {isUpdatingPassword ? 'Updating Password...' : 'Update Password'}
                       </Button>
                     </form>
-                  </Card>
-
-                  <Card className="border-destructive/20 bg-destructive/5 p-6">
-                    <h4 className="font-medium mb-2">Delete Library</h4>
-                    <p className="text-sm text-muted-foreground mb-4">
-                      {isAuthenticated
-                        ? 'This will delete all books from your MongoDB-backed account library, remove their references from series and collections, delete book-linked notifications, and clear stale browser cache on this device.'
-                        : 'This will remove all books from your local library, clear book references from series and collections, and keep those series and collection structures intact.'}
-                    </p>
-                    <ul className="list-disc pl-5 space-y-2 text-sm text-muted-foreground mb-4">
-                      <li>{isAuthenticated ? 'All account-library books will be deleted from the remote source of truth' : 'All local books will be deleted'}</li>
-                      <li>Books will be removed from series and collections</li>
-                      <li>Series and collection structures will be preserved</li>
-                      {isAuthenticated && (
-                        <li>This device&apos;s stale local cache will be cleared after the remote deletion completes</li>
-                      )}
-                    </ul>
-
-                    <Button
-                      variant="destructive"
-                      className="mt-2 flex items-center gap-2"
-                      onClick={() => {
-                        setDeleteMode('delete');
-                        setShowDeleteConfirmation(true);
-                      }}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                      Delete Library
-                    </Button>
-                  </Card>
-
-                  <Card className="border-destructive/20 bg-destructive/5 p-6">
-                    <h4 className="font-medium mb-2">Reset Library</h4>
-                    <p className="text-sm text-muted-foreground mb-4">
-                      This will completely reset your library by removing all books, series, collections, upcoming releases, and notifications.
-                    </p>
-                    <ul className="list-disc pl-5 space-y-2 text-sm text-muted-foreground mb-4">
-                      <li>All books will be deleted</li>
-                      <li>All series will be deleted</li>
-                      <li>All collections will be deleted</li>
-                      <li>All upcoming releases and notifications will be deleted</li>
-                      <li>You will start with a completely empty library</li>
-                    </ul>
-
-                    <Button
-                      variant="destructive"
-                      className="mt-2 flex items-center gap-2"
-                      onClick={() => {
-                        setDeleteMode('reset');
-                        setShowDeleteConfirmation(true);
-                      }}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                      Reset Library
-                    </Button>
                   </Card>
 
                   {isAuthenticated && (
