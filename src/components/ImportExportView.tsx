@@ -87,10 +87,29 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
 
   const dataScopeLabel = isAuthenticated ? 'your authenticated account library' : "this browser's local library";
 
+  const loadLegacySummary = useCallback(async () => {
+    if (!isAuthenticated) {
+      setLegacySummary(null);
+      setLegacyImportResult(null);
+      setLegacyProgress({ progress: 0, summary: '', details: '' });
+      return;
+    }
+
+    try {
+      const summary = await getLegacyImportSummary();
+      setLegacySummary(summary);
+    } catch (error) {
+      setStatusMessage({
+        type: 'error',
+        message: `Failed to inspect legacy browser data: ${error instanceof Error ? error.message : String(error)}`,
+      });
+    }
+  }, [isAuthenticated]);
+
   useEffect(() => {
     let isMounted = true;
 
-    const loadLegacySummary = async () => {
+    const syncLegacySummary = async () => {
       if (!isAuthenticated) {
         if (isMounted) {
           setLegacySummary(null);
@@ -116,12 +135,12 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
       }
     };
 
-    loadLegacySummary();
+    syncLegacySummary();
 
     return () => {
       isMounted = false;
     };
-  }, [isAuthenticated]);
+  }, [isAuthenticated, loadLegacySummary]);
 
   // Handle file input changes
   const handleCsvFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -609,6 +628,36 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
     }
   };
 
+  const handleRepairLegacyIndexedDb = async () => {
+    try {
+      setIsLoading('repairLegacyIndexedDb');
+      setStatusMessage({
+        type: 'info',
+        message: 'Checking and repairing browser-local IndexedDB stores...',
+      });
+
+      const { IndexedDBService } = await import('@/services/storage/IndexedDBService');
+      const indexedDbService = new IndexedDBService();
+      const repaired = await indexedDbService.checkAndRepairDatabase();
+
+      await loadLegacySummary();
+
+      setStatusMessage({
+        type: repaired ? 'success' : 'error',
+        message: repaired
+          ? 'IndexedDB repair completed. Legacy browser data was rechecked.'
+          : 'IndexedDB repair did not complete successfully.',
+      });
+    } catch (error) {
+      setStatusMessage({
+        type: 'error',
+        message: `Failed to repair IndexedDB: ${error instanceof Error ? error.message : String(error)}`,
+      });
+    } finally {
+      setIsLoading(null);
+    }
+  };
+
   return (
     <div>
       <h2 className="text-xl font-semibold mb-6">Import & Export</h2>
@@ -783,19 +832,35 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
                       </div>
                     )}
 
-                    <Button
-                      onClick={handleImportLegacyBrowserData}
-                      disabled={isLoading !== null || !legacySummary.hasLegacyData}
-                      className="flex items-center gap-2"
-                    >
-                      <Download size={18} />
-                      <span>
-                        {settings.migration?.legacyImport?.status === 'failed'
-                          ? 'Retry Legacy Import'
-                          : 'Import Legacy Browser Data'}
-                      </span>
-                      {isLoading === 'legacyImport' && <RefreshCw className="animate-spin" size={18} />}
-                    </Button>
+                    <div className="flex flex-col gap-3 md:flex-row md:flex-wrap">
+                      <Button
+                        onClick={handleImportLegacyBrowserData}
+                        disabled={isLoading !== null || !legacySummary.hasLegacyData}
+                        className="flex items-center gap-2"
+                      >
+                        <Download size={18} />
+                        <span>
+                          {settings.migration?.legacyImport?.status === 'failed'
+                            ? 'Retry Legacy Import'
+                            : 'Import Legacy Browser Data'}
+                        </span>
+                        {isLoading === 'legacyImport' && <RefreshCw className="animate-spin" size={18} />}
+                      </Button>
+
+                      <Button
+                        onClick={handleRepairLegacyIndexedDb}
+                        disabled={isLoading !== null}
+                        variant="outline"
+                        className="flex items-center gap-2"
+                      >
+                        <RefreshCw size={18} className={isLoading === 'repairLegacyIndexedDb' ? 'animate-spin' : ''} />
+                        <span>Repair IndexedDB</span>
+                      </Button>
+                    </div>
+
+                    <p className="text-xs text-gray-500">
+                      Repair IndexedDB only affects browser-local data on this device. It does not change your account data in MongoDB.
+                    </p>
                   </>
                 ) : (
                   <p className="text-sm text-gray-600">Inspecting local browser data...</p>
