@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { createLogger } from '@/utils/loggingUtils';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -9,7 +8,6 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { enhancedStorageService } from '@/services/storage/EnhancedStorageService';
 import type { Book } from '@/types/book';
-import { useAuth } from '@/hooks/useAuth';
 import { CollectionTestUI } from './CollectionTestUI';
 
 type TestResult = {
@@ -138,11 +136,9 @@ const LEGACY_SEED_COLLECTIONS = [
 ] as const;
 
 export function WorkflowTester() {
-  const { isAuthenticated, user } = useAuth();
   const [running, setRunning] = useState(false);
   const [results, setResults] = useState<TestResult[]>([]);
   const [progress, setProgress] = useState(0);
-  const log = createLogger('WorkflowTester');
 
   const addResult = (step: string, success: boolean, message: string) => {
     setResults((prev) => [...prev, { step, success, message }]);
@@ -285,39 +281,6 @@ export function WorkflowTester() {
     }
   };
 
-  const runWorkflowTest = async () => {
-    if (!isAuthenticated) {
-      setResults([
-        {
-          step: 'Authentication Required',
-          success: false,
-          message: 'The repository workflow seed is disabled until you are signed in. This test now targets MongoDB-backed account data only.',
-        },
-      ]);
-      setProgress(0);
-      return;
-    }
-
-    setRunning(true);
-    setResults([]);
-    setProgress(0);
-
-    try {
-      const { runRepositoryWorkflowTest } = await import('@/services/debug/workflowRepositoryTest');
-
-      await runRepositoryWorkflowTest({
-        addResult,
-        setProgress,
-      });
-    } catch (error) {
-      console.error('Workflow test failed:', error);
-      log.error('Workflow test failed:', error);
-      addResult('Error', false, `Test failed: ${error instanceof Error ? error.message : String(error)}`);
-    } finally {
-      setRunning(false);
-    }
-  };
-
   return (
     <div className="p-4 max-w-4xl mx-auto">
       <h1 className="text-2xl font-bold mb-4">Workflow Tester</h1>
@@ -325,9 +288,8 @@ export function WorkflowTester() {
         Test various workflows and generate test data for the application.
       </p>
 
-      <Tabs defaultValue="workflow" className="mb-6">
+      <Tabs defaultValue="legacy-seed" className="mb-6">
         <TabsList className="mb-4">
-          <TabsTrigger value="workflow">Repository Workflow</TabsTrigger>
           <TabsTrigger value="legacy-seed">Legacy Migration Seed</TabsTrigger>
           <TabsTrigger value="collections">
             <span className="flex items-center gap-1">
@@ -336,71 +298,6 @@ export function WorkflowTester() {
             </span>
           </TabsTrigger>
         </TabsList>
-
-        <TabsContent value="workflow">
-          <div className="space-y-4">
-            <p className="text-muted-foreground">
-              Writes a Mongo-backed workflow dataset for the currently logged-in account only.
-            </p>
-            <p className="text-sm text-muted-foreground">
-              This workflow clears prior `workflow-test-*` records, then adds 200 books total: 100 from Google Books search results, 100 from Open Library search results, plus 9 generated series built from those books.
-            </p>
-            <Alert>
-              <Database className="h-4 w-4" />
-              <AlertTitle>Repository Target</AlertTitle>
-              <AlertDescription>
-                {isAuthenticated
-                  ? `Authenticated session detected for ${user?.email || 'the current account'}. This seed will write to that user's MongoDB-backed library.`
-                  : 'No authenticated session detected. This workflow is disabled because it no longer falls back to local storage.'}
-              </AlertDescription>
-            </Alert>
-
-            <Button
-              onClick={runWorkflowTest}
-              disabled={running || !isAuthenticated}
-              className="mb-4"
-            >
-              {running ? 'Running...' : 'Seed 200 Mongo Books and 9 Series'}
-            </Button>
-
-            {running && (
-              <div className="mb-4">
-                <Progress value={progress} className="mb-2" />
-                <p className="text-sm text-center">{progress.toFixed(0)}% complete</p>
-              </div>
-            )}
-
-            {results.length > 0 && (
-              <Card className="mb-4">
-                <CardHeader>
-                  <CardTitle>Test Results</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    {results.map((result, index) => (
-                      <Alert key={index} variant={result.success ? 'default' : 'destructive'}>
-                        <div className="flex items-start gap-2">
-                          {result.success ? <Check className="h-5 w-5 text-green-500" /> : <AlertCircle className="h-5 w-5" />}
-                          <div>
-                            <AlertTitle className="flex items-center gap-2">
-                              {result.step}
-                              {result.success ? (
-                                <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">Success</Badge>
-                              ) : (
-                                <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">Failed</Badge>
-                              )}
-                            </AlertTitle>
-                            <AlertDescription>{result.message}</AlertDescription>
-                          </div>
-                        </div>
-                      </Alert>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-        </TabsContent>
 
         <TabsContent value="legacy-seed">
           <div className="space-y-4">
