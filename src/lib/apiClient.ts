@@ -191,6 +191,26 @@ export type AdminAuditLogRecord = {
   createdAt: string;
 };
 
+export type SystemAnnouncementRecord = {
+  id: string;
+  title: string;
+  body: string;
+  kind: "release" | "maintenance" | "warning" | "feature";
+  severity: "info" | "success" | "warning" | "critical";
+  isActive: boolean;
+  startsAt?: string;
+  endsAt?: string;
+  minAppVersion?: string;
+  maxAppVersion?: string;
+  environment: "all" | "preview" | "production";
+  ctaLabel?: string;
+  ctaUrl?: string;
+  createdAt: string;
+  updatedAt: string;
+  isSeen: boolean;
+  dismissedAt?: string;
+};
+
 export class ApiClientError extends Error {
   status: number;
   code?: string;
@@ -220,6 +240,13 @@ const buildHeaders = (auth = false, headers?: HeadersInit): Headers => {
 
   if (!requestHeaders.has("Content-Type")) {
     requestHeaders.set("Content-Type", "application/json");
+  }
+
+  if (!requestHeaders.has("X-App-Version")) {
+    requestHeaders.set(
+      "X-App-Version",
+      import.meta.env.VITE_APP_VERSION?.trim() || "2.0.0",
+    );
   }
 
   if (auth) {
@@ -308,6 +335,23 @@ export const authApi = {
     apiRequest<AdminAuditLogRecord[]>("/auth/admin-audit-logs", {
       auth: true,
       method: "GET",
+    }),
+  getSystemAnnouncements: () =>
+    apiRequest<SystemAnnouncementRecord[]>("/auth/system-announcements", {
+      auth: true,
+      method: "GET",
+    }),
+  markSystemAnnouncementSeen: (announcementId: string) =>
+    apiRequest<{ success: boolean }>("/auth/system-announcement-seen", {
+      auth: true,
+      method: "POST",
+      body: { announcementId },
+    }),
+  dismissSystemAnnouncement: (announcementId: string) =>
+    apiRequest<{ success: boolean }>("/auth/system-announcement-dismiss", {
+      auth: true,
+      method: "POST",
+      body: { announcementId },
     }),
   getAdminUserDetail: (userId: string) =>
     apiRequest<AdminUserDetailResponse>(

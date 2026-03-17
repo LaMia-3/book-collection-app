@@ -48,6 +48,7 @@ import searchService, { SearchResult, SearchOptions } from "@/services/search/Se
 import { SimpleSearch } from "@/components/SimpleSearch";
 import { GoalTracker } from "@/components/GoalTracker";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { SystemAnnouncementsCard } from "@/components/system/SystemAnnouncementsCard";
 import { useLibrarySettings } from '@/hooks/useLibrarySettings';
 import { bookRepository } from '@/repositories/BookRepository';
 
@@ -351,6 +352,8 @@ const Index = () => {
         
         {/* Goal Tracker */}
         <GoalTracker booksCompletedThisMonth={booksCompletedThisMonth} />
+
+        <SystemAnnouncementsCard />
 
         {/* Library View */}
         <div className="bg-card rounded-lg p-6 mx-4 shadow-elegant">

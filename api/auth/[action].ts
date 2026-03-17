@@ -8,6 +8,11 @@ import {
   listAdminAuditLogs,
   toAdminAuditLogEntry,
 } from "../../src/server/models/admin-audit-log.js";
+import {
+  findSystemAnnouncementById,
+  listActiveSystemAnnouncements,
+  toPublicSystemAnnouncement,
+} from "../../src/server/models/system-announcement.js";
 import { ensureBootstrapAdminUser } from "../../src/server/lib/admin-bootstrap.js";
 import { signAuthToken } from "../../src/server/lib/auth.js";
 import { sendPasswordResetEmail } from "../../src/server/lib/email.js";
@@ -46,6 +51,11 @@ import { getUpcomingReleasesCollection } from "../../src/server/models/upcoming-
 import { getNotificationsCollection } from "../../src/server/models/notification.js";
 import { getUserSettingsCollection } from "../../src/server/models/user-settings.js";
 import {
+  dismissAnnouncement,
+  getUserAnnouncementStates,
+  markAnnouncementSeen,
+} from "../../src/server/models/user-announcement-state.js";
+import {
   consumePasswordResetOtp,
   createPasswordResetOtp,
   invalidatePasswordResetOtpsForUser,
@@ -53,6 +63,7 @@ import {
 } from "../../src/server/models/password-reset-otp.js";
 
 type AuthRequestBody = {
+  announcementId?: string;
   currentPassword?: string;
   email?: string;
   newPassword?: string;
@@ -74,6 +85,17 @@ type DeletedAccountSummary = {
 
 const createTemporaryPassword = (): string => {
   return randomBytes(12).toString("base64url");
+};
+
+const resolveAnnouncementEnvironment = (): "preview" | "production" => {
+  return process.env.VERCEL_ENV === "production" ? "production" : "preview";
+};
+
+const resolveAppVersion = (request: VercelRequest): string => {
+  const header = request.headers["x-app-version"];
+  const appVersion = Array.isArray(header) ? header[0] : header;
+
+  return appVersion?.trim() || process.env.APP_VERSION?.trim() || "2.0.0";
 };
 
 const getRequestBody = (request: VercelRequest): AuthRequestBody => {
@@ -318,6 +340,103 @@ const handleAdminAuditLogs = async (
     200,
     logs.map((log) => toAdminAuditLogEntry(log)),
   );
+};
+
+const handleSystemAnnouncements = async (
+  request: VercelRequest,
+  response: VercelResponse,
+): Promise<VercelResponse> => {
+  if (request.method !== "GET") {
+    return methodNotAllowed(response, ["GET"]);
+  }
+
+  const authUser = await requireAuthenticatedUser(request);
+  const appVersion = resolveAppVersion(request);
+  const environment = resolveAnnouncementEnvironment();
+  const announcements = await listActiveSystemAnnouncements({
+    appVersion,
+    environment,
+  });
+  const states = await getUserAnnouncementStates(
+    authUser.sub,
+    announcements.map((announcement) => announcement._id!.toString()),
+  );
+  const statesByAnnouncementId = new Map(
+    states.map((state) => [state.announcementId, state]),
+  );
+
+  return sendJson(
+    response,
+    200,
+    announcements
+      .filter((announcement) => {
+        const state = statesByAnnouncementId.get(announcement._id!.toString());
+        return !state?.dismissedAt;
+      })
+      .map((announcement) => {
+        const state = statesByAnnouncementId.get(announcement._id!.toString());
+
+        return {
+          ...toPublicSystemAnnouncement(announcement),
+          isSeen: Boolean(state?.seenAt),
+          dismissedAt: state?.dismissedAt?.toISOString(),
+        };
+      }),
+  );
+};
+
+const handleSystemAnnouncementSeen = async (
+  request: VercelRequest,
+  response: VercelResponse,
+): Promise<VercelResponse> => {
+  if (request.method !== "POST") {
+    return methodNotAllowed(response, ["POST"]);
+  }
+
+  const authUser = await requireAuthenticatedUser(request);
+  const body = getRequestBody(request);
+  const announcementId = (body.announcementId || "").trim();
+
+  if (!announcementId) {
+    throw new ApiError(400, "BAD_REQUEST", "Announcement ID is required.");
+  }
+
+  const announcement = await findSystemAnnouncementById(announcementId);
+
+  if (!announcement) {
+    throw new ApiError(404, "NOT_FOUND", "Announcement not found.");
+  }
+
+  await markAnnouncementSeen(authUser.sub, announcementId);
+
+  return sendJson(response, 200, { success: true });
+};
+
+const handleSystemAnnouncementDismiss = async (
+  request: VercelRequest,
+  response: VercelResponse,
+): Promise<VercelResponse> => {
+  if (request.method !== "POST") {
+    return methodNotAllowed(response, ["POST"]);
+  }
+
+  const authUser = await requireAuthenticatedUser(request);
+  const body = getRequestBody(request);
+  const announcementId = (body.announcementId || "").trim();
+
+  if (!announcementId) {
+    throw new ApiError(400, "BAD_REQUEST", "Announcement ID is required.");
+  }
+
+  const announcement = await findSystemAnnouncementById(announcementId);
+
+  if (!announcement) {
+    throw new ApiError(404, "NOT_FOUND", "Announcement not found.");
+  }
+
+  await dismissAnnouncement(authUser.sub, announcementId);
+
+  return sendJson(response, 200, { success: true });
 };
 
 const handleAdminUserDetail = async (
@@ -841,6 +960,18 @@ export default async function handler(
 
     if (action === "admin-user-detail") {
       return handleAdminUserDetail(request, response);
+    }
+
+    if (action === "system-announcements") {
+      return handleSystemAnnouncements(request, response);
+    }
+
+    if (action === "system-announcement-seen") {
+      return handleSystemAnnouncementSeen(request, response);
+    }
+
+    if (action === "system-announcement-dismiss") {
+      return handleSystemAnnouncementDismiss(request, response);
     }
 
     if (action === "admin-delete-account") {
