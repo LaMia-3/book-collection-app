@@ -31,6 +31,7 @@ import {
   updateUserEmailById,
   updateUserLastLoginById,
   updateUserPasswordById,
+  updateUserRoleById,
 } from "../../src/server/models/user.js";
 import { getBooksCollection } from "../../src/server/models/book.js";
 import { getSeriesCollection } from "../../src/server/models/series.js";
