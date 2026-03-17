@@ -110,7 +110,7 @@ export const updateUserEmailById = async (
 
   const usersCollection = await getUsersCollection();
   const normalizedEmail = normalizeUserEmail(email);
-  const result = await usersCollection.findOneAndUpdate(
+  const result = await usersCollection.updateOne(
     { _id: new ObjectId(id) },
     {
       $set: {
@@ -118,12 +118,13 @@ export const updateUserEmailById = async (
         updatedAt: new Date(),
       },
     },
-    {
-      returnDocument: "after",
-    },
   );
 
-  return result;
+  if (result.matchedCount !== 1) {
+    return null;
+  }
+
+  return findUserById(id);
 };
 
 export const invalidateUserSessionsById = async (id: string): Promise<boolean> => {

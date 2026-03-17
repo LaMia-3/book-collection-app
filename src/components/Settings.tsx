@@ -225,8 +225,16 @@ export const Settings: React.FC<SettingsProps> = ({
         success: 'Email updated. You are still signed in with the refreshed session.',
       });
     } catch (error) {
+      const nextMessage =
+        error instanceof ApiClientError &&
+        (error.status === 409 || error.message === 'Email is already in use.')
+          ? 'Email is being used by another account.'
+          : error instanceof ApiClientError
+            ? error.message
+            : 'Email change failed.';
+
       setEmailStatus({
-        error: error instanceof ApiClientError ? error.message : 'Email change failed.',
+        error: nextMessage,
         success: null,
       });
     } finally {

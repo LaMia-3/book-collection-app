@@ -1,4 +1,5 @@
 import { VercelRequest, VercelResponse } from "@vercel/node";
+import { MongoServerError } from "mongodb";
 
 import { ApiError, methodNotAllowed, sendError, sendJson } from "../../src/server/lib/api-response.js";
 import { signAuthToken } from "../../src/server/lib/auth.js";
@@ -494,6 +495,13 @@ export default async function handler(
       return sendError(
         response,
         new ApiError(401, "UNAUTHORIZED", error.message),
+      );
+    }
+
+    if (error instanceof MongoServerError && error.code === 11000) {
+      return sendError(
+        response,
+        new ApiError(409, "CONFLICT", "Email is already in use."),
       );
     }
 
