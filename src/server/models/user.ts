@@ -169,6 +169,33 @@ export const updateUserEmailById = async (
   return findUserById(id);
 };
 
+export const updateUserPreferredNameById = async (
+  id: string,
+  preferredName?: string,
+): Promise<UserDocument | null> => {
+  if (!ObjectId.isValid(id)) {
+    return null;
+  }
+
+  const usersCollection = await getUsersCollection();
+  const normalizedPreferredName = preferredName?.trim() || undefined;
+  const result = await usersCollection.updateOne(
+    { _id: new ObjectId(id) },
+    {
+      $set: {
+        preferredName: normalizedPreferredName,
+        updatedAt: new Date(),
+      },
+    },
+  );
+
+  if (result.matchedCount !== 1) {
+    return null;
+  }
+
+  return findUserById(id);
+};
+
 export const updateUserRoleById = async (
   id: string,
   role: UserRole,

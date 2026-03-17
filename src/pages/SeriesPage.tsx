@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { Settings } from "@/components/Settings";
 import { useNavigate } from "react-router-dom";
-import { useSettings } from "@/contexts/SettingsContext";
 import { useLibrarySettings } from '@/hooks/useLibrarySettings';
 import { Series } from "@/types/series";
 import { Book } from "@/types/book";
@@ -34,7 +33,6 @@ import { seriesRepository } from "@/repositories/SeriesRepository";
 const SeriesPage = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { settings } = useSettings();
   const [series, setSeries] = useState<Series[]>([]);
   const [isCreatingNewSeries, setIsCreatingNewSeries] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -119,11 +117,6 @@ const SeriesPage = () => {
     setFilter({});
   };
   
-  // Get the personalized library name
-  const libraryName = settings.preferredName 
-    ? `${settings.preferredName}'s Series`
-    : "My Series";
-    
   // Load books through the repository so authenticated sessions use the API path.
   useEffect(() => {
     setIsLoading(true);

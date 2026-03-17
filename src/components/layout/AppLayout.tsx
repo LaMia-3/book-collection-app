@@ -1,6 +1,7 @@
 import { ReactNode } from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import { useSettings } from '@/contexts/SettingsContext';
+import { useAuth } from '@/hooks/useAuth';
 import { EnhancedHeader } from '@/components/navigation/EnhancedHeader';
 import { ViewMode } from '@/components/ViewToggle';
 
@@ -29,10 +30,12 @@ export function AppLayout({
 }: AppLayoutProps) {
   const location = useLocation();
   const { settings } = useSettings();
+  const { user } = useAuth();
+  const preferredName = user?.preferredName || settings.preferredName;
   
   // Get the personalized library name
-  const libraryName = settings.preferredName 
-    ? `${settings.preferredName}'s Personal Library`
+  const libraryName = preferredName
+    ? `${preferredName}'s Personal Library`
     : "My Personal Library";
   
   // Determine current section and title based on route
@@ -41,20 +44,20 @@ export function AppLayout({
   let currentAddButtonLabel = addButtonLabel;
   
   if (location.pathname.startsWith('/series')) {
-    title = settings.preferredName 
-      ? `${settings.preferredName}'s Series`
+    title = preferredName
+      ? `${preferredName}'s Series`
       : "My Series";
     subtitle = "Organize and track your book series";
     currentAddButtonLabel = "Add Series";
   } else if (location.pathname.startsWith('/collections')) {
-    title = settings.preferredName 
-      ? `${settings.preferredName}'s Collections`
+    title = preferredName
+      ? `${preferredName}'s Collections`
       : "My Collections";
     subtitle = "Create custom collections of your favorite books";
     currentAddButtonLabel = "Add Collection";
   } else if (location.pathname.startsWith('/insights')) {
-    title = settings.preferredName 
-      ? `${settings.preferredName}'s Reading Insights`
+    title = preferredName
+      ? `${preferredName}'s Reading Insights`
       : "My Reading Insights";
     subtitle = "Track your reading progress and achievements";
     currentAddButtonLabel = undefined; // No add button for insights

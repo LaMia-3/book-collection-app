@@ -17,6 +17,9 @@ export type AuthContextValue = {
     currentPassword: string;
     email: string;
   }) => Promise<void>;
+  changePreferredName: (input: {
+    preferredName?: string;
+  }) => Promise<void>;
   changePassword: (input: {
     currentPassword: string;
     newPassword: string;

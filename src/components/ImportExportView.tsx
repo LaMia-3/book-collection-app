@@ -45,8 +45,9 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
 }) => {
   // Get import context functions for background processing
   const { startImport, updateImportProgress, completeImport, errorImport, setCancelCallback } = useImport();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const { settings } = useSettings();
+  const preferredName = user?.preferredName || settings.preferredName;
   
   // State for file inputs and operation status
   const [csvFile, setCsvFile] = useState<File | null>(null);
@@ -188,7 +189,7 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
       const timeStr = now.toTimeString().split(' ')[0].replace(/:/g, '-'); // HH-MM-SS
       
       // Create filename with preferred name if available
-      const prefix = settings?.preferredName ? `${settings.preferredName.toLowerCase().replace(/\s+/g, '-')}-library` : 'library';
+      const prefix = preferredName ? `${preferredName.toLowerCase().replace(/\s+/g, '-')}-library` : 'library';
       const filename = `${prefix}-export-${dateStr}-${timeStr}.csv`;
       
       // Download the file
@@ -239,7 +240,7 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
       const timeStr = now.toTimeString().split(' ')[0].replace(/:/g, '-'); // HH-MM-SS
       
       // Create filename with preferred name if available
-      const prefix = settings?.preferredName ? `${settings.preferredName.toLowerCase().replace(/\s+/g, '-')}-library` : 'library';
+      const prefix = preferredName ? `${preferredName.toLowerCase().replace(/\s+/g, '-')}-library` : 'library';
       const filename = `${prefix}-export-${dateStr}-${timeStr}.json`;
       
       // Download the file
@@ -615,16 +616,6 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
         Import, export, and restore data for {dataScopeLabel}. Legacy browser migration is separate from normal file import.
       </p>
 
-      <div className="mb-6 rounded-md border bg-muted/20 px-4 py-3 text-sm text-gray-700">
-        <p>
-          <strong>Current source of truth:</strong>{' '}
-          {isAuthenticated ? 'MongoDB-backed account data' : 'browser-local IndexedDB data'}
-        </p>
-        <p className="mt-1">
-          CSV and JSON import are book-import tools. Full-library restore belongs in <strong>Backup & Restore</strong>. Legacy browser migration belongs in <strong>Legacy Browser Data</strong>.
-        </p>
-      </div>
-      
       {/* Status Message */}
       {statusMessage && (
         <div 

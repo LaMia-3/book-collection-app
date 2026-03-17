@@ -50,6 +50,7 @@ import {
   updateUserEmailById,
   updateUserLastLoginById,
   updateUserPasswordById,
+  updateUserPreferredNameById,
   updateUserRoleById,
 } from "../../src/server/models/user.js";
 import { getBooksCollection } from "../../src/server/models/book.js";
@@ -1174,6 +1175,46 @@ const handleChangePassword = async (
   });
 };
 
+const handleChangePreferredName = async (
+  request: VercelRequest,
+  response: VercelResponse,
+): Promise<VercelResponse> => {
+  if (request.method !== "POST") {
+    return methodNotAllowed(response, ["POST"]);
+  }
+
+  const authUser = await requireAuthenticatedUser(request);
+  const body = getRequestBody(request);
+  const preferredName = normalizeOptionalString(body.preferredName);
+
+  if (preferredName && preferredName.length > 80) {
+    throw new ApiError(
+      400,
+      "BAD_REQUEST",
+      "Preferred name must be 80 characters or fewer.",
+    );
+  }
+
+  const updatedUser = await updateUserPreferredNameById(
+    authUser.sub,
+    preferredName,
+  );
+
+  if (!updatedUser?._id) {
+    throw new ApiError(
+      500,
+      "INTERNAL_SERVER_ERROR",
+      "Failed to update preferred name.",
+    );
+  }
+
+  console.info("[AUTH] User changed preferred name", {
+    userId: authUser.sub,
+  });
+
+  return sendJson(response, 200, toPublicUser(updatedUser));
+};
+
 const handleForgotPassword = async (
   request: VercelRequest,
   response: VercelResponse,
@@ -1375,6 +1416,10 @@ export default async function handler(
 
     if (action === "change-email") {
       return handleChangeEmail(request, response);
+    }
+
+    if (action === "change-preferred-name") {
+      return handleChangePreferredName(request, response);
     }
 
     if (action === "change-password") {

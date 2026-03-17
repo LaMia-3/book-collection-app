@@ -157,7 +157,7 @@ interface UseLibrarySettingsOptions {
 export function useLibrarySettings(options: UseLibrarySettingsOptions = {}) {
   const { toast } = useToast();
   const { settings } = useSettings();
-  const { deleteAccount, isAuthenticated, logout } = useAuth();
+  const { deleteAccount, isAuthenticated, logout, user } = useAuth();
   const [showSettings, setShowSettings] = useState(false);
   const [internalBooks, setInternalBooks] = useState<Book[]>([]);
   const onLibraryCleared = options.onLibraryCleared;
@@ -515,7 +515,7 @@ export function useLibrarySettings(options: UseLibrarySettingsOptions = {}) {
         collectionRepository.getAll(),
       ]);
 
-      const preferredName = settings?.preferredName;
+      const preferredName = user?.preferredName || settings?.preferredName;
       await createBackup(exportBooks, preferredName, {
         series: exportSeries,
         collections: exportCollections,
@@ -538,7 +538,7 @@ export function useLibrarySettings(options: UseLibrarySettingsOptions = {}) {
       });
       return Promise.reject(error);
     }
-  }, [isAuthenticated, settings?.preferredName, toast]);
+  }, [isAuthenticated, settings?.preferredName, toast, user?.preferredName]);
 
   const onRestoreBackup = useCallback(async (file: File) => {
     try {

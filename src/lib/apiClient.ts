@@ -448,6 +448,12 @@ export const authApi = {
       method: "POST",
       body: payload,
     }),
+  changePreferredName: (payload: { preferredName?: string }) =>
+    apiRequest<AuthUser>("/auth/change-preferred-name", {
+      auth: true,
+      method: "POST",
+      body: payload,
+    }),
   changePassword: (payload: {
     currentPassword: string;
     newPassword: string;

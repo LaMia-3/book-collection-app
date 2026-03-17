@@ -145,6 +145,28 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const changePreferredName = async (input: {
+    preferredName?: string;
+  }) => {
+    setAuthError(null);
+    setIsLoadingAuth(true);
+
+    try {
+      const authenticatedUser = await authApi.changePreferredName(input);
+      setStoredAuthUser(authenticatedUser);
+      setUser(authenticatedUser);
+    } catch (error) {
+      setAuthError(
+        error instanceof ApiClientError
+          ? error.message
+          : "Preferred name change failed.",
+      );
+      throw error;
+    } finally {
+      setIsLoadingAuth(false);
+    }
+  };
+
   const changePassword = async (input: {
     currentPassword: string;
     newPassword: string;
@@ -171,6 +193,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const value: AuthContextValue = {
     authError,
     changeEmail,
+    changePreferredName,
     changePassword,
     deleteAccount,
     isAuthenticated: Boolean(user),

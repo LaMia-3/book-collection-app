@@ -5,11 +5,13 @@ import { EnhancedHeader } from '@/components/navigation/EnhancedHeader';
 import { InsightsView } from '@/components/InsightsView';
 import { GoalsTab } from '@/components/GoalsTab';
 import { useSettings } from '@/contexts/SettingsContext';
+import { useAuth } from '@/hooks/useAuth';
 import { useLibrarySettings } from '@/hooks/useLibrarySettings';
 import { bookRepository } from '@/repositories/BookRepository';
 
 const InsightsPage = () => {
   const { settings } = useSettings();
+  const { user } = useAuth();
   const [booksCompletedThisMonth, setBooksCompletedThisMonth] = useState<number>(0);
   
   const { books, setBooks, settingsProps, setShowSettings } = useLibrarySettings({
@@ -62,8 +64,9 @@ const InsightsPage = () => {
   }, [setBooks]);
   
   // Calculate library name
-  const libraryName = settings.preferredName 
-    ? `${settings.preferredName}'s Reading Insights`
+  const preferredName = user?.preferredName || settings.preferredName;
+  const libraryName = preferredName
+    ? `${preferredName}'s Reading Insights`
     : "My Reading Insights";
   
   return (

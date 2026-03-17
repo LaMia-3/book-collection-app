@@ -26,7 +26,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { useNavigate } from 'react-router-dom';
 import { ImportExportView } from './ImportExportView';
-import { Settings as SettingsIcon, Trash2, AlertTriangle, Palette, Trophy, BookOpen, ArrowUp, ArrowDown, ListOrdered, Sun, Moon, Monitor, Sliders, FileUp, FileDown, LogOut, Shield } from 'lucide-react';
+import { Settings as SettingsIcon, Trash2, AlertTriangle, Palette, Trophy, BookOpen, ArrowUp, ArrowDown, ListOrdered, Sun, Moon, Monitor, Sliders, FileUp, FileDown, LogOut, Shield, Library } from 'lucide-react';
 import { useSettings } from '@/contexts/SettingsContext';
 import { useTheme } from '@/components/ui-common/ThemeProvider';
 import { PaletteSelector } from '@/components/PaletteSelector';
@@ -66,7 +66,7 @@ export const Settings: React.FC<SettingsProps> = ({
   const [deleteMode, setDeleteMode] = useState<'delete' | 'reset' | 'account'>('delete');
   const { settings, updateSettings, isLoading } = useSettings();
   const { colorMode, setColorMode } = useTheme();
-  const { changeEmail, changePassword, isAuthenticated, logout, user } = useAuth();
+  const { changeEmail, changePassword, changePreferredName, isAuthenticated, logout, user } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
   
@@ -89,11 +89,12 @@ export const Settings: React.FC<SettingsProps> = ({
   const [passwordStatus, setPasswordStatus] = useState<{error: string | null; success: string | null}>({ error: null, success: null });
   const [isUpdatingEmail, setIsUpdatingEmail] = useState(false);
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
+  const [isUpdatingPreferredName, setIsUpdatingPreferredName] = useState(false);
   
   // Initialize form state from settings
   useEffect(() => {
     if (!isLoading && settings) {
-      setPreferredName(settings.preferredName || '');
+      setPreferredName(user?.preferredName || settings.preferredName || '');
       setBirthday(settings.birthday || '');
       setCelebrateBirthday(settings.celebrateBirthday ?? true);
       setDefaultView(settings.defaultView || 'shelf');
@@ -106,7 +107,7 @@ export const Settings: React.FC<SettingsProps> = ({
       const defaultOrder = ['reading', 'want-to-read', 'completed', 'on-hold', 'dnf'];
       setShelfOrder(settings.displayOptions?.shelfOrder || defaultOrder);
     }
-  }, [isLoading, settings]);
+  }, [isLoading, settings, user?.preferredName]);
 
   useEffect(() => {
     setAccountEmail(user?.email || '');
@@ -115,7 +116,52 @@ export const Settings: React.FC<SettingsProps> = ({
   // Handle form changes
   const handlePreferredNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setPreferredName(e.target.value);
-    updateSettings({ preferredName: e.target.value });
+  };
+
+  const handlePreferredNameBlur = async () => {
+    const nextPreferredName = preferredName.trim();
+    const accountPreferredName = user?.preferredName?.trim() || '';
+    const settingsPreferredName = settings.preferredName?.trim() || '';
+
+    if (
+      nextPreferredName === accountPreferredName &&
+      nextPreferredName === settingsPreferredName
+    ) {
+      return;
+    }
+
+    setIsUpdatingPreferredName(true);
+
+    try {
+      if (isAuthenticated) {
+        await changePreferredName({
+          preferredName: nextPreferredName || undefined,
+        });
+        try {
+          await updateSettings({
+            preferredName: nextPreferredName || undefined,
+          });
+        } catch (settingsError) {
+          console.warn('Preferred name account update succeeded, but settings sync failed.', settingsError);
+        }
+      } else {
+        await updateSettings({
+          preferredName: nextPreferredName || undefined,
+        });
+      }
+    } catch (error) {
+      setPreferredName(accountPreferredName || settingsPreferredName);
+      toast({
+        title: 'Preferred name update failed',
+        description:
+          error instanceof ApiClientError
+            ? error.message
+            : 'Preferred name change failed.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsUpdatingPreferredName(false);
+    }
   };
   
   const handleBirthdayChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -319,7 +365,7 @@ export const Settings: React.FC<SettingsProps> = ({
             <TabsList className="flex-col space-y-1 mr-6 h-auto bg-transparent">
               <TabsTrigger 
                 value="general" 
-                className="justify-start w-40 data-[state=active]:bg-muted"
+                className="justify-start w-48 data-[state=active]:bg-muted"
               >
                 <span className="flex items-center gap-2">
                   <Sliders className="h-4 w-4 text-gray-500" />
@@ -328,7 +374,7 @@ export const Settings: React.FC<SettingsProps> = ({
               </TabsTrigger>
               <TabsTrigger 
                 value="appearance" 
-                className="justify-start w-40 data-[state=active]:bg-muted"
+                className="justify-start w-48 data-[state=active]:bg-muted"
               >
                 <span className="flex items-center gap-2">
                   <Palette className="h-4 w-4 text-purple-500" />
@@ -337,7 +383,7 @@ export const Settings: React.FC<SettingsProps> = ({
               </TabsTrigger>
               <TabsTrigger 
                 value="import-export" 
-                className="justify-start w-40 data-[state=active]:bg-muted"
+                className="justify-start w-48 data-[state=active]:bg-muted"
               >
                 <span className="flex items-center gap-2">
                   <FileUp className="h-4 w-4 text-green-500" />
@@ -346,16 +392,16 @@ export const Settings: React.FC<SettingsProps> = ({
               </TabsTrigger>
               <TabsTrigger 
                 value="library-management" 
-                className="justify-start w-40 data-[state=active]:bg-muted"
+                className="justify-start w-48 data-[state=active]:bg-muted"
               >
                 <span className="flex items-center gap-2">
-                  <Trash2 className="h-4 w-4 text-destructive" />
+                  <Library className="h-4 w-4 text-primary" />
                   Library Management
                 </span>
               </TabsTrigger>
               <TabsTrigger 
                 value="account" 
-                className="justify-start w-40 data-[state=active]:bg-muted"
+                className="justify-start w-48 data-[state=active]:bg-muted"
               >
                 <span className="flex items-center gap-2">
                   <Shield className="h-4 w-4 text-emerald-600" />
@@ -364,7 +410,7 @@ export const Settings: React.FC<SettingsProps> = ({
               </TabsTrigger>
               <Button
                 variant="ghost"
-                className="justify-start w-40 px-3 text-amber-700 hover:text-amber-800"
+                className="justify-start w-48 px-3 text-amber-700 hover:text-amber-800"
                 onClick={handleLogout}
               >
                 <span className="flex items-center gap-2">
@@ -394,6 +440,10 @@ export const Settings: React.FC<SettingsProps> = ({
                           placeholder="Your name"
                           value={preferredName}
                           onChange={handlePreferredNameChange}
+                          onBlur={() => {
+                            void handlePreferredNameBlur();
+                          }}
+                          disabled={isUpdatingPreferredName}
                         />
                         <p className="text-xs text-muted-foreground">Used to personalize your library: "[Name]'s Personal Library"</p>
                       </div>

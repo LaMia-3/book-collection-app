@@ -103,11 +103,6 @@ const Index = () => {
     },
   });
   
-  // Get the personalized library name
-  const libraryName = settings.preferredName 
-    ? `${settings.preferredName}'s Personal Library`
-    : "My Personal Library";
-
   useEffect(() => {
     const loadBooks = async () => {
       try {

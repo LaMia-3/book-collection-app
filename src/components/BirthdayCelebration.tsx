@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useSettings } from '@/contexts/SettingsContext';
+import { useAuth } from '@/hooks/useAuth';
 import { Cake, X } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { createLogger } from '@/utils/loggingUtils';
@@ -69,8 +70,10 @@ const getBirthdayMonthDay = (birthdayString: string) => {
 
 export const BirthdayCelebration: React.FC = () => {
   const { settings, updateSettings } = useSettings();
+  const { user } = useAuth();
   const [showCelebration, setShowCelebration] = useState(false);
   const [dismissed, setDismissed] = useState(false);
+  const preferredName = user?.preferredName || settings.preferredName;
   
   // Store dismissed status in IndexedDB with the current date to track it persistently
   // The key includes the date so it will reset each day
@@ -148,7 +151,7 @@ export const BirthdayCelebration: React.FC = () => {
       <div className="flex items-center gap-3">
         <Cake className="h-6 w-6 text-white" />
         <div>
-          <h3 className="font-semibold text-lg">Happy Birthday{settings.preferredName ? `, ${settings.preferredName}` : ''}!</h3>
+          <h3 className="font-semibold text-lg">Happy Birthday{preferredName ? `, ${preferredName}` : ''}!</h3>
           <p className="text-sm">Enjoy your special day with your favorite books!</p>
         </div>
         <button 
