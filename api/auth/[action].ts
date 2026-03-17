@@ -1,4 +1,5 @@
 import { VercelRequest, VercelResponse } from "@vercel/node";
+import { randomBytes } from "node:crypto";
 import { MongoServerError } from "mongodb";
 
 import { ApiError, methodNotAllowed, sendError, sendJson } from "../../src/server/lib/api-response.js";
@@ -64,6 +65,10 @@ type DeletedAccountSummary = {
   upcomingReleases: number;
   notifications: number;
   userSettings: number;
+};
+
+const createTemporaryPassword = (): string => {
+  return randomBytes(12).toString("base64url");
 };
 
 const getRequestBody = (request: VercelRequest): AuthRequestBody => {
@@ -478,6 +483,61 @@ const handleAdminSetRole = async (
   });
 };
 
+const handleAdminResetPassword = async (
+  request: VercelRequest,
+  response: VercelResponse,
+): Promise<VercelResponse> => {
+  if (request.method !== "POST") {
+    return methodNotAllowed(response, ["POST"]);
+  }
+
+  const adminUser = await requireAdminUser(request);
+  const body = getRequestBody(request);
+  const userId = (body.userId || "").trim();
+
+  if (!userId) {
+    throw new ApiError(400, "BAD_REQUEST", "User ID is required.");
+  }
+
+  if (userId === adminUser.sub) {
+    throw new ApiError(
+      403,
+      "FORBIDDEN",
+      "Admins cannot reset their own password from this screen.",
+    );
+  }
+
+  const user = await findUserById(userId);
+
+  if (!user?._id) {
+    throw new ApiError(404, "NOT_FOUND", "User not found.");
+  }
+
+  const temporaryPassword = createTemporaryPassword();
+  const passwordHash = await hashPassword(temporaryPassword);
+  const updated = await updateUserPasswordById(userId, passwordHash);
+
+  if (!updated) {
+    throw new ApiError(
+      500,
+      "INTERNAL_SERVER_ERROR",
+      "Failed to reset password.",
+    );
+  }
+
+  console.info("[ADMIN] User password reset", {
+    adminUserId: adminUser.sub,
+    targetUserId: userId,
+  });
+
+  return sendJson(response, 200, {
+    success: true,
+    user: toPublicUser(user),
+    temporaryPassword,
+    message: "Temporary password generated and existing sessions invalidated.",
+  });
+};
+
 const handleChangeEmail = async (
   request: VercelRequest,
   response: VercelResponse,
@@ -743,6 +803,10 @@ export default async function handler(
 
     if (action === "admin-set-role") {
       return handleAdminSetRole(request, response);
+    }
+
+    if (action === "admin-reset-password") {
+      return handleAdminResetPassword(request, response);
     }
 
     if (action === "change-email") {

@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { AlertCircle, Database, HardDrive, RefreshCw, Trash2, UserCircle, Wrench } from "lucide-react";
+import { AlertCircle, Database, HardDrive, KeyRound, RefreshCw, Trash2, UserCircle, Wrench } from "lucide-react";
 import { PageHeader } from '@/components/ui/page-header';
 import { DatabaseRepairUtility } from '@/components/debug/DatabaseRepairUtility';
 import { SessionDiagnostics } from '@/components/debug/SessionDiagnostics';
@@ -61,6 +61,10 @@ export default function AdminPage() {
   const [selectedUserError, setSelectedUserError] = useState<string | null>(null);
   const [isLoadingSelectedUser, setIsLoadingSelectedUser] = useState(false);
   const [isUpdatingSelectedUserRole, setIsUpdatingSelectedUserRole] = useState(false);
+  const [showResetPasswordConfirmation, setShowResetPasswordConfirmation] = useState(false);
+  const [resetPasswordConfirmationValue, setResetPasswordConfirmationValue] = useState('');
+  const [isResettingSelectedUserPassword, setIsResettingSelectedUserPassword] = useState(false);
+  const [generatedTemporaryPassword, setGeneratedTemporaryPassword] = useState<string | null>(null);
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
   const [deleteConfirmationValue, setDeleteConfirmationValue] = useState('');
   const [isDeletingSelectedUser, setIsDeletingSelectedUser] = useState(false);
@@ -93,8 +97,11 @@ export default function AdminPage() {
     if (!selectedUserId) {
       setSelectedUserDetail(null);
       setSelectedUserError(null);
+      setGeneratedTemporaryPassword(null);
       return;
     }
+
+    setGeneratedTemporaryPassword(null);
 
     const loadSelectedUser = async () => {
       try {
@@ -118,6 +125,9 @@ export default function AdminPage() {
   }, [selectedUserId]);
 
   const selectedUserIsCurrentAdmin = selectedUserDetail?.user.id === user?.id;
+  const resetConfirmationMatches =
+    resetPasswordConfirmationValue.trim().toLowerCase() ===
+    (selectedUserDetail?.user.email || '').trim().toLowerCase();
   const deleteConfirmationMatches =
     deleteConfirmationValue.trim().toLowerCase() ===
     (selectedUserDetail?.user.email || '').trim().toLowerCase();
@@ -208,6 +218,40 @@ export default function AdminPage() {
       });
     } finally {
       setIsDeletingSelectedUser(false);
+    }
+  };
+
+  const handleResetSelectedUserPassword = async () => {
+    if (!selectedUserDetail) {
+      return;
+    }
+
+    try {
+      setIsResettingSelectedUserPassword(true);
+
+      const result = await authApi.adminResetPassword({
+        userId: selectedUserDetail.user.id,
+      });
+
+      setGeneratedTemporaryPassword(result.temporaryPassword);
+      setResetPasswordConfirmationValue('');
+      setShowResetPasswordConfirmation(false);
+
+      toast({
+        title: "Temporary password generated",
+        description: `Existing sessions for ${result.user.email} were invalidated.`,
+      });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Password reset failed",
+        description:
+          error instanceof ApiClientError
+            ? error.message
+            : 'Failed to reset the selected user password.',
+      });
+    } finally {
+      setIsResettingSelectedUserPassword(false);
     }
   };
 
@@ -394,6 +438,47 @@ export default function AdminPage() {
                     </div>
                   </div>
 
+                  <div className="rounded-lg border p-4">
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="space-y-2">
+                        <h3 className="flex items-center gap-2 font-semibold">
+                          <KeyRound className="h-4 w-4" />
+                          Reset Password
+                        </h3>
+                        <p className="text-sm text-muted-foreground">
+                          Generate a temporary password for this user. Existing sessions will be invalidated immediately.
+                        </p>
+                        {selectedUserIsCurrentAdmin ? (
+                          <p className="text-sm font-medium text-muted-foreground">
+                            Use your own account settings to change your password. This admin reset tool cannot be used on your own account.
+                          </p>
+                        ) : null}
+                        {generatedTemporaryPassword ? (
+                          <Alert className="border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100">
+                            <AlertTitle>Temporary password</AlertTitle>
+                            <AlertDescription>
+                              <div className="space-y-2">
+                                <p>Copy this now. It is only shown here after the reset succeeds.</p>
+                                <code className="block rounded bg-background/80 px-3 py-2 font-mono text-sm text-foreground">
+                                  {generatedTemporaryPassword}
+                                </code>
+                              </div>
+                            </AlertDescription>
+                          </Alert>
+                        ) : null}
+                      </div>
+
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setShowResetPasswordConfirmation(true)}
+                        disabled={selectedUserIsCurrentAdmin || isResettingSelectedUserPassword}
+                      >
+                        Reset Password
+                      </Button>
+                    </div>
+                  </div>
+
                   <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4">
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                       <div className="space-y-2">
@@ -553,6 +638,57 @@ export default function AdminPage() {
 
       </Tabs>
       </PageHeader>
+
+      <AlertDialog
+        open={showResetPasswordConfirmation}
+        onOpenChange={(open) => {
+          setShowResetPasswordConfirmation(open);
+
+          if (!open) {
+            setResetPasswordConfirmationValue('');
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <KeyRound className="h-5 w-5" />
+              Generate Temporary Password
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-4 text-sm text-muted-foreground">
+                <p>
+                  This generates a new temporary password for <span className="font-medium text-foreground">{selectedUserDetail?.user.email}</span> and immediately invalidates their existing sessions.
+                </p>
+                <div className="space-y-2">
+                  <label htmlFor="admin-reset-confirmation" className="font-medium text-foreground">
+                    Type the user email to confirm
+                  </label>
+                  <Input
+                    id="admin-reset-confirmation"
+                    value={resetPasswordConfirmationValue}
+                    onChange={(event) => setResetPasswordConfirmationValue(event.target.value)}
+                    placeholder={selectedUserDetail?.user.email || 'user@example.com'}
+                    autoComplete="off"
+                  />
+                </div>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isResettingSelectedUserPassword}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(event) => {
+                event.preventDefault();
+                void handleResetSelectedUserPassword();
+              }}
+              disabled={!resetConfirmationMatches || isResettingSelectedUserPassword || selectedUserIsCurrentAdmin}
+            >
+              {isResettingSelectedUserPassword ? 'Generating…' : 'Generate Temporary Password'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog
         open={showDeleteConfirmation}

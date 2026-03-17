@@ -70,6 +70,13 @@ type AdminSetRoleResponse = {
   user: AuthUser;
 };
 
+type AdminResetPasswordResponse = {
+  success: boolean;
+  user: AuthUser;
+  temporaryPassword: string;
+  message: string;
+};
+
 type BookRecord = {
   id: string;
   title: string;
@@ -298,6 +305,12 @@ export const authApi = {
     }),
   adminSetRole: (payload: { userId: string; role: "user" | "admin" }) =>
     apiRequest<AdminSetRoleResponse>("/auth/admin-set-role", {
+      auth: true,
+      method: "POST",
+      body: payload,
+    }),
+  adminResetPassword: (payload: { userId: string }) =>
+    apiRequest<AdminResetPasswordResponse>("/auth/admin-reset-password", {
       auth: true,
       method: "POST",
       body: payload,
