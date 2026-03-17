@@ -3,6 +3,11 @@ import { randomBytes } from "node:crypto";
 import { MongoServerError } from "mongodb";
 
 import { ApiError, methodNotAllowed, sendError, sendJson } from "../../src/server/lib/api-response.js";
+import {
+  createAdminAuditLog,
+  listAdminAuditLogs,
+  toAdminAuditLogEntry,
+} from "../../src/server/models/admin-audit-log.js";
 import { ensureBootstrapAdminUser } from "../../src/server/lib/admin-bootstrap.js";
 import { signAuthToken } from "../../src/server/lib/auth.js";
 import { sendPasswordResetEmail } from "../../src/server/lib/email.js";
@@ -297,6 +302,24 @@ const handleAdminUsers = async (
   );
 };
 
+const handleAdminAuditLogs = async (
+  request: VercelRequest,
+  response: VercelResponse,
+): Promise<VercelResponse> => {
+  if (request.method !== "GET") {
+    return methodNotAllowed(response, ["GET"]);
+  }
+
+  await requireAdminUser(request);
+  const logs = await listAdminAuditLogs(100);
+
+  return sendJson(
+    response,
+    200,
+    logs.map((log) => toAdminAuditLogEntry(log)),
+  );
+};
+
 const handleAdminUserDetail = async (
   request: VercelRequest,
   response: VercelResponse,
@@ -395,9 +418,16 @@ const handleAdminDeleteAccount = async (
 
   const summary = await deleteOwnedUserData(userId);
 
-  console.info("[ADMIN] Account deleted", {
-    adminUserId: adminUser.sub,
-    deletedUserId: userId,
+  await createAdminAuditLog({
+    actorUserId: adminUser.sub,
+    actorEmail: adminUser.email,
+    action: "admin.user.deleted",
+    targetUserId: userId,
+    targetUserEmail: user.email,
+    details: {
+      summary,
+      role: user.role || "user",
+    },
   });
 
   return sendJson(response, 200, {
@@ -471,10 +501,16 @@ const handleAdminSetRole = async (
     throw new ApiError(500, "INTERNAL_SERVER_ERROR", "Failed to update role.");
   }
 
-  console.info("[ADMIN] User role changed", {
-    adminUserId: adminUser.sub,
+  await createAdminAuditLog({
+    actorUserId: adminUser.sub,
+    actorEmail: adminUser.email,
+    action: role === "admin" ? "admin.user.promoted" : "admin.user.demoted",
     targetUserId: userId,
-    nextRole: role,
+    targetUserEmail: user.email,
+    details: {
+      previousRole: currentRole,
+      nextRole: role,
+    },
   });
 
   return sendJson(response, 200, {
@@ -525,9 +561,15 @@ const handleAdminResetPassword = async (
     );
   }
 
-  console.info("[ADMIN] User password reset", {
-    adminUserId: adminUser.sub,
+  await createAdminAuditLog({
+    actorUserId: adminUser.sub,
+    actorEmail: adminUser.email,
+    action: "admin.user.password_reset",
     targetUserId: userId,
+    targetUserEmail: user.email,
+    details: {
+      sessionsInvalidated: true,
+    },
   });
 
   return sendJson(response, 200, {
@@ -791,6 +833,10 @@ export default async function handler(
 
     if (action === "admin-users") {
       return handleAdminUsers(request, response);
+    }
+
+    if (action === "admin-audit-logs") {
+      return handleAdminAuditLogs(request, response);
     }
 
     if (action === "admin-user-detail") {

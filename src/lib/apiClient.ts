@@ -176,6 +176,21 @@ export type NotificationRecord = {
   actionUrl?: string;
 };
 
+export type AdminAuditLogRecord = {
+  id: string;
+  actorUserId: string;
+  actorEmail: string;
+  action:
+    | "admin.user.promoted"
+    | "admin.user.demoted"
+    | "admin.user.password_reset"
+    | "admin.user.deleted";
+  targetUserId?: string;
+  targetUserEmail?: string;
+  details?: Record<string, unknown>;
+  createdAt: string;
+};
+
 export class ApiClientError extends Error {
   status: number;
   code?: string;
@@ -286,6 +301,11 @@ export const authApi = {
     }),
   getAdminUsers: () =>
     apiRequest<AuthUser[]>("/auth/admin-users", {
+      auth: true,
+      method: "GET",
+    }),
+  getAdminAuditLogs: () =>
+    apiRequest<AdminAuditLogRecord[]>("/auth/admin-audit-logs", {
       auth: true,
       method: "GET",
     }),

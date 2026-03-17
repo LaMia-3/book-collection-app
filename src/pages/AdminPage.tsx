@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { AlertCircle, Database, HardDrive, KeyRound, RefreshCw, Trash2, UserCircle, Wrench } from "lucide-react";
+import { AlertCircle, Database, FileText, HardDrive, KeyRound, RefreshCw, Trash2, UserCircle, Wrench } from "lucide-react";
 import { PageHeader } from '@/components/ui/page-header';
 import { DatabaseRepairUtility } from '@/components/debug/DatabaseRepairUtility';
 import { SessionDiagnostics } from '@/components/debug/SessionDiagnostics';
@@ -25,7 +25,7 @@ import { IndexedDBViewer } from '@/components/debug/IndexedDBViewer';
 import { useSettings } from '@/contexts/SettingsContext';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
-import { ApiClientError, authApi } from '@/lib/apiClient';
+import { AdminAuditLogRecord, ApiClientError, authApi } from '@/lib/apiClient';
 import type { AuthUser } from '@/lib/auth-storage';
 
 /**
@@ -69,6 +69,9 @@ export default function AdminPage() {
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
   const [deleteConfirmationValue, setDeleteConfirmationValue] = useState('');
   const [isDeletingSelectedUser, setIsDeletingSelectedUser] = useState(false);
+  const [isLoadingAuditLogs, setIsLoadingAuditLogs] = useState(false);
+  const [auditLogs, setAuditLogs] = useState<AdminAuditLogRecord[]>([]);
+  const [auditLogsError, setAuditLogsError] = useState<string | null>(null);
   const { settings } = useSettings();
   const { isAuthenticated, user } = useAuth();
   const { toast } = useToast();
@@ -124,6 +127,31 @@ export default function AdminPage() {
 
     void loadSelectedUser();
   }, [selectedUserId]);
+
+  useEffect(() => {
+    if (activeTab !== 'audit-logs') {
+      return;
+    }
+
+    const loadAuditLogs = async () => {
+      try {
+        setIsLoadingAuditLogs(true);
+        setAuditLogsError(null);
+        const nextLogs = await authApi.getAdminAuditLogs();
+        setAuditLogs(nextLogs);
+      } catch (error) {
+        setAuditLogsError(
+          error instanceof ApiClientError
+            ? error.message
+            : 'Unable to load admin audit logs.',
+        );
+      } finally {
+        setIsLoadingAuditLogs(false);
+      }
+    };
+
+    void loadAuditLogs();
+  }, [activeTab]);
 
   const selectedUserIsCurrentAdmin = selectedUserDetail?.user.id === user?.id;
   const resetConfirmationMatches =
@@ -268,6 +296,48 @@ export default function AdminPage() {
     }
   };
 
+  const getAuditLogActionLabel = (action: AdminAuditLogRecord['action']): string => {
+    switch (action) {
+      case 'admin.user.promoted':
+        return 'User Promoted';
+      case 'admin.user.demoted':
+        return 'Admin Access Removed';
+      case 'admin.user.password_reset':
+        return 'Password Reset';
+      case 'admin.user.deleted':
+        return 'Account Deleted';
+      default:
+        return action;
+    }
+  };
+
+  const renderAuditLogDetails = (log: AdminAuditLogRecord): string | null => {
+    if (log.action === 'admin.user.promoted' || log.action === 'admin.user.demoted') {
+      const previousRole = typeof log.details?.previousRole === 'string' ? log.details.previousRole : undefined;
+      const nextRole = typeof log.details?.nextRole === 'string' ? log.details.nextRole : undefined;
+
+      if (previousRole && nextRole) {
+        return `${previousRole} -> ${nextRole}`;
+      }
+    }
+
+    if (log.action === 'admin.user.password_reset') {
+      return 'Existing sessions invalidated.';
+    }
+
+    if (log.action === 'admin.user.deleted') {
+      const summary = log.details?.summary;
+
+      if (summary && typeof summary === 'object') {
+        const typedSummary = summary as Record<string, unknown>;
+
+        return `${typedSummary.books ?? 0} books, ${typedSummary.series ?? 0} series, ${typedSummary.collections ?? 0} collections, ${typedSummary.upcomingReleases ?? 0} upcoming releases, ${typedSummary.notifications ?? 0} notifications, ${typedSummary.userSettings ?? 0} user settings`;
+      }
+    }
+
+    return null;
+  };
+
   return (
     <div className="container py-8 max-w-7xl">
       <PageHeader
@@ -295,6 +365,10 @@ export default function AdminPage() {
           <TabsTrigger value="repair" className="flex items-center gap-2">
             <Wrench className="h-4 w-4" />
             <span>Repair</span>
+          </TabsTrigger>
+          <TabsTrigger value="audit-logs" className="flex items-center gap-2">
+            <FileText className="h-4 w-4" />
+            <span>Audit Logs</span>
           </TabsTrigger>
         </TabsList>
 
@@ -658,6 +732,60 @@ export default function AdminPage() {
             </CardHeader>
             <CardContent>
               <DatabaseRepairUtility />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="audit-logs" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5" />
+                Admin Audit Logs
+              </CardTitle>
+              <CardDescription>
+                Persistent records of privileged admin actions, including role changes, password resets, and account deletions.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {auditLogsError ? (
+                <Alert variant="destructive">
+                  <AlertTitle>Audit Log Error</AlertTitle>
+                  <AlertDescription>{auditLogsError}</AlertDescription>
+                </Alert>
+              ) : isLoadingAuditLogs ? (
+                <p className="text-sm text-muted-foreground">Loading audit logs…</p>
+              ) : auditLogs.length === 0 ? (
+                <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                  No admin audit logs recorded yet.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {auditLogs.map((log) => (
+                    <div key={log.id} className="rounded-lg border p-4">
+                      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                        <div className="space-y-1">
+                          <p className="font-medium">{getAuditLogActionLabel(log.action)}</p>
+                          <p className="text-sm text-muted-foreground">
+                            Actor: {log.actorEmail}
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            Target: {log.targetUserEmail || 'None'}
+                          </p>
+                          {renderAuditLogDetails(log) ? (
+                            <p className="text-sm text-muted-foreground">
+                              Details: {renderAuditLogDetails(log)}
+                            </p>
+                          ) : null}
+                        </div>
+                        <div className="text-sm text-muted-foreground">
+                          <p>{new Date(log.createdAt).toLocaleString()}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

@@ -1,7 +1,7 @@
 {
   "routes": [
     {
-      "src": "/api/auth/(login|register|me|account|admin-users|admin-user-detail|admin-delete-account|admin-set-role|admin-reset-password|change-email|change-password|forgot-password|verify-reset-otp|reset-password)",
+      "src": "/api/auth/(login|register|me|account|admin-users|admin-audit-logs|admin-user-detail|admin-delete-account|admin-set-role|admin-reset-password|change-email|change-password|forgot-password|verify-reset-otp|reset-password)",
       "dest": "/api/auth/[action]?action=$1"
     },
     {
