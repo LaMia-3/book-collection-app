@@ -242,6 +242,11 @@ export const authApi = {
       auth: true,
       method: "DELETE",
     }),
+  getAdminUsers: () =>
+    apiRequest<AuthUser[]>("/auth/admin-users", {
+      auth: true,
+      method: "GET",
+    }),
   changeEmail: (payload: { currentPassword: string; email: string }) =>
     apiRequest<AuthResponse>("/auth/change-email", {
       auth: true,

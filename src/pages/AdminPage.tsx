@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -12,6 +12,8 @@ import { MigrationDiagnostics } from '@/components/debug/MigrationDiagnostics';
 import { IndexedDBViewer } from '@/components/debug/IndexedDBViewer';
 import { useSettings } from '@/contexts/SettingsContext';
 import { useAuth } from '@/hooks/useAuth';
+import { ApiClientError, authApi } from '@/lib/apiClient';
+import type { AuthUser } from '@/lib/auth-storage';
 
 /**
  * Admin Page
@@ -28,9 +30,32 @@ export default function AdminPage() {
   const tabParam = queryParams.get('tab');
   
   const [activeTab, setActiveTab] = useState(tabParam || 'account');
+  const [isLoadingUsers, setIsLoadingUsers] = useState(true);
+  const [users, setUsers] = useState<AuthUser[]>([]);
+  const [usersError, setUsersError] = useState<string | null>(null);
   const { settings } = useSettings();
   const { isAuthenticated } = useAuth();
-  
+
+  useEffect(() => {
+    const loadUsers = async () => {
+      try {
+        setIsLoadingUsers(true);
+        setUsersError(null);
+        const nextUsers = await authApi.getAdminUsers();
+        setUsers(nextUsers);
+      } catch (error) {
+        setUsersError(
+          error instanceof ApiClientError
+            ? error.message
+            : 'Unable to load users.',
+        );
+      } finally {
+        setIsLoadingUsers(false);
+      }
+    };
+
+    void loadUsers();
+  }, []);
 
   return (
     <div className="container py-8 max-w-7xl">
@@ -64,6 +89,47 @@ export default function AdminPage() {
 
         <TabsContent value="account" className="space-y-6">
           <SessionDiagnostics />
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <UserCircle className="h-5 w-5 mr-2" />
+                User List
+              </CardTitle>
+              <CardDescription>
+                Basic admin view of signed-up users. This is the first read-only slice before user management actions are added.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {usersError ? (
+                <Alert variant="destructive">
+                  <AlertTitle>User List Error</AlertTitle>
+                  <AlertDescription>{usersError}</AlertDescription>
+                </Alert>
+              ) : isLoadingUsers ? (
+                <p className="text-sm text-muted-foreground">Loading users…</p>
+              ) : (
+                <div className="space-y-3">
+                  {users.map((user) => (
+                    <div key={user.id} className="rounded-lg border p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <p className="font-medium">{user.email}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {user.preferredName || 'No preferred name'}
+                          </p>
+                        </div>
+                        <div className="text-sm text-muted-foreground">
+                          <p><span className="font-medium">Role:</span> {user.role}</p>
+                          <p><span className="font-medium">Created:</span> {new Date(user.createdAt).toLocaleDateString()}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
           <Card>
             <CardHeader>

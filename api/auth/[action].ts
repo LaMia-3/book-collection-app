@@ -14,12 +14,18 @@ import {
   validateRegisterCredentials,
   verifyPassword,
 } from "../../src/server/lib/password.js";
-import { UnauthorizedError, requireAuthenticatedUser } from "../../src/server/middleware/auth.js";
+import {
+  ForbiddenError,
+  UnauthorizedError,
+  requireAdminUser,
+  requireAuthenticatedUser,
+} from "../../src/server/middleware/auth.js";
 import {
   findUserByEmail,
   findUserById,
   deleteUserById,
   insertUser,
+  listUsers,
   toPublicUser,
   updateUserEmailById,
   updateUserPasswordById,
@@ -211,6 +217,24 @@ const handleDeleteAccount = async (
   }
 
   return sendJson(response, 200, { success: true });
+};
+
+const handleAdminUsers = async (
+  request: VercelRequest,
+  response: VercelResponse,
+): Promise<VercelResponse> => {
+  if (request.method !== "GET") {
+    return methodNotAllowed(response, ["GET"]);
+  }
+
+  await requireAdminUser(request);
+  const users = await listUsers();
+
+  return sendJson(
+    response,
+    200,
+    users.map((user) => toPublicUser(user)),
+  );
 };
 
 const handleChangeEmail = async (
@@ -464,6 +488,10 @@ export default async function handler(
       return handleDeleteAccount(request, response);
     }
 
+    if (action === "admin-users") {
+      return handleAdminUsers(request, response);
+    }
+
     if (action === "change-email") {
       return handleChangeEmail(request, response);
     }
@@ -497,6 +525,13 @@ export default async function handler(
       return sendError(
         response,
         new ApiError(401, "UNAUTHORIZED", error.message),
+      );
+    }
+
+    if (error instanceof ForbiddenError) {
+      return sendError(
+        response,
+        new ApiError(403, "FORBIDDEN", error.message),
       );
     }
 

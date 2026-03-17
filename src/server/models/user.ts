@@ -69,6 +69,11 @@ export const findUserById = async (
   return usersCollection.findOne({ _id: new ObjectId(id) });
 };
 
+export const listUsers = async (): Promise<UserDocument[]> => {
+  const usersCollection = await getUsersCollection();
+  return usersCollection.find({}, { sort: { createdAt: -1 } }).toArray();
+};
+
 export const deleteUserById = async (id: string): Promise<boolean> => {
   if (!ObjectId.isValid(id)) {
     return false;

@@ -3,6 +3,7 @@ import { VercelResponse } from "@vercel/node";
 export type ApiErrorCode =
   | "BAD_REQUEST"
   | "UNAUTHORIZED"
+  | "FORBIDDEN"
   | "NOT_FOUND"
   | "CONFLICT"
   | "METHOD_NOT_ALLOWED"

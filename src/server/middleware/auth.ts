@@ -1,7 +1,7 @@
 import { IncomingHttpHeaders } from "http";
 
 import { AuthTokenPayload, verifyAuthToken } from "../lib/auth.js";
-import { findUserById } from "../models/user.js";
+import { findUserById, UserDocument } from "../models/user.js";
 
 type HeaderSource =
   | Headers
@@ -43,6 +43,15 @@ export class UnauthorizedError extends Error {
   constructor(message = "Authentication required.") {
     super(message);
     this.name = "UnauthorizedError";
+  }
+}
+
+export class ForbiddenError extends Error {
+  statusCode = 403;
+
+  constructor(message = "You do not have access to this resource.") {
+    super(message);
+    this.name = "ForbiddenError";
   }
 }
 
@@ -94,4 +103,21 @@ export const requireAuthenticatedUser = async (
   }
 
   return authPayload;
+};
+
+export const requireAdminUser = async (
+  source: HeaderSource,
+): Promise<UserDocument & { _id: NonNullable<UserDocument["_id"]> }> => {
+  const authPayload = await requireAuthenticatedUser(source);
+  const user = await findUserById(authPayload.sub);
+
+  if (!user?._id) {
+    throw new UnauthorizedError("User account is no longer available.");
+  }
+
+  if ((user.role || "user") !== "admin") {
+    throw new ForbiddenError();
+  }
+
+  return user as UserDocument & { _id: NonNullable<UserDocument["_id"]> };
 };

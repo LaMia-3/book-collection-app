@@ -130,6 +130,7 @@ export function SessionDiagnostics() {
             <div className="space-y-1 text-sm">
               <p><span className="font-medium">Email:</span> {user?.email || 'Not signed in'}</p>
               <p><span className="font-medium">User ID:</span> {user?.id || 'Not signed in'}</p>
+              <p><span className="font-medium">Role:</span> {user?.role || 'Not signed in'}</p>
               <p><span className="font-medium">Preferred Name:</span> {user?.preferredName || 'Not set'}</p>
             </div>
           </div>
