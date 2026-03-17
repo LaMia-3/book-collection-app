@@ -219,7 +219,7 @@ export const NotificationFeed = ({ onClose }: NotificationFeedProps) => {
   };
   
   return (
-    <div className="w-full max-w-sm bg-background border rounded-lg shadow-lg overflow-hidden">
+    <div className="w-[26rem] max-w-[calc(100vw-1.5rem)] bg-background border rounded-lg shadow-lg overflow-hidden">
       <div className="flex items-center justify-between p-4 border-b">
         <div className="flex items-center gap-2">
           <Bell className="h-5 w-5" />
@@ -252,11 +252,17 @@ export const NotificationFeed = ({ onClose }: NotificationFeedProps) => {
       
       <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'app-updates' | 'book-alerts')} className="w-full">
         <div className="px-2 pt-2">
-          <TabsList className="w-full grid grid-cols-2">
-            <TabsTrigger value="app-updates" className="text-sm">
+          <TabsList className="grid h-auto w-full grid-cols-2 gap-1">
+            <TabsTrigger
+              value="app-updates"
+              className="min-w-0 whitespace-normal px-3 py-2 text-center text-sm leading-tight"
+            >
               App Updates ({announcements.length})
             </TabsTrigger>
-            <TabsTrigger value="book-alerts" className="text-sm">
+            <TabsTrigger
+              value="book-alerts"
+              className="min-w-0 whitespace-normal px-3 py-2 text-center text-sm leading-tight"
+            >
               Book Alerts ({notifications.length})
             </TabsTrigger>
           </TabsList>
@@ -318,7 +324,10 @@ export const NotificationFeed = ({ onClose }: NotificationFeedProps) => {
             <TabsContent value="book-alerts" className="mt-0">
               {notifications.length === 0 ? (
                 <div className="py-8 text-center">
-                  <p className="text-muted-foreground">No book alerts</p>
+                  <p className="text-muted-foreground">No book alerts yet</p>
+                  <p className="mt-2 text-xs text-muted-foreground/80">
+                    Book alerts will be expanded in a later phase.
+                  </p>
                 </div>
               ) : (
                 <>
@@ -332,6 +341,9 @@ export const NotificationFeed = ({ onClose }: NotificationFeedProps) => {
                       <Trash className="h-3.5 w-3.5" />
                       Clear all notifications
                     </Button>
+                  </div>
+                  <div className="border-b px-4 py-2 text-xs text-muted-foreground/80">
+                    Book alerts will be expanded in a later phase.
                   </div>
                   <div className="h-[300px] overflow-hidden">
                     <ScrollArea className="h-full pr-2">
