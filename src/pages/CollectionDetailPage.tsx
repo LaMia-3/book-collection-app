@@ -510,8 +510,8 @@ const CollectionDetailPage: React.FC = () => {
               
               <TabsContent value="books" className="space-y-4">
                 {/* Search and filter controls */}
-                <div className="flex flex-col md:flex-row gap-4 mb-6">
-                  <div className="relative flex-grow">
+                <div className="mb-6 flex w-full flex-wrap items-center gap-4 sm:flex-nowrap">
+                  <div className="relative w-full min-w-0 sm:flex-grow">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" size={18} />
                     <Input
                       placeholder="Search books..."
@@ -521,12 +521,12 @@ const CollectionDetailPage: React.FC = () => {
                     />
                   </div>
                   
-                  <div className="flex gap-2">
+                  <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:flex-nowrap">
                     <Select
                       value={sortOrder}
                       onValueChange={(value) => setSortOrder(value as 'alphabetical' | 'author' | 'recent')}
                     >
-                      <SelectTrigger className="w-[180px]">
+                      <SelectTrigger className="w-full sm:w-[180px]">
                         <SelectValue placeholder="Sort by" />
                       </SelectTrigger>
                       <SelectContent>
@@ -536,7 +536,7 @@ const CollectionDetailPage: React.FC = () => {
                       </SelectContent>
                     </Select>
                     
-                    <div className="flex border rounded-md">
+                    <div className="ml-auto flex border rounded-md">
                       <Button
                         variant={viewMode === 'grid' ? 'default' : 'ghost'}
                         size="icon"

@@ -655,16 +655,16 @@ export default function AdminPage() {
       >
       
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="flex w-full mb-8">
-          <TabsTrigger value="account" className="flex items-center gap-2">
+        <TabsList className="mb-8 flex h-auto w-full justify-start gap-1 overflow-x-auto p-1">
+          <TabsTrigger value="account" className="shrink-0 flex items-center gap-2">
             <UserCircle className="h-4 w-4" />
             <span>User Management</span>
           </TabsTrigger>
-          <TabsTrigger value="announcements" className="flex items-center gap-2">
+          <TabsTrigger value="announcements" className="shrink-0 flex items-center gap-2">
             <Megaphone className="h-4 w-4" />
             <span>Announcements</span>
           </TabsTrigger>
-          <TabsTrigger value="audit-logs" className="flex items-center gap-2">
+          <TabsTrigger value="audit-logs" className="shrink-0 flex items-center gap-2">
             <FileText className="h-4 w-4" />
             <span>Audit Logs</span>
           </TabsTrigger>

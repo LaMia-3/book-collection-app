@@ -26,7 +26,7 @@ export const BookShelf = ({ books, onBookClick }: BookShelfProps) => {
       <div className="flex flex-col items-center justify-center py-16 text-center">
         <div className="w-24 h-24 bg-gradient-shelf rounded-lg mb-6 shadow-shelf"></div>
         <h3 className="text-xl font-serif text-muted-foreground mb-2">Your library awaits</h3>
-        <p className="text-muted-foreground">Start building your collection by searching for books above</p>
+        <p className="text-muted-foreground">Start building your collection by using the Add Books button above</p>
       </div>
     );
   }

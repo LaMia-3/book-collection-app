@@ -48,13 +48,6 @@ export const CreateSeriesDialog = ({
   });
   const [selectedBookIds, setSelectedBookIds] = useState<Record<string, boolean>>({});
   
-  // Fetch books directly from IndexedDB when dialog opens or when switching to books step
-  useEffect(() => {
-    if (open && step === 'books') {
-      loadBooksNotInSeries();
-    }
-  }, [loadBooksNotInSeries, open, step]);
-  
   // Load books through the repository so authenticated sessions use the API path.
   const loadBooksNotInSeries = useCallback(async () => {
     setIsLoading(true);
@@ -99,6 +92,13 @@ export const CreateSeriesDialog = ({
       setIsLoading(false);
     }
   }, [toast]);
+
+  // Fetch books when dialog opens or when switching to books step
+  useEffect(() => {
+    if (open && step === 'books') {
+      loadBooksNotInSeries();
+    }
+  }, [loadBooksNotInSeries, open, step]);
   
   const handleNextStep = () => {
     if (!seriesData.name.trim()) {

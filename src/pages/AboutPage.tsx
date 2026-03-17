@@ -35,24 +35,24 @@ const AboutPage = () => {
         </p>
 
         <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5">
-            <TabsTrigger value="changelog" className="flex items-center gap-1.5 text-xs sm:text-sm">
+          <TabsList className="flex h-auto w-full justify-start gap-1 overflow-x-auto p-1 sm:grid sm:grid-cols-5 sm:overflow-visible">
+            <TabsTrigger value="changelog" className="shrink-0 flex items-center gap-1.5 text-xs sm:text-sm">
               <BookOpen className="h-3.5 w-3.5 hidden sm:inline" />
               Changelog
             </TabsTrigger>
-            <TabsTrigger value="known-issues" className="flex items-center gap-1.5 text-xs sm:text-sm">
+            <TabsTrigger value="known-issues" className="shrink-0 flex items-center gap-1.5 text-xs sm:text-sm">
               <Bug className="h-3.5 w-3.5 hidden sm:inline" />
               Known Issues
             </TabsTrigger>
-            <TabsTrigger value="privacy" className="flex items-center gap-1.5 text-xs sm:text-sm">
+            <TabsTrigger value="privacy" className="shrink-0 flex items-center gap-1.5 text-xs sm:text-sm">
               <Shield className="h-3.5 w-3.5 hidden sm:inline" />
               Privacy
             </TabsTrigger>
-            <TabsTrigger value="roadmap" className="flex items-center gap-1.5 text-xs sm:text-sm">
+            <TabsTrigger value="roadmap" className="shrink-0 flex items-center gap-1.5 text-xs sm:text-sm">
               <Sparkles className="h-3.5 w-3.5 hidden sm:inline" />
               Roadmap
             </TabsTrigger>
-            <TabsTrigger value="about" className="flex items-center gap-1.5 text-xs sm:text-sm">
+            <TabsTrigger value="about" className="shrink-0 flex items-center gap-1.5 text-xs sm:text-sm">
               <Heart className="h-3.5 w-3.5 hidden sm:inline" />
               About
             </TabsTrigger>
@@ -421,7 +421,7 @@ const AboutPage = () => {
               <div>
                 <h3 className="text-lg font-semibold mb-2">Built With</h3>
                 <div className="flex flex-wrap gap-2">
-                  {['React', 'TypeScript', 'Tailwind CSS', 'Radix UI', 'Vite', 'Vercel Functions', 'MongoDB', 'IndexedDB'].map((tech) => (
+                  {['React', 'TypeScript', 'Tailwind CSS', 'Radix UI', 'Vite', 'Vercel Functions', 'MongoDB'].map((tech) => (
                     <span
                       key={tech}
                       className="text-xs bg-muted text-muted-foreground px-2.5 py-1 rounded-full"

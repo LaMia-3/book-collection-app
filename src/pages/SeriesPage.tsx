@@ -304,9 +304,9 @@ const SeriesPage = () => {
       onSettingsClick={() => setShowSettings(true)}
       addButtonLabel="Add Series"
       searchComponent={
-        <div className="flex items-center gap-2 w-full">
+        <div className="flex w-full flex-wrap items-center gap-2 sm:flex-nowrap">
           {/* Search input */}
-          <div className="relative flex-grow">
+          <div className="relative w-full min-w-0 sm:flex-grow">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
             <Input
               type="text"
@@ -331,7 +331,7 @@ const SeriesPage = () => {
             value={filter.sortBy || 'alphabetical'}
             onValueChange={(value) => setFilter({...filter, sortBy: value as 'alphabetical' | 'recent'})}
           >
-            <SelectTrigger className="w-[140px] h-10">
+            <SelectTrigger className="h-10 w-full sm:w-[140px]">
               <SelectValue placeholder="Sort by" />
             </SelectTrigger>
             <SelectContent>
@@ -341,10 +341,10 @@ const SeriesPage = () => {
           </Select>
           
           {/* Filter button */}
-          <div className="relative">
+          <div className="relative w-full sm:w-auto">
             <Button 
               variant="outline" 
-              className="h-10"
+              className="h-10 w-full sm:w-auto"
               onClick={() => {
                 setIsFilterOpen(!isFilterOpen)
               }}
@@ -377,7 +377,7 @@ const SeriesPage = () => {
           </div>
           
           {/* View Toggle Buttons */}
-          <div className="flex">
+          <div className="ml-auto flex shrink-0">
             <Button
               variant={viewMode === "grid" ? "default" : "outline"}
               size="icon"
@@ -565,13 +565,12 @@ const SeriesPage = () => {
       {isCreatingNewSeries && (
         <CreateSeriesDialog
           open={isCreatingNewSeries}
-          onClose={() => setIsCreatingNewSeries(false)}
-          onCreateSeries={(newSeries) => {
+          onOpenChange={setIsCreatingNewSeries}
+          onSeriesCreated={(newSeries) => {
             // Add the new series to state
             setSeries(prev => [...prev, newSeries]);
             setIsCreatingNewSeries(false);
           }}
-          books={books}
         />
       )}
       

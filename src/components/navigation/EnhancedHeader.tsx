@@ -73,7 +73,7 @@ export function EnhancedHeader({
                   <DropdownMenuContent>
                     <DropdownMenuItem onClick={onSearchAPIClick}>
                       <Search className="h-4 w-4 mr-2" />
-                      Search API
+                      Search
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={onManualEntryClick}>
                       <PenLine className="h-4 w-4 mr-2" />

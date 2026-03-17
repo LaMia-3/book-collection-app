@@ -62,6 +62,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { enhancedStorageService } from "@/services/storage/EnhancedStorageService";
 import { bookRepository } from "@/repositories/BookRepository";
 import { seriesRepository } from "@/repositories/SeriesRepository";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -369,12 +370,11 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
         description: seriesData.description || `Series featuring ${book.title}`,
         author: seriesData.author || book.author,
         books: [book.id],
-        coverImage: seriesData.coverImage || book.thumbnail,
-        // Convert genre to categories for IndexedDB format
-        categories: seriesData.genre || (book.genre ? [book.genre] : []),
-        status: seriesData.status || 'ongoing',
+        coverImage: book.thumbnail,
+        genre: Array.isArray(book.genre) ? book.genre : (book.genre ? [book.genre] : undefined),
+        status: 'ongoing' as const,
         readingOrder: 'publication' as 'publication' | 'chronological' | 'custom',
-        totalBooks: seriesData.totalBooks || 1,
+        totalBooks: 1,
         completedBooks: 0,
         readingProgress: 0,
         isTracked: seriesData.isTracked || false,
@@ -389,8 +389,7 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
         ...newSeriesForIndexedDB,
         createdAt: new Date(),
         updatedAt: new Date(),
-        // Copy categories to genre for UI compatibility
-        genre: newSeriesForIndexedDB.categories
+        genre: newSeriesForIndexedDB.genre
       };
 
       await seriesRepository.add(newUISeriesObject);
@@ -959,8 +958,9 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
   }, [handleSave, onClose, isEditingTitle, isEditingAuthor, isEditingPageCount, isEditingDescription, isEditingPublishedDate, isEditingGenre, showDeleteConfirm]);
 
   return (
-    <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-elegant">
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto p-0">
+      <Card className="w-full border-0 shadow-elegant">
         <CardHeader className="bg-gradient-warm text-primary-foreground">
           <div className="flex items-start justify-between">
             <div className="flex-1">
@@ -2118,7 +2118,8 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
           />
         </CardContent>
       </Card>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 };
 
