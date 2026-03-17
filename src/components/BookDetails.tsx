@@ -138,7 +138,7 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
   const [showCreateSeriesDialog, setShowCreateSeriesDialog] = useState(false);
   const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
   const [showMetadataInfo, setShowMetadataInfo] = useState(false);
-  const [showCollectionsInfo, setShowCollectionsInfo] = useState(true);
+  const [showCollectionsInfo, setShowCollectionsInfo] = useState(false);
   const [seriesDetectionResult, setSeriesDetectionResult] = useState<SeriesDetectionResult | null>(null);
   // Format date for HTML date input (YYYY-MM-DD)
   const formatDateForInput = (dateString?: string): string => {
@@ -2104,35 +2104,39 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
           </AlertDialog>
           
           {/* Series Assignment Dialog */}
-          <Suspense fallback={null}>
-            <SeriesAssignmentDialog
-              open={showSeriesAssignmentDialog}
-              onOpenChange={setShowSeriesAssignmentDialog}
-              book={book}
-              existingBooks={availableSeries.length > 0 ? availableSeries.map(s => ({ ...book, id: s.id })) : []}
-              detectedSeries={seriesDetectionResult}
-              onAssignSeries={handleAssignSeries}
-              onCreateNewSeries={handleCreateNewSeries}
-              mode="change"
-              currentBookSeriesId={selectedSeriesId}
-            />
-          </Suspense>
+          {showSeriesAssignmentDialog && (
+            <Suspense fallback={null}>
+              <SeriesAssignmentDialog
+                open={showSeriesAssignmentDialog}
+                onOpenChange={setShowSeriesAssignmentDialog}
+                book={book}
+                existingBooks={availableSeries.length > 0 ? availableSeries.map(s => ({ ...book, id: s.id })) : []}
+                detectedSeries={seriesDetectionResult}
+                onAssignSeries={handleAssignSeries}
+                onCreateNewSeries={handleCreateNewSeries}
+                mode="change"
+                currentBookSeriesId={selectedSeriesId}
+              />
+            </Suspense>
+          )}
           
           {/* Create Series Dialog */}
-          <Suspense fallback={null}>
-            <CreateSeriesDialog
-              open={showCreateSeriesDialog}
-              onOpenChange={setShowCreateSeriesDialog}
-              onSeriesCreated={(newSeries) => {
-                // Associate current book with new series
-                handleAssignSeries(book, newSeries.id);
-                toast({
-                  title: "Book added to new series",
-                  description: `Successfully added "${book.title}" to "${newSeries.name}" series`
-                });
-              }}
-            />
-          </Suspense>
+          {showCreateSeriesDialog && (
+            <Suspense fallback={null}>
+              <CreateSeriesDialog
+                open={showCreateSeriesDialog}
+                onOpenChange={setShowCreateSeriesDialog}
+                onSeriesCreated={(newSeries) => {
+                  // Associate current book with new series
+                  handleAssignSeries(book, newSeries.id);
+                  toast({
+                    title: "Book added to new series",
+                    description: `Successfully added "${book.title}" to "${newSeries.name}" series`
+                  });
+                }}
+              />
+            </Suspense>
+          )}
         </CardContent>
       </Card>
       </DialogContent>
