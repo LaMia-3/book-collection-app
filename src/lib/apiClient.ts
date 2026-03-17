@@ -242,6 +242,21 @@ export const authApi = {
       auth: true,
       method: "DELETE",
     }),
+  changeEmail: (payload: { currentPassword: string; email: string }) =>
+    apiRequest<AuthResponse>("/auth/change-email", {
+      auth: true,
+      method: "POST",
+      body: payload,
+    }),
+  changePassword: (payload: {
+    currentPassword: string;
+    newPassword: string;
+  }) =>
+    apiRequest<{ success: boolean; message: string }>("/auth/change-password", {
+      auth: true,
+      method: "POST",
+      body: payload,
+    }),
   requestPasswordReset: (payload: { email: string }) =>
     apiRequest<PasswordResetRequestResponse>("/auth/forgot-password", {
       method: "POST",

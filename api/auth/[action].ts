@@ -19,6 +19,7 @@ import {
   deleteUserById,
   insertUser,
   toPublicUser,
+  updateUserEmailById,
   updateUserPasswordById,
 } from "../../src/server/models/user.js";
 import { getBooksCollection } from "../../src/server/models/book.js";
@@ -35,7 +36,9 @@ import {
 } from "../../src/server/models/password-reset-otp.js";
 
 type AuthRequestBody = {
+  currentPassword?: string;
   email?: string;
+  newPassword?: string;
   otp?: string;
   password?: string;
   preferredName?: string;
@@ -208,6 +211,106 @@ const handleDeleteAccount = async (
   return sendJson(response, 200, { success: true });
 };
 
+const handleChangeEmail = async (
+  request: VercelRequest,
+  response: VercelResponse,
+): Promise<VercelResponse> => {
+  if (request.method !== "POST") {
+    return methodNotAllowed(response, ["POST"]);
+  }
+
+  const authUser = await requireAuthenticatedUser(request);
+  const body = getRequestBody(request);
+  const email = validateEmail(body.email || "");
+  const currentPassword = validatePassword(body.currentPassword || "");
+  const user = await findUserById(authUser.sub);
+
+  if (!user?._id) {
+    throw new ApiError(404, "NOT_FOUND", "User not found.");
+  }
+
+  const isValidPassword = await verifyPassword(currentPassword, user.passwordHash);
+
+  if (!isValidPassword) {
+    throw new ApiError(401, "UNAUTHORIZED", "Current password is incorrect.");
+  }
+
+  if (user.email === email) {
+    throw new ApiError(400, "BAD_REQUEST", "That email is already on your account.");
+  }
+
+  const existingUser = await findUserByEmail(email);
+
+  if (existingUser?._id && existingUser._id.toString() !== user._id.toString()) {
+    throw new ApiError(409, "CONFLICT", "Email is already in use.");
+  }
+
+  const updatedUser = await updateUserEmailById(authUser.sub, email);
+
+  if (!updatedUser?._id) {
+    throw new ApiError(500, "INTERNAL_SERVER_ERROR", "Failed to update email.");
+  }
+
+  console.info("[AUTH] User changed email", {
+    userId: authUser.sub,
+  });
+
+  const token = signAuthToken({
+    sub: updatedUser._id.toString(),
+    email: updatedUser.email,
+  });
+
+  return sendJson(response, 200, {
+    token,
+    user: toPublicUser(updatedUser),
+  });
+};
+
+const handleChangePassword = async (
+  request: VercelRequest,
+  response: VercelResponse,
+): Promise<VercelResponse> => {
+  if (request.method !== "POST") {
+    return methodNotAllowed(response, ["POST"]);
+  }
+
+  const authUser = await requireAuthenticatedUser(request);
+  const body = getRequestBody(request);
+  const currentPassword = validatePassword(body.currentPassword || "");
+  const newPassword = validatePassword(body.newPassword || "");
+  const user = await findUserById(authUser.sub);
+
+  if (!user?._id) {
+    throw new ApiError(404, "NOT_FOUND", "User not found.");
+  }
+
+  const isValidPassword = await verifyPassword(currentPassword, user.passwordHash);
+
+  if (!isValidPassword) {
+    throw new ApiError(401, "UNAUTHORIZED", "Current password is incorrect.");
+  }
+
+  const nextPasswordHash = await hashPassword(newPassword);
+  const updatedUser = await updateUserPasswordById(authUser.sub, nextPasswordHash);
+
+  if (!updatedUser) {
+    throw new ApiError(
+      500,
+      "INTERNAL_SERVER_ERROR",
+      "Failed to update password.",
+    );
+  }
+
+  console.info("[AUTH] User changed password", {
+    userId: authUser.sub,
+  });
+
+  return sendJson(response, 200, {
+    success: true,
+    message: "Password updated. Sign in again with your new password.",
+  });
+};
+
 const handleForgotPassword = async (
   request: VercelRequest,
   response: VercelResponse,
@@ -356,6 +459,14 @@ export default async function handler(
 
     if (action === "account") {
       return handleDeleteAccount(request, response);
+    }
+
+    if (action === "change-email") {
+      return handleChangeEmail(request, response);
+    }
+
+    if (action === "change-password") {
+      return handleChangePassword(request, response);
     }
 
     if (action === "forgot-password") {

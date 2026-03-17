@@ -16,12 +16,14 @@ import appScreenshot from "../../docs/app-screenshot.png";
 
 type LocationState = {
   from?: string;
+  message?: string;
 };
 
 export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { authError, isAuthenticated, isLoadingAuth, login } = useAuth();
+  const locationState = location.state as LocationState | null;
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [pageError, setPageError] = useState<string | null>(null);
@@ -55,6 +57,10 @@ export default function LoginPage() {
           </CardHeader>
           <CardContent>
             <form className="space-y-4" onSubmit={handleSubmit}>
+              {locationState?.message && !pageError && !authError && (
+                <p className="text-sm text-muted-foreground">{locationState.message}</p>
+              )}
+
               <div className="space-y-2">
                 <label className="text-sm font-medium" htmlFor="email">
                   Email

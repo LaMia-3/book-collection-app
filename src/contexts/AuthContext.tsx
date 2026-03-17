@@ -123,8 +123,55 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const changeEmail = async (input: {
+    currentPassword: string;
+    email: string;
+  }) => {
+    setAuthError(null);
+    setIsLoadingAuth(true);
+
+    try {
+      const { token, user: authenticatedUser } = await authApi.changeEmail(input);
+      setStoredAuthToken(token);
+      setStoredAuthUser(authenticatedUser);
+      setUser(authenticatedUser);
+    } catch (error) {
+      setAuthError(
+        error instanceof ApiClientError ? error.message : "Email change failed.",
+      );
+      throw error;
+    } finally {
+      setIsLoadingAuth(false);
+    }
+  };
+
+  const changePassword = async (input: {
+    currentPassword: string;
+    newPassword: string;
+  }) => {
+    setAuthError(null);
+    setIsLoadingAuth(true);
+
+    try {
+      await authApi.changePassword(input);
+      clearStoredAuthSession();
+      setUser(null);
+    } catch (error) {
+      setAuthError(
+        error instanceof ApiClientError
+          ? error.message
+          : "Password change failed.",
+      );
+      throw error;
+    } finally {
+      setIsLoadingAuth(false);
+    }
+  };
+
   const value: AuthContextValue = {
     authError,
+    changeEmail,
+    changePassword,
     deleteAccount,
     isAuthenticated: Boolean(user),
     isLoadingAuth,

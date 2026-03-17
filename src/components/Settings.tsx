@@ -25,18 +25,20 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { useNavigate } from 'react-router-dom';
 import { ImportExportView } from './ImportExportView';
-import { Settings as SettingsIcon, Trash2, AlertTriangle, Palette, Trophy, BookOpen, ArrowUp, ArrowDown, ListOrdered, Wrench, Sun, Moon, Monitor, Sliders, FileUp, FileDown, LogOut } from 'lucide-react';
+import { Settings as SettingsIcon, Trash2, AlertTriangle, Palette, Trophy, BookOpen, ArrowUp, ArrowDown, ListOrdered, Wrench, Sun, Moon, Monitor, Sliders, FileUp, FileDown, LogOut, Shield } from 'lucide-react';
 import { useSettings } from '@/contexts/SettingsContext';
 import { useTheme } from '@/components/ui-common/ThemeProvider';
 import { PaletteSelector } from '@/components/PaletteSelector';
 import { GoalsTab } from '@/components/GoalsTab';
 import { indexedDBService } from '@/services/storage/IndexedDBService';
 import { useAuth } from '@/hooks/useAuth';
+import { ApiClientError } from '@/lib/apiClient';
+import type { UserSettings } from '@/types/user-settings';
 
 interface SettingsProps {
   isOpen: boolean;
   onClose: () => void;
-  books: any[]; // Will be properly typed with Book[] later
+  books: unknown[];
   onImportCSV?: (file: File) => Promise<void>;
   onImportJSON?: (file: File) => Promise<void>;
   onCreateBackup?: () => Promise<void>;
@@ -67,7 +69,7 @@ export const Settings: React.FC<SettingsProps> = ({
   const [repairStatus, setRepairStatus] = useState<{success: boolean; message: string} | null>(null);
   const { settings, updateSettings, isLoading } = useSettings();
   const { colorMode, setColorMode } = useTheme();
-  const { isAuthenticated, logout } = useAuth();
+  const { changeEmail, changePassword, isAuthenticated, logout, user } = useAuth();
   const navigate = useNavigate();
   
   // Local form state for settings
@@ -80,6 +82,15 @@ export const Settings: React.FC<SettingsProps> = ({
   const [groupSpecialStatuses, setGroupSpecialStatuses] = useState(false);
   const [disableHoverEffect, setDisableHoverEffect] = useState(false);
   const [shelfOrder, setShelfOrder] = useState<string[]>(['reading', 'want-to-read', 'completed', 'on-hold', 'dnf']);
+  const [accountEmail, setAccountEmail] = useState('');
+  const [emailCurrentPassword, setEmailCurrentPassword] = useState('');
+  const [passwordCurrentPassword, setPasswordCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [emailStatus, setEmailStatus] = useState<{error: string | null; success: string | null}>({ error: null, success: null });
+  const [passwordStatus, setPasswordStatus] = useState<{error: string | null; success: string | null}>({ error: null, success: null });
+  const [isUpdatingEmail, setIsUpdatingEmail] = useState(false);
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
   
   // Initialize form state from settings
   useEffect(() => {
@@ -98,6 +109,10 @@ export const Settings: React.FC<SettingsProps> = ({
       setShelfOrder(settings.displayOptions?.shelfOrder || defaultOrder);
     }
   }, [isLoading, settings]);
+
+  useEffect(() => {
+    setAccountEmail(user?.email || '');
+  }, [user?.email]);
   
   // Handle form changes
   const handlePreferredNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -116,18 +131,21 @@ export const Settings: React.FC<SettingsProps> = ({
   };
   
   const handleDefaultViewChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setDefaultView(e.target.value);
-    updateSettings({ defaultView: e.target.value as any });
+    const nextDefaultView = e.target.value as NonNullable<UserSettings['defaultView']>;
+    setDefaultView(nextDefaultView);
+    updateSettings({ defaultView: nextDefaultView });
   };
   
   const handleDefaultApiChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setDefaultApi(e.target.value);
-    updateSettings({ defaultApi: e.target.value as any });
+    const nextDefaultApi = e.target.value as NonNullable<UserSettings['defaultApi']>;
+    setDefaultApi(nextDefaultApi);
+    updateSettings({ defaultApi: nextDefaultApi });
   };
   
   const handleDefaultStatusChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setDefaultStatus(e.target.value);
-    updateSettings({ defaultStatus: e.target.value as any });
+    const nextDefaultStatus = e.target.value as NonNullable<UserSettings['defaultStatus']>;
+    setDefaultStatus(nextDefaultStatus);
+    updateSettings({ defaultStatus: nextDefaultStatus });
   };
 
   const handleGroupSpecialStatusesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -191,6 +209,74 @@ export const Settings: React.FC<SettingsProps> = ({
     navigate('/login', { replace: true });
   };
 
+  const handleEmailChange = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setEmailStatus({ error: null, success: null });
+    setIsUpdatingEmail(true);
+
+    try {
+      await changeEmail({
+        currentPassword: emailCurrentPassword,
+        email: accountEmail,
+      });
+      setEmailCurrentPassword('');
+      setEmailStatus({
+        error: null,
+        success: 'Email updated. You are still signed in with the refreshed session.',
+      });
+    } catch (error) {
+      setEmailStatus({
+        error: error instanceof ApiClientError ? error.message : 'Email change failed.',
+        success: null,
+      });
+    } finally {
+      setIsUpdatingEmail(false);
+    }
+  };
+
+  const handlePasswordChange = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setPasswordStatus({ error: null, success: null });
+
+    if (newPassword !== confirmNewPassword) {
+      setPasswordStatus({
+        error: 'New passwords must match.',
+        success: null,
+      });
+      return;
+    }
+
+    setIsUpdatingPassword(true);
+
+    try {
+      await changePassword({
+        currentPassword: passwordCurrentPassword,
+        newPassword,
+      });
+      setPasswordCurrentPassword('');
+      setNewPassword('');
+      setConfirmNewPassword('');
+      setPasswordStatus({
+        error: null,
+        success: 'Password updated. Sign in again with your new password.',
+      });
+      onClose();
+      navigate('/login', {
+        replace: true,
+        state: {
+          message: 'Password updated. Sign in again with your new password.',
+        },
+      });
+    } catch (error) {
+      setPasswordStatus({
+        error: error instanceof ApiClientError ? error.message : 'Password change failed.',
+        success: null,
+      });
+    } finally {
+      setIsUpdatingPassword(false);
+    }
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
@@ -223,6 +309,15 @@ export const Settings: React.FC<SettingsProps> = ({
                 <span className="flex items-center gap-2">
                   <BookOpen className="h-4 w-4 text-primary" />
                   Bookshelf View
+                </span>
+              </TabsTrigger>
+              <TabsTrigger 
+                value="account" 
+                className="justify-start w-40 data-[state=active]:bg-muted"
+              >
+                <span className="flex items-center gap-2">
+                  <Shield className="h-4 w-4 text-emerald-600" />
+                  Account
                 </span>
               </TabsTrigger>
               <TabsTrigger 
@@ -499,6 +594,120 @@ export const Settings: React.FC<SettingsProps> = ({
                 </div>
               </TabsContent>
 
+              <TabsContent value="account" className="mt-0">
+                <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
+                  <Shield className="h-5 w-5 text-emerald-600" />
+                  Account Security
+                </h3>
+                <p className="text-muted-foreground mb-6">
+                  Manage the credentials tied to your account. Every change requires your current password.
+                </p>
+
+                <div className="space-y-6">
+                  <Card className="p-6">
+                    <h4 className="font-medium mb-2">Change Email</h4>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Your email is your sign-in identity. Email changes take effect immediately in v1 and keep you signed in.
+                    </p>
+
+                    <form className="space-y-4" onSubmit={handleEmailChange}>
+                      <div className="grid gap-2">
+                        <label htmlFor="account-email" className="text-sm font-medium">New Email</label>
+                        <input
+                          id="account-email"
+                          type="email"
+                          autoComplete="email"
+                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                          value={accountEmail}
+                          onChange={(event) => setAccountEmail(event.target.value)}
+                        />
+                      </div>
+
+                      <div className="grid gap-2">
+                        <label htmlFor="email-current-password" className="text-sm font-medium">Current Password</label>
+                        <input
+                          id="email-current-password"
+                          type="password"
+                          autoComplete="current-password"
+                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                          value={emailCurrentPassword}
+                          onChange={(event) => setEmailCurrentPassword(event.target.value)}
+                        />
+                      </div>
+
+                      {emailStatus.error && (
+                        <p className="text-sm text-destructive">{emailStatus.error}</p>
+                      )}
+
+                      {emailStatus.success && (
+                        <p className="text-sm text-muted-foreground">{emailStatus.success}</p>
+                      )}
+
+                      <Button disabled={isUpdatingEmail} type="submit">
+                        {isUpdatingEmail ? 'Updating Email...' : 'Update Email'}
+                      </Button>
+                    </form>
+                  </Card>
+
+                  <Card className="p-6">
+                    <h4 className="font-medium mb-2">Change Password</h4>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Password changes sign out the current session and invalidate older sessions. You will need to sign in again afterward.
+                    </p>
+
+                    <form className="space-y-4" onSubmit={handlePasswordChange}>
+                      <div className="grid gap-2">
+                        <label htmlFor="password-current-password" className="text-sm font-medium">Current Password</label>
+                        <input
+                          id="password-current-password"
+                          type="password"
+                          autoComplete="current-password"
+                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                          value={passwordCurrentPassword}
+                          onChange={(event) => setPasswordCurrentPassword(event.target.value)}
+                        />
+                      </div>
+
+                      <div className="grid gap-2">
+                        <label htmlFor="new-password" className="text-sm font-medium">New Password</label>
+                        <input
+                          id="new-password"
+                          type="password"
+                          autoComplete="new-password"
+                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                          value={newPassword}
+                          onChange={(event) => setNewPassword(event.target.value)}
+                        />
+                      </div>
+
+                      <div className="grid gap-2">
+                        <label htmlFor="confirm-new-password" className="text-sm font-medium">Confirm New Password</label>
+                        <input
+                          id="confirm-new-password"
+                          type="password"
+                          autoComplete="new-password"
+                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                          value={confirmNewPassword}
+                          onChange={(event) => setConfirmNewPassword(event.target.value)}
+                        />
+                      </div>
+
+                      {passwordStatus.error && (
+                        <p className="text-sm text-destructive">{passwordStatus.error}</p>
+                      )}
+
+                      {passwordStatus.success && (
+                        <p className="text-sm text-muted-foreground">{passwordStatus.success}</p>
+                      )}
+
+                      <Button disabled={isUpdatingPassword} type="submit">
+                        {isUpdatingPassword ? 'Updating Password...' : 'Update Password'}
+                      </Button>
+                    </form>
+                  </Card>
+                </div>
+              </TabsContent>
+              
               <TabsContent value="goals" className="mt-0">
                 <GoalsTab />
               </TabsContent>

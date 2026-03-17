@@ -98,6 +98,34 @@ export const updateUserPasswordById = async (
   return result.matchedCount === 1;
 };
 
+export const updateUserEmailById = async (
+  id: string,
+  email: string,
+): Promise<UserDocument | null> => {
+  if (!ObjectId.isValid(id)) {
+    return null;
+  }
+
+  await ensureUserIndexes();
+
+  const usersCollection = await getUsersCollection();
+  const normalizedEmail = normalizeUserEmail(email);
+  const result = await usersCollection.findOneAndUpdate(
+    { _id: new ObjectId(id) },
+    {
+      $set: {
+        email: normalizedEmail,
+        updatedAt: new Date(),
+      },
+    },
+    {
+      returnDocument: "after",
+    },
+  );
+
+  return result;
+};
+
 export const invalidateUserSessionsById = async (id: string): Promise<boolean> => {
   if (!ObjectId.isValid(id)) {
     return false;
