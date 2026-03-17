@@ -21,7 +21,9 @@ import Index from "@/pages/Index";
 import InsightsPage from "@/pages/InsightsPage";
 import LoginPage from "@/pages/LoginPage";
 import NotFound from "@/pages/NotFound";
+import ForgotPasswordPage from "@/pages/ForgotPasswordPage";
 import RegisterPage from "@/pages/RegisterPage";
+import ResetPasswordPage from "@/pages/ResetPasswordPage";
 import SeriesDetailPage from "@/pages/SeriesDetailPage";
 import SeriesPage from "@/pages/SeriesPage";
 
@@ -47,6 +49,8 @@ const AppRoutes = () => (
   <Routes>
     <Route path="/login" element={<LoginPage />} />
     <Route path="/register" element={<RegisterPage />} />
+    <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+    <Route path="/reset-password" element={<ResetPasswordPage />} />
     <Route path="/about" element={<AboutPage />} />
 
     <Route element={<ProtectedLibraryLayout />}>

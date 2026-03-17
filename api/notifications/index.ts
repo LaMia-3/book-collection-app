@@ -17,7 +17,7 @@ export default async function handler(
   response: VercelResponse,
 ): Promise<VercelResponse | void> {
   try {
-    const authUser = requireAuthenticatedUser(request);
+    const authUser = await requireAuthenticatedUser(request);
 
     if (request.method === "GET") {
       const notifications = await listNotificationsByUserId(authUser.sub);

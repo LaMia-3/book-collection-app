@@ -11,6 +11,7 @@ export type UserDocument = {
   passwordHash: string;
   preferredName?: string;
   createdAt: Date;
+  sessionInvalidBefore?: Date;
   updatedAt: Date;
 };
 
@@ -72,6 +73,48 @@ export const deleteUserById = async (id: string): Promise<boolean> => {
   const usersCollection = await getUsersCollection();
   const result = await usersCollection.deleteOne({ _id: new ObjectId(id) });
   return result.deletedCount === 1;
+};
+
+export const updateUserPasswordById = async (
+  id: string,
+  passwordHash: string,
+): Promise<boolean> => {
+  if (!ObjectId.isValid(id)) {
+    return false;
+  }
+
+  const usersCollection = await getUsersCollection();
+  const result = await usersCollection.updateOne(
+    { _id: new ObjectId(id) },
+    {
+      $set: {
+        passwordHash,
+        sessionInvalidBefore: new Date(),
+        updatedAt: new Date(),
+      },
+    },
+  );
+
+  return result.matchedCount === 1;
+};
+
+export const invalidateUserSessionsById = async (id: string): Promise<boolean> => {
+  if (!ObjectId.isValid(id)) {
+    return false;
+  }
+
+  const usersCollection = await getUsersCollection();
+  const result = await usersCollection.updateOne(
+    { _id: new ObjectId(id) },
+    {
+      $set: {
+        sessionInvalidBefore: new Date(),
+        updatedAt: new Date(),
+      },
+    },
+  );
+
+  return result.matchedCount === 1;
 };
 
 export const insertUser = async (

@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -45,13 +44,12 @@ export default function RegisterPage() {
 
   return (
     <AuthEntryShell
+      compact
+      showEntryLinks={false}
       authCard={
         <Card className="w-full max-w-md border-border/60 bg-card/95 shadow-elegant">
           <CardHeader>
             <CardTitle>Create Account</CardTitle>
-            <CardDescription>
-              Start syncing your library to your authenticated account.
-            </CardDescription>
           </CardHeader>
           <CardContent>
             <form className="space-y-4" onSubmit={handleSubmit}>

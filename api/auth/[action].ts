@@ -2,10 +2,13 @@ import { VercelRequest, VercelResponse } from "@vercel/node";
 
 import { ApiError, methodNotAllowed, sendError, sendJson } from "../../src/server/lib/api-response.js";
 import { signAuthToken } from "../../src/server/lib/auth.js";
+import { sendPasswordResetEmail } from "../../src/server/lib/email.js";
 import {
   CredentialValidationError,
   hashPassword,
+  validateEmail,
   validateLoginCredentials,
+  validatePassword,
   validateRegisterCredentials,
   verifyPassword,
 } from "../../src/server/lib/password.js";
@@ -16,6 +19,7 @@ import {
   deleteUserById,
   insertUser,
   toPublicUser,
+  updateUserPasswordById,
 } from "../../src/server/models/user.js";
 import { getBooksCollection } from "../../src/server/models/book.js";
 import { getSeriesCollection } from "../../src/server/models/series.js";
@@ -23,9 +27,16 @@ import { getCollectionsCollection } from "../../src/server/models/collection.js"
 import { getUpcomingReleasesCollection } from "../../src/server/models/upcoming-release.js";
 import { getNotificationsCollection } from "../../src/server/models/notification.js";
 import { getUserSettingsCollection } from "../../src/server/models/user-settings.js";
+import {
+  consumePasswordResetOtp,
+  createPasswordResetOtp,
+  invalidatePasswordResetOtpsForUser,
+  verifyPasswordResetOtp,
+} from "../../src/server/models/password-reset-otp.js";
 
 type AuthRequestBody = {
   email?: string;
+  otp?: string;
   password?: string;
   preferredName?: string;
 };
@@ -47,6 +58,10 @@ const resolveAction = (request: VercelRequest): string => {
   }
 
   return action;
+};
+
+const getResetOtp = (value: string | undefined): string => {
+  return (value || "").trim();
 };
 
 const handleRegister = async (
@@ -134,7 +149,7 @@ const handleMe = async (
     return methodNotAllowed(response, ["GET"]);
   }
 
-  const authUser = requireAuthenticatedUser(request);
+  const authUser = await requireAuthenticatedUser(request);
   const user = await findUserById(authUser.sub);
 
   if (!user) {
@@ -152,7 +167,7 @@ const handleDeleteAccount = async (
     return methodNotAllowed(response, ["DELETE"]);
   }
 
-  const authUser = requireAuthenticatedUser(request);
+  const authUser = await requireAuthenticatedUser(request);
   const user = await findUserById(authUser.sub);
 
   if (!user) {
@@ -193,6 +208,133 @@ const handleDeleteAccount = async (
   return sendJson(response, 200, { success: true });
 };
 
+const handleForgotPassword = async (
+  request: VercelRequest,
+  response: VercelResponse,
+): Promise<VercelResponse> => {
+  if (request.method !== "POST") {
+    return methodNotAllowed(response, ["POST"]);
+  }
+
+  const body = getRequestBody(request);
+  const email = validateEmail(body.email || "");
+  const user = await findUserByEmail(email);
+
+  if (user?._id) {
+    const { expiresAt, otp } = await createPasswordResetOtp(user._id.toString());
+    await sendPasswordResetEmail({
+      email,
+      expiresAt,
+      otp,
+      preferredName: user.preferredName,
+    });
+  }
+
+  return sendJson(response, 200, {
+    success: true,
+    message:
+      "If an account exists for that email, a one-time reset code has been sent.",
+  });
+};
+
+const handleVerifyResetOtp = async (
+  request: VercelRequest,
+  response: VercelResponse,
+): Promise<VercelResponse> => {
+  if (request.method !== "POST") {
+    return methodNotAllowed(response, ["POST"]);
+  }
+
+  const body = getRequestBody(request);
+  const email = validateEmail(body.email || "");
+  const otp = getResetOtp(body.otp);
+
+  if (!otp) {
+    throw new ApiError(400, "BAD_REQUEST", "Reset code is required.");
+  }
+
+  const user = await findUserByEmail(email);
+
+  if (!user?._id) {
+    throw new ApiError(400, "INVALID_RESET_OTP", "Code is invalid or expired.");
+  }
+
+  const result = await verifyPasswordResetOtp(user._id.toString(), otp);
+
+  if (result.status === "exhausted") {
+    throw new ApiError(
+      400,
+      "RESET_OTP_ATTEMPTS_EXHAUSTED",
+      "Too many incorrect attempts. Request a new code.",
+    );
+  }
+
+  if (result.status !== "valid") {
+    throw new ApiError(400, "INVALID_RESET_OTP", "Code is invalid or expired.");
+  }
+
+  return sendJson(response, 200, {
+    valid: true,
+    expiresAt: result.record.expiresAt.toISOString(),
+  });
+};
+
+const handleResetPassword = async (
+  request: VercelRequest,
+  response: VercelResponse,
+): Promise<VercelResponse> => {
+  if (request.method !== "POST") {
+    return methodNotAllowed(response, ["POST"]);
+  }
+
+  const body = getRequestBody(request);
+  const email = validateEmail(body.email || "");
+  const otp = getResetOtp(body.otp);
+  const password = validatePassword(body.password || "");
+
+  if (!otp) {
+    throw new ApiError(400, "BAD_REQUEST", "Reset code is required.");
+  }
+
+  const user = await findUserByEmail(email);
+
+  if (!user?._id) {
+    throw new ApiError(400, "INVALID_RESET_OTP", "Code is invalid or expired.");
+  }
+
+  const result = await verifyPasswordResetOtp(user._id.toString(), otp);
+
+  if (result.status === "exhausted") {
+    throw new ApiError(
+      400,
+      "RESET_OTP_ATTEMPTS_EXHAUSTED",
+      "Too many incorrect attempts. Request a new code.",
+    );
+  }
+
+  if (result.status !== "valid") {
+    throw new ApiError(400, "INVALID_RESET_OTP", "Code is invalid or expired.");
+  }
+
+  const passwordHash = await hashPassword(password);
+  const updatedUser = await updateUserPasswordById(
+    result.record.userId,
+    passwordHash,
+  );
+
+  if (!updatedUser) {
+    throw new ApiError(404, "NOT_FOUND", "User not found.");
+  }
+
+  await consumePasswordResetOtp(result.record._id);
+  await invalidatePasswordResetOtpsForUser(result.record.userId);
+
+  return sendJson(response, 200, {
+    success: true,
+    message: "Password reset successful.",
+  });
+};
+
 export default async function handler(
   request: VercelRequest,
   response: VercelResponse,
@@ -214,6 +356,18 @@ export default async function handler(
 
     if (action === "account") {
       return handleDeleteAccount(request, response);
+    }
+
+    if (action === "forgot-password") {
+      return handleForgotPassword(request, response);
+    }
+
+    if (action === "verify-reset-otp") {
+      return handleVerifyResetOtp(request, response);
+    }
+
+    if (action === "reset-password") {
+      return handleResetPassword(request, response);
     }
 
     throw new ApiError(404, "NOT_FOUND", "Auth route not found.");

@@ -1,6 +1,7 @@
 import { IncomingHttpHeaders } from "http";
 
 import { AuthTokenPayload, verifyAuthToken } from "../lib/auth.js";
+import { findUserById } from "../models/user.js";
 
 type HeaderSource =
   | Headers
@@ -61,18 +62,36 @@ export const getBearerToken = (source: HeaderSource): string | null => {
   return token;
 };
 
-export const requireAuthenticatedUser = (
+export const requireAuthenticatedUser = async (
   source: HeaderSource,
-): AuthTokenPayload => {
+): Promise<AuthTokenPayload> => {
   const token = getBearerToken(source);
 
   if (!token) {
     throw new UnauthorizedError();
   }
 
+  let authPayload: AuthTokenPayload;
+
   try {
-    return verifyAuthToken(token);
+    authPayload = verifyAuthToken(token);
   } catch {
     throw new UnauthorizedError("Token is not valid.");
   }
+
+  const user = await findUserById(authPayload.sub);
+
+  if (!user) {
+    throw new UnauthorizedError("User account is no longer available.");
+  }
+
+  if (user.sessionInvalidBefore) {
+    const issuedAtMs = (authPayload.issuedAt || 0) * 1000;
+
+    if (!issuedAtMs || issuedAtMs <= user.sessionInvalidBefore.getTime()) {
+      throw new UnauthorizedError("Session has expired. Please sign in again.");
+    }
+  }
+
+  return authPayload;
 };

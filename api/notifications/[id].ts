@@ -28,7 +28,7 @@ export default async function handler(
   response: VercelResponse,
 ): Promise<VercelResponse | void> {
   try {
-    const authUser = requireAuthenticatedUser(request);
+    const authUser = await requireAuthenticatedUser(request);
     const id = resolveNotificationId(request);
 
     if (request.method === "GET") {

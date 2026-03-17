@@ -3,6 +3,7 @@ import jwt, { SignOptions } from "jsonwebtoken";
 export type AuthTokenPayload = {
   sub: string;
   email?: string;
+  issuedAt?: number;
 };
 
 const getJwtSecret = (): string => {
@@ -41,5 +42,6 @@ export const verifyAuthToken = (token: string): AuthTokenPayload => {
   return {
     sub: decoded.sub,
     email: typeof decoded.email === "string" ? decoded.email : undefined,
+    issuedAt: typeof decoded.iat === "number" ? decoded.iat : undefined,
   };
 };

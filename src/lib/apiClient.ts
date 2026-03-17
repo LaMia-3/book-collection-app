@@ -25,6 +25,16 @@ type AuthResponse = {
   user: AuthUser;
 };
 
+type PasswordResetRequestResponse = {
+  success: boolean;
+  message: string;
+};
+
+type PasswordResetValidationResponse = {
+  valid: boolean;
+  expiresAt: string;
+};
+
 type BookRecord = {
   id: string;
   title: string;
@@ -231,6 +241,24 @@ export const authApi = {
     apiRequest<{ success: boolean }>("/auth/account", {
       auth: true,
       method: "DELETE",
+    }),
+  requestPasswordReset: (payload: { email: string }) =>
+    apiRequest<PasswordResetRequestResponse>("/auth/forgot-password", {
+      method: "POST",
+      body: payload,
+    }),
+  verifyPasswordResetOtp: (payload: { email: string; otp: string }) =>
+    apiRequest<PasswordResetValidationResponse>(
+      "/auth/verify-reset-otp",
+      {
+        method: "POST",
+        body: payload,
+      },
+    ),
+  resetPassword: (payload: { email: string; otp: string; password: string }) =>
+    apiRequest<PasswordResetRequestResponse>("/auth/reset-password", {
+      method: "POST",
+      body: payload,
     }),
 };
 

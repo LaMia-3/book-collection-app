@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/useAuth";
+import appScreenshot from "../../docs/app-screenshot.png";
 
 type LocationState = {
   from?: string;
@@ -45,7 +46,7 @@ export default function LoginPage() {
   return (
     <AuthEntryShell
       authCard={
-        <Card className="w-full max-w-md border-border/60 bg-card/95 shadow-elegant">
+        <Card className="w-full border-border/60 bg-card/95 shadow-elegant">
           <CardHeader>
             <CardTitle>Sign In</CardTitle>
             <CardDescription>
@@ -90,12 +91,46 @@ export default function LoginPage() {
             </form>
 
             <p className="mt-4 text-sm text-muted-foreground">
+              Forgot your password?{" "}
+              <Link
+                className="text-primary underline-offset-4 hover:underline"
+                to="/forgot-password"
+              >
+                Reset it
+              </Link>
+            </p>
+
+            <p className="mt-2 text-sm text-muted-foreground">
               Need an account?{" "}
-              <Link className="text-primary underline-offset-4 hover:underline" to="/register">
+              <Link
+                className="text-primary underline-offset-4 hover:underline"
+                to="/register"
+              >
                 Create one
               </Link>
             </p>
           </CardContent>
+        </Card>
+      }
+      authSupplement={
+        <Card className="w-full overflow-hidden border-border/60 bg-card/95 shadow-elegant">
+          <div className="border-b border-border/60 px-4 py-3">
+            <p className="text-sm font-medium text-foreground">
+              What the app looks like
+            </p>
+            <p className="text-sm text-muted-foreground">
+              A bookshelf-style library with collections, series tracking, and
+              reading goals built into the same view.
+            </p>
+          </div>
+          <div className="p-3">
+            <img
+              alt="Book Collection App library dashboard screenshot"
+              className="w-full rounded-2xl border border-border/60 shadow-sm"
+              loading="lazy"
+              src={appScreenshot}
+            />
+          </div>
         </Card>
       }
     />

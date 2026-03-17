@@ -5,17 +5,18 @@ import {
   Bug,
   Heart,
   Library,
-  LockKeyhole,
   Shield,
   Sparkles,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import appScreenshot from "../../../docs/app-screenshot.png";
 
 type AuthEntryShellProps = {
   authCard: ReactNode;
+  authSupplement?: ReactNode;
+  compact?: boolean;
+  showEntryLinks?: boolean;
 };
 
 const ENTRY_LINKS = [
@@ -52,7 +53,41 @@ const PRODUCT_HIGHLIGHTS = [
   "Track series, follow your reading goals, and keep your progress in one place.",
 ] as const;
 
-export function AuthEntryShell({ authCard }: AuthEntryShellProps) {
+export function AuthEntryShell({
+  authCard,
+  authSupplement,
+  compact = false,
+  showEntryLinks = true,
+}: AuthEntryShellProps) {
+  if (compact) {
+    return (
+      <div className="min-h-screen bg-gradient-page">
+        <div className="mx-auto flex min-h-screen max-w-3xl items-center justify-center px-4 py-10 lg:px-8">
+          <section className="w-full max-w-md space-y-4">
+            {authCard}
+            {showEntryLinks && (
+              <div className="space-y-3 rounded-3xl border border-border/50 bg-card/80 p-4 shadow-elegant backdrop-blur">
+                <p className="text-sm font-medium text-foreground">
+                  Learn more before you sign in
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {ENTRY_LINKS.map(({ icon: Icon, label, to }) => (
+                    <Button key={label} asChild size="sm" variant="outline">
+                      <Link to={to}>
+                        <Icon className="h-4 w-4" />
+                        {label}
+                      </Link>
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </section>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-page">
       <div className="mx-auto grid min-h-screen max-w-7xl gap-8 px-4 py-10 lg:grid-cols-[1.15fr_0.85fr] lg:px-8">
@@ -85,38 +120,6 @@ export function AuthEntryShell({ authCard }: AuthEntryShellProps) {
               ))}
             </div>
 
-            <Card className="overflow-hidden border-border/60 bg-background/80">
-              <div className="border-b border-border/60 px-4 py-3">
-                <p className="text-sm font-medium text-foreground">
-                  What the app looks like
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  Your library, collections, series tracking, and reading
-                  progress all live in one calm, shelf-first experience.
-                </p>
-              </div>
-              <div className="p-3">
-                <img
-                  alt="Book Collection App library dashboard screenshot"
-                  className="w-full rounded-2xl border border-border/60 shadow-sm"
-                  loading="lazy"
-                  src={appScreenshot}
-                />
-              </div>
-            </Card>
-
-            <div className="rounded-2xl border border-amber-300/40 bg-amber-50/70 p-4 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
-              <div className="mb-2 flex items-center gap-2 font-medium">
-                <LockKeyhole className="h-4 w-4" />
-                Why create an account
-              </div>
-              <p className="leading-6">
-                Your bookshelf, collections, series progress, and reading goals
-                stay with you when you sign in. If you used an older version of
-                the app, you can also bring that library forward instead of
-                starting over.
-              </p>
-            </div>
           </div>
 
           <div className="mt-8 space-y-3">
@@ -136,7 +139,12 @@ export function AuthEntryShell({ authCard }: AuthEntryShellProps) {
           </div>
         </section>
 
-        <section className="flex items-center justify-center">{authCard}</section>
+        <section className="flex items-center justify-center">
+          <div className="w-full max-w-md space-y-4">
+            {authCard}
+            {authSupplement}
+          </div>
+        </section>
       </div>
     </div>
   );
