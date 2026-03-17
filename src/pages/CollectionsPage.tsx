@@ -393,9 +393,9 @@ const CollectionsPage: React.FC = () => {
       onSettingsClick={() => setShowSettings(true)}
       addButtonLabel="Add Collection"
       searchComponent={
-        <div className="flex items-center gap-2 w-full">
+        <div className="flex w-full flex-wrap items-center gap-2 sm:flex-nowrap">
           {/* Search input */}
-          <div className="relative flex-grow">
+          <div className="relative w-full min-w-0 sm:flex-grow">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
             <Input
               type="text"
@@ -420,7 +420,7 @@ const CollectionsPage: React.FC = () => {
             value={sortOrder}
             onValueChange={(value) => setSortOrder(value as 'alphabetical' | 'recent')}
           >
-            <SelectTrigger className="w-[140px] h-10">
+            <SelectTrigger className="h-10 w-full sm:w-[140px]">
               <SelectValue placeholder="Sort by" />
             </SelectTrigger>
             <SelectContent>
@@ -430,7 +430,7 @@ const CollectionsPage: React.FC = () => {
           </Select>
           
           {/* View Toggle Buttons */}
-          <div className="flex">
+          <div className="ml-auto flex shrink-0">
             <Button
               variant={viewMode === 'grid' ? 'default' : 'outline'}
               size="icon"

@@ -251,9 +251,9 @@ const Index = () => {
       onManualEntryClick={() => setShowManualAddDialog(true)}
       addButtonLabel="Add Books"
       searchComponent={
-        <div className="flex items-center gap-2 w-full">
+        <div className="flex w-full flex-wrap items-center gap-2 sm:flex-nowrap">
           {/* Search input */}
-          <div className="relative flex-grow">
+          <div className="relative w-full min-w-0 sm:flex-grow">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
             <Input
               type="text"
@@ -281,7 +281,7 @@ const Index = () => {
           </div>
           
           {/* View Toggle Buttons */}
-          <div className="flex">
+          <div className="ml-auto flex shrink-0">
             <Button
               variant={viewMode === 'shelf' ? 'default' : 'outline'}
               size="icon"
