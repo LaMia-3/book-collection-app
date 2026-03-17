@@ -87,6 +87,20 @@ const toDatetimeLocalValue = (value?: string): string => {
   return offsetDate.toISOString().slice(0, 16);
 };
 
+const toIsoFromDatetimeLocalValue = (value: string): string | undefined => {
+  if (!value) {
+    return undefined;
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return undefined;
+  }
+
+  return date.toISOString();
+};
+
 const toAnnouncementFormState = (
   announcement: AdminSystemAnnouncementRecord,
 ): AnnouncementFormState => ({
@@ -445,8 +459,8 @@ export default function AdminPage() {
         kind: announcementForm.kind,
         severity: announcementForm.severity,
         isActive: announcementForm.isActive,
-        startsAt: announcementForm.startsAt || undefined,
-        endsAt: announcementForm.endsAt || undefined,
+        startsAt: toIsoFromDatetimeLocalValue(announcementForm.startsAt),
+        endsAt: toIsoFromDatetimeLocalValue(announcementForm.endsAt),
         minAppVersion: announcementForm.minAppVersion || undefined,
         maxAppVersion: announcementForm.maxAppVersion || undefined,
         environment: announcementForm.environment,
