@@ -66,31 +66,30 @@ const AboutPage = () => {
                   <span className="text-sm font-semibold bg-primary/10 text-primary px-2.5 py-0.5 rounded-full">v2.0.0</span>
                   <span className="text-sm text-muted-foreground">Latest</span>
                 </div>
-                <h3 className="text-lg font-semibold mb-2">Authenticated Library Release</h3>
+                <h3 className="text-lg font-semibold mb-2">Your Library, Now Tied to Your Account</h3>
                 <p className="text-sm text-muted-foreground mb-4">
-                  This release moves the app from a browser-only library manager to an authenticated app with MongoDB-backed storage and Vercel API functions.
+                  Version 2.0.0 turns the app into an account-based reading library, adds stronger account tools, and makes updates easier to manage inside the app.
                 </p>
                 <div className="space-y-5">
                   <div>
-                    <h4 className="text-sm font-semibold mb-1.5">Completed</h4>
+                    <h4 className="text-sm font-semibold mb-1.5">What&apos;s New</h4>
                     <ul className="space-y-1.5 text-sm text-muted-foreground list-disc list-inside">
-                      <li>Added account registration, login, logout, and authenticated session restore</li>
-                      <li>Added protected Vercel API routes backed by MongoDB</li>
-                      <li>Moved books, series, collections, upcoming releases, notifications, and user settings to per-user remote storage</li>
-                      <li>Added ownership enforcement so one user cannot access another user&apos;s records</li>
-                      <li>Added one-time legacy IndexedDB import with migration summary, retry flow, and duplicate protection</li>
-                      <li>Added delete library, reset library, and delete account actions for authenticated users</li>
-                      <li>Updated destructive-action confirmations to reflect actual account and storage scope</li>
+                      <li>Your library is now connected to your account, so your books, series, collections, settings, and tracked items are no longer limited to one browser.</li>
+                      <li>Older browser-stored libraries can now be imported into the new account-based version with a guided migration flow.</li>
+                      <li>You can now manage your account more safely with better email and password controls, plus clearer delete and reset actions.</li>
+                      <li>System updates now appear inside Notifications under a dedicated <strong>App Updates</strong> tab, separate from future book alerts.</li>
+                      <li>The sign-in experience has been upgraded with clearer app information, easier navigation to help pages, and a more polished first impression.</li>
+                      <li>Settings have been reorganized so everyday options, library actions, and account actions are easier to find.</li>
+                      <li>Admin tools now support user management, role changes, password resets, account deletion, and audit history.</li>
                     </ul>
                   </div>
 
                   <div>
-                    <h4 className="text-sm font-semibold mb-1.5">Still To Be Completed</h4>
+                    <h4 className="text-sm font-semibold mb-1.5">Still Being Improved</h4>
                     <ul className="space-y-1.5 text-sm text-muted-foreground list-disc list-inside">
-                      <li>Admin and troubleshooting audit for remote-versus-local assumptions</li>
-                      <li>Import and export UX updates that clearly distinguish remote data, local cache, and legacy migration</li>
-                      <li>Final cleanup of delete-library wording and operational boundaries</li>
-                      <li>Expanded test coverage for auth, migration, and destructive actions</li>
+                      <li>Password recovery still needs follow-up testing and final hardening.</li>
+                      <li>More quality-of-life cleanup is planned for settings, admin presentation, and small usability details.</li>
+                      <li>Additional testing is still planned across migration, account security, announcements, and destructive actions.</li>
                     </ul>
                   </div>
                 </div>
@@ -280,30 +279,30 @@ const AboutPage = () => {
 
               <div className="space-y-4">
                 <div className="border-l-4 border-purple-500 pl-4 py-1">
-                  <h4 className="font-medium text-sm">Admin and diagnostics cleanup</h4>
+                  <h4 className="font-medium text-sm">Password recovery polish</h4>
                   <p className="text-sm text-muted-foreground">
-                    Separate remote account diagnostics from local cache diagnostics, and update admin/debug tools that still assume IndexedDB is the source of truth.
+                    Finish hardening the forgot-password flow with more testing and final usability cleanup.
                   </p>
                 </div>
 
                 <div className="border-l-4 border-purple-500 pl-4 py-1">
-                  <h4 className="font-medium text-sm">System update announcements</h4>
+                  <h4 className="font-medium text-sm">Quality-of-life cleanup</h4>
                   <p className="text-sm text-muted-foreground">
-                    Add an in-app announcement layer for app updates, maintenance notices, and other product messages without mixing them into book-release notifications.
+                    Continue refining Settings, account details, and admin screens so the most important actions are easier to find and use.
                   </p>
                 </div>
 
                 <div className="border-l-4 border-purple-500 pl-4 py-1">
-                  <h4 className="font-medium text-sm">Testing and hardening</h4>
+                  <h4 className="font-medium text-sm">Better book alerts</h4>
                   <p className="text-sm text-muted-foreground">
-                    Add automated coverage for auth, ownership enforcement, migration, destructive actions, and announcement targeting, then complete full manual QA for the authenticated app.
+                    Expand the notifications experience so release tracking and reading-related alerts become more useful alongside app updates.
                   </p>
                 </div>
 
                 <div className="border-l-4 border-purple-500 pl-4 py-1">
-                  <h4 className="font-medium text-sm">Future product work</h4>
+                  <h4 className="font-medium text-sm">Testing and stability</h4>
                   <p className="text-sm text-muted-foreground">
-                    Continue improving series detection, release tracking, and other reading-management features once the v2 platform migration is fully stabilized.
+                    Add broader test coverage and finish end-to-end QA across accounts, migration, notifications, and destructive actions.
                   </p>
                 </div>
               </div>
@@ -332,7 +331,7 @@ const AboutPage = () => {
                   <li><strong>Books</strong> — title, author, status, dates, ratings, notes, and cover images</li>
                   <li><strong>Series</strong> — series names, reading order, and book assignments</li>
                   <li><strong>Collections</strong> — collection names, descriptions, and book assignments</li>
-                  <li><strong>Upcoming releases and notifications</strong> — tracked release data and in-app notification state</li>
+                  <li><strong>Upcoming releases and notifications</strong> — tracked release data, book-alert notification state, and system-announcement seen or dismissed state</li>
                   <li><strong>Settings</strong> — your display preferences, reading goals, and migration status metadata</li>
                 </ul>
               </div>
@@ -341,37 +340,38 @@ const AboutPage = () => {
                 <h3 className="text-lg font-semibold mb-2">Local Browser Storage</h3>
                 <p className="text-sm text-muted-foreground">
                   The app may also use local browser storage such as IndexedDB or localStorage for legacy migration support,
-                  short-lived cache behavior, and troubleshooting utilities on a specific device. Local browser storage is not the primary source of truth for authenticated accounts.
+                  temporary device-specific cache behavior, and migration compatibility on a specific device. Local browser storage is not the primary source of truth for authenticated accounts.
                 </p>
               </div>
 
               <div>
                 <h3 className="text-lg font-semibold mb-2">External Services</h3>
                 <p className="text-sm text-muted-foreground">
-                  The app connects to two external APIs when you search for or add a book:
+                  The app connects to external services for book lookup and password recovery:
                 </p>
                 <ul className="space-y-1.5 text-sm text-muted-foreground list-disc list-inside mt-2">
                   <li><strong>Google Books API</strong> — search, book metadata, and cover images</li>
                   <li><strong>Open Library API</strong> — search, book metadata, cover images, and series detection</li>
+                  <li><strong>Resend</strong> — delivery of one-time password reset codes by email</li>
                 </ul>
                 <p className="text-sm text-muted-foreground mt-2">
                   Search queries and book lookup requests may be sent to those providers when you use related features.
-                  Your account password is not sent to those services. You can choose your preferred provider in Settings.
+                  Your account password is not sent to the book providers, and reset emails are sent only when you start a password recovery flow. You can choose your preferred book-search provider in Settings.
                 </p>
               </div>
 
               <div>
                 <h3 className="text-lg font-semibold mb-2">Data Portability</h3>
                 <p className="text-sm text-muted-foreground">
-                  You can export library data via Settings. Backup and export behavior is being updated as part of v2 so the app can more clearly distinguish remote account data, local browser cache data, and legacy migration data.
+                  You can export library data through Settings. Standard export, full backup and restore, and legacy browser migration are separate flows so it is clearer what comes from your account data versus older browser-only data.
                 </p>
               </div>
 
               <div>
                 <h3 className="text-lg font-semibold mb-2">Deleting Your Data</h3>
                 <ul className="space-y-1.5 text-sm text-muted-foreground list-disc list-inside">
-                  <li><strong>Delete Library</strong> removes books while preserving series and collection structures</li>
-                  <li><strong>Reset Library</strong> removes library records for the signed-in account</li>
+                  <li><strong>Delete Library</strong> removes books from your account library, removes their references from series and collections, deletes book-linked notifications, and clears stale device cache afterward</li>
+                  <li><strong>Reset Library</strong> removes books, series, collections, upcoming releases, and notifications for the signed-in account</li>
                   <li><strong>Delete Account</strong> removes the user account and all associated remote data</li>
                 </ul>
                 <p className="text-sm text-muted-foreground mt-2">

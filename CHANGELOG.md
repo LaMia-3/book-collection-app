@@ -14,14 +14,23 @@ This release moves the app from a browser-only library manager to an authenticat
 - Added per-user ownership enforcement across authenticated API routes
 - Added repository-backed frontend data access for authenticated sessions
 - Added legacy IndexedDB import flow with migration detection, summary UI, progress reporting, retry handling, and duplicate protection
-- Added authenticated delete-library, reset-library, clear-local-cache, and delete-account flows
+- Added authenticated delete-library, reset-library, and delete-account flows
 - Added account-aware destructive action confirmations and local-cache cleanup after remote destructive actions
+- Added admin bootstrap from environment variables and admin-only access to the admin dashboard
+- Added admin user management with user listing, filtering, selected-user inspection, last-login visibility, promote/demote safeguards, admin password reset, permanent account deletion, and persistent admin audit logs
+- Added in-app system announcements with admin authoring, per-user seen and dismiss state, environment and app-version targeting, and integration into the Notifications UI under `App Updates`
+- Added a richer login entry experience with direct access to changelog, known issues, roadmap, privacy, and about content
+- Added logged-in account security settings for changing email, changing password, and syncing preferred name to the account record
+- Added password visibility toggles to key auth and account-security password fields
+- Reorganized Settings with clearer sections for General, Appearance, Import & Export, Library Management, Account, and Log Out
 - Updated the app to support authenticated settings and account-scoped data management
 
 ### In Progress
 
-- In-app system update announcements for app releases, maintenance notices, and product messages
-- Expanded automated and manual test coverage for auth, migration, and destructive actions
+- User-initiated password reset hardening and deployed end-to-end verification
+- Quality-of-life polish for Settings and admin information architecture
+- Additional last-modified metadata for editable records where it adds value
+- Expanded automated and manual test coverage for admin, announcements, account security, migration, and destructive actions
 
 ## [1.2.2]
 
