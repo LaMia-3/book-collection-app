@@ -12,6 +12,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import appScreenshot from "../../../docs/app-screenshot.png";
 
 type AuthEntryShellProps = {
   authCard: ReactNode;
@@ -46,9 +47,9 @@ const ENTRY_LINKS = [
 ] as const;
 
 const PRODUCT_HIGHLIGHTS = [
-  "Track books, series, collections, and reading progress in one library.",
-  "Keep your library in an authenticated account backed by MongoDB.",
-  "Import legacy browser data when moving from older local-only versions.",
+  "Build a personal library that actually looks like a bookshelf.",
+  "Create collections for your favorites, TBR piles, genres, or any custom shelf you want.",
+  "Track series, follow your reading goals, and keep your progress in one place.",
 ] as const;
 
 export function AuthEntryShell({ authCard }: AuthEntryShellProps) {
@@ -64,12 +65,12 @@ export function AuthEntryShell({ authCard }: AuthEntryShellProps) {
 
             <div className="max-w-2xl space-y-4">
               <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">
-                Organize your reading life in one account-backed library.
+                A reading tracker built around your own bookshelf.
               </h1>
               <p className="max-w-xl text-base leading-7 text-muted-foreground sm:text-lg">
-                Track what you own, what you are reading, and what comes next.
-                Your library now lives in your signed-in account instead of only
-                this browser.
+                Add books, arrange them on a shelf-style library, group them
+                into collections, keep up with series, and watch your reading
+                goals come together over time.
               </p>
             </div>
 
@@ -84,15 +85,36 @@ export function AuthEntryShell({ authCard }: AuthEntryShellProps) {
               ))}
             </div>
 
+            <Card className="overflow-hidden border-border/60 bg-background/80">
+              <div className="border-b border-border/60 px-4 py-3">
+                <p className="text-sm font-medium text-foreground">
+                  What the app looks like
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Your library, collections, series tracking, and reading
+                  progress all live in one calm, shelf-first experience.
+                </p>
+              </div>
+              <div className="p-3">
+                <img
+                  alt="Book Collection App library dashboard screenshot"
+                  className="w-full rounded-2xl border border-border/60 shadow-sm"
+                  loading="lazy"
+                  src={appScreenshot}
+                />
+              </div>
+            </Card>
+
             <div className="rounded-2xl border border-amber-300/40 bg-amber-50/70 p-4 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
               <div className="mb-2 flex items-center gap-2 font-medium">
                 <LockKeyhole className="h-4 w-4" />
-                Why accounts matter now
+                Why create an account
               </div>
               <p className="leading-6">
-                Signing in gives you remote persistence, account-level settings,
-                and a path to import older IndexedDB libraries without losing the
-                data already stored in your browser.
+                Your bookshelf, collections, series progress, and reading goals
+                stay with you when you sign in. If you used an older version of
+                the app, you can also bring that library forward instead of
+                starting over.
               </p>
             </div>
           </div>
