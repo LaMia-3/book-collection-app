@@ -195,6 +195,7 @@ export const createUserDocument = ({
   email,
   passwordHash,
   preferredName,
+  role,
 }: CreateUserInput): UserDocument => {
   const now = new Date();
 
