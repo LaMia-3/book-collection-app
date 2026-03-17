@@ -34,6 +34,7 @@ import { indexedDBService } from '@/services/storage/IndexedDBService';
 import { useAuth } from '@/hooks/useAuth';
 import { ApiClientError } from '@/lib/apiClient';
 import type { UserSettings } from '@/types/user-settings';
+import { useToast } from '@/hooks/use-toast';
 
 interface SettingsProps {
   isOpen: boolean;
@@ -70,6 +71,7 @@ export const Settings: React.FC<SettingsProps> = ({
   const { settings, updateSettings, isLoading } = useSettings();
   const { colorMode, setColorMode } = useTheme();
   const { changeEmail, changePassword, isAuthenticated, logout, user } = useAuth();
+  const { toast } = useToast();
   const navigate = useNavigate();
   
   // Local form state for settings
@@ -224,6 +226,10 @@ export const Settings: React.FC<SettingsProps> = ({
         error: null,
         success: 'Email updated. You are still signed in with the refreshed session.',
       });
+      toast({
+        title: 'Email updated',
+        description: 'Your sign-in email was updated successfully.',
+      });
     } catch (error) {
       const nextMessage =
         error instanceof ApiClientError &&
@@ -236,6 +242,11 @@ export const Settings: React.FC<SettingsProps> = ({
       setEmailStatus({
         error: nextMessage,
         success: null,
+      });
+      toast({
+        title: 'Email update failed',
+        description: nextMessage,
+        variant: 'destructive',
       });
     } finally {
       setIsUpdatingEmail(false);
@@ -268,6 +279,10 @@ export const Settings: React.FC<SettingsProps> = ({
         error: null,
         success: 'Password updated. Sign in again with your new password.',
       });
+      toast({
+        title: 'Password updated',
+        description: 'Sign in again with your new password.',
+      });
       onClose();
       navigate('/login', {
         replace: true,
@@ -279,6 +294,11 @@ export const Settings: React.FC<SettingsProps> = ({
       setPasswordStatus({
         error: error instanceof ApiClientError ? error.message : 'Password change failed.',
         success: null,
+      });
+      toast({
+        title: 'Password update failed',
+        description: error instanceof ApiClientError ? error.message : 'Password change failed.',
+        variant: 'destructive',
       });
     } finally {
       setIsUpdatingPassword(false);
