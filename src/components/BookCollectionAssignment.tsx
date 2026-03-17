@@ -31,11 +31,6 @@ const BookCollectionAssignment: React.FC<BookCollectionAssignmentProps> = ({
   
   const { toast } = useToast();
   
-  // Load collections when component mounts or dialog opens
-  useEffect(() => {
-    loadCollections();
-  }, [loadCollections]);
-  
   // Load all collections and determine which ones contain this book
   const loadCollections = useCallback(async () => {
     setIsLoading(true);
@@ -60,6 +55,11 @@ const BookCollectionAssignment: React.FC<BookCollectionAssignmentProps> = ({
       setIsLoading(false);
     }
   }, [book.id, toast]);
+
+  // Load collections when component mounts or when the target book changes
+  useEffect(() => {
+    loadCollections();
+  }, [loadCollections]);
   
   // Toggle book's membership in a collection
   const toggleCollection = async (collection: Collection) => {
