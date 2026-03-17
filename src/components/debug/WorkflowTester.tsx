@@ -138,7 +138,7 @@ const LEGACY_SEED_COLLECTIONS = [
 ] as const;
 
 export function WorkflowTester() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const [running, setRunning] = useState(false);
   const [results, setResults] = useState<TestResult[]>([]);
   const [progress, setProgress] = useState(0);
@@ -286,6 +286,18 @@ export function WorkflowTester() {
   };
 
   const runWorkflowTest = async () => {
+    if (!isAuthenticated) {
+      setResults([
+        {
+          step: 'Authentication Required',
+          success: false,
+          message: 'The repository workflow seed is disabled until you are signed in. This test now targets MongoDB-backed account data only.',
+        },
+      ]);
+      setProgress(0);
+      return;
+    }
+
     setRunning(true);
     setResults([]);
     setProgress(0);
@@ -295,7 +307,6 @@ export function WorkflowTester() {
 
       await runRepositoryWorkflowTest({
         addResult,
-        isAuthenticated,
         setProgress,
       });
     } catch (error) {
@@ -329,18 +340,27 @@ export function WorkflowTester() {
         <TabsContent value="workflow">
           <div className="space-y-4">
             <p className="text-muted-foreground">
-              Writes a namespaced test dataset through repositories. In authenticated sessions this lands in MongoDB-backed account data; otherwise it uses the local repository fallback.
+              Writes a Mongo-backed workflow dataset for the currently logged-in account only.
             </p>
             <p className="text-sm text-muted-foreground">
-              This workflow creates books, series, and collections without clearing unrelated user data.
+              This workflow clears prior `workflow-test-*` records, then adds 200 books total: 100 from Google Books search results, 100 from Open Library search results, plus 9 generated series built from those books.
             </p>
+            <Alert>
+              <Database className="h-4 w-4" />
+              <AlertTitle>Repository Target</AlertTitle>
+              <AlertDescription>
+                {isAuthenticated
+                  ? `Authenticated session detected for ${user?.email || 'the current account'}. This seed will write to that user's MongoDB-backed library.`
+                  : 'No authenticated session detected. This workflow is disabled because it no longer falls back to local storage.'}
+              </AlertDescription>
+            </Alert>
 
             <Button
               onClick={runWorkflowTest}
-              disabled={running}
+              disabled={running || !isAuthenticated}
               className="mb-4"
             >
-              {running ? 'Running...' : 'Run Repository Workflow Test'}
+              {running ? 'Running...' : 'Seed 200 Mongo Books and 9 Series'}
             </Button>
 
             {running && (
