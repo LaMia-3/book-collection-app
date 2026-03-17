@@ -132,3 +132,52 @@ export const dismissAnnouncement = async (
     },
   );
 };
+
+export const getAnnouncementStateCounts = async (
+  announcementIds: string[],
+): Promise<Record<string, { seenCount: number; dismissedCount: number }>> => {
+  if (announcementIds.length === 0) {
+    return {};
+  }
+
+  await ensureUserAnnouncementStateIndexes();
+  const collection = await getUserAnnouncementStatesCollection();
+  const rows = await collection
+    .aggregate<{
+      _id: string;
+      seenCount: number;
+      dismissedCount: number;
+    }>([
+      {
+        $match: {
+          announcementId: { $in: announcementIds },
+        },
+      },
+      {
+        $group: {
+          _id: "$announcementId",
+          seenCount: {
+            $sum: {
+              $cond: [{ $ifNull: ["$seenAt", false] }, 1, 0],
+            },
+          },
+          dismissedCount: {
+            $sum: {
+              $cond: [{ $ifNull: ["$dismissedAt", false] }, 1, 0],
+            },
+          },
+        },
+      },
+    ])
+    .toArray();
+
+  return Object.fromEntries(
+    rows.map((row) => [
+      row._id,
+      {
+        seenCount: row.seenCount,
+        dismissedCount: row.dismissedCount,
+      },
+    ]),
+  );
+};

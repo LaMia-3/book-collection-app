@@ -10,8 +10,16 @@ import {
 } from "../../src/server/models/admin-audit-log.js";
 import {
   findSystemAnnouncementById,
+  insertSystemAnnouncement,
   listActiveSystemAnnouncements,
+  listAllSystemAnnouncements,
+  SystemAnnouncementEnvironment,
+  SystemAnnouncementInput,
+  SystemAnnouncementKind,
+  SystemAnnouncementSeverity,
   toPublicSystemAnnouncement,
+  updateSystemAnnouncementById,
+  deleteSystemAnnouncementById,
 } from "../../src/server/models/system-announcement.js";
 import { ensureBootstrapAdminUser } from "../../src/server/lib/admin-bootstrap.js";
 import { signAuthToken } from "../../src/server/lib/auth.js";
@@ -52,6 +60,7 @@ import { getNotificationsCollection } from "../../src/server/models/notification
 import { getUserSettingsCollection } from "../../src/server/models/user-settings.js";
 import {
   dismissAnnouncement,
+  getAnnouncementStateCounts,
   getUserAnnouncementStates,
   markAnnouncementSeen,
 } from "../../src/server/models/user-announcement-state.js";
@@ -64,13 +73,25 @@ import {
 
 type AuthRequestBody = {
   announcementId?: string;
+  announcementBody?: string;
+  ctaLabel?: string;
+  ctaUrl?: string;
   currentPassword?: string;
   email?: string;
+  endsAt?: string;
+  environment?: "all" | "preview" | "production";
+  isActive?: boolean;
+  kind?: "release" | "maintenance" | "warning" | "feature";
+  maxAppVersion?: string;
+  minAppVersion?: string;
   newPassword?: string;
   otp?: string;
   password?: string;
   preferredName?: string;
   role?: "user" | "admin";
+  severity?: "info" | "success" | "warning" | "critical";
+  startsAt?: string;
+  title?: string;
   userId?: string;
 };
 
@@ -97,6 +118,26 @@ const resolveAppVersion = (request: VercelRequest): string => {
 
   return appVersion?.trim() || process.env.APP_VERSION?.trim() || "2.0.0";
 };
+
+const SYSTEM_ANNOUNCEMENT_KINDS: SystemAnnouncementKind[] = [
+  "release",
+  "maintenance",
+  "warning",
+  "feature",
+];
+
+const SYSTEM_ANNOUNCEMENT_SEVERITIES: SystemAnnouncementSeverity[] = [
+  "info",
+  "success",
+  "warning",
+  "critical",
+];
+
+const SYSTEM_ANNOUNCEMENT_ENVIRONMENTS: SystemAnnouncementEnvironment[] = [
+  "all",
+  "preview",
+  "production",
+];
 
 const getRequestBody = (request: VercelRequest): AuthRequestBody => {
   if (!request.body || typeof request.body !== "object") {
@@ -132,6 +173,156 @@ const getQueryValue = (
 
 const getResetOtp = (value: string | undefined): string => {
   return (value || "").trim();
+};
+
+const normalizeOptionalString = (value: string | undefined): string | undefined => {
+  const normalized = value?.trim();
+  return normalized || undefined;
+};
+
+const parseOptionalDate = (value: string | undefined, fieldName: string): Date | undefined => {
+  const normalized = normalizeOptionalString(value);
+
+  if (!normalized) {
+    return undefined;
+  }
+
+  const parsedDate = new Date(normalized);
+
+  if (Number.isNaN(parsedDate.getTime())) {
+    throw new ApiError(400, "BAD_REQUEST", `${fieldName} must be a valid date.`);
+  }
+
+  return parsedDate;
+};
+
+const validateAnnouncementEnum = <T extends string>(
+  value: string | undefined,
+  allowedValues: T[],
+  fieldName: string,
+): T => {
+  const normalized = normalizeOptionalString(value);
+
+  if (!normalized || !allowedValues.includes(normalized as T)) {
+    throw new ApiError(
+      400,
+      "BAD_REQUEST",
+      `${fieldName} must be one of: ${allowedValues.join(", ")}.`,
+    );
+  }
+
+  return normalized as T;
+};
+
+const validateOptionalUrl = (value: string | undefined): string | undefined => {
+  const normalized = normalizeOptionalString(value);
+
+  if (!normalized) {
+    return undefined;
+  }
+
+  try {
+    const parsed = new URL(normalized);
+    return parsed.toString();
+  } catch {
+    throw new ApiError(400, "BAD_REQUEST", "ctaUrl must be a valid URL.");
+  }
+};
+
+const normalizeSystemAnnouncementInput = (
+  body: AuthRequestBody,
+  mode: "create" | "update",
+): Partial<SystemAnnouncementInput> => {
+  const title = normalizeOptionalString(body.title);
+  const announcementBody = normalizeOptionalString(body.announcementBody);
+  const startsAt = parseOptionalDate(body.startsAt, "startsAt");
+  const endsAt = parseOptionalDate(body.endsAt, "endsAt");
+  const ctaLabel = normalizeOptionalString(body.ctaLabel);
+  const ctaUrl = validateOptionalUrl(body.ctaUrl);
+  const minAppVersion = normalizeOptionalString(body.minAppVersion);
+  const maxAppVersion = normalizeOptionalString(body.maxAppVersion);
+
+  if (startsAt && endsAt && startsAt > endsAt) {
+    throw new ApiError(
+      400,
+      "BAD_REQUEST",
+      "endsAt must be after startsAt.",
+    );
+  }
+
+  if (mode === "create") {
+    if (!title) {
+      throw new ApiError(400, "BAD_REQUEST", "title is required.");
+    }
+
+    if (!announcementBody) {
+      throw new ApiError(400, "BAD_REQUEST", "announcementBody is required.");
+    }
+  }
+
+  const nextPayload: Partial<SystemAnnouncementInput> = {};
+
+  if (title !== undefined) {
+    nextPayload.title = title;
+  }
+
+  if (announcementBody !== undefined) {
+    nextPayload.body = announcementBody;
+  }
+
+  if (body.kind !== undefined) {
+    nextPayload.kind = validateAnnouncementEnum(
+      body.kind,
+      SYSTEM_ANNOUNCEMENT_KINDS,
+      "kind",
+    );
+  }
+
+  if (body.severity !== undefined) {
+    nextPayload.severity = validateAnnouncementEnum(
+      body.severity,
+      SYSTEM_ANNOUNCEMENT_SEVERITIES,
+      "severity",
+    );
+  }
+
+  if (body.environment !== undefined) {
+    nextPayload.environment = validateAnnouncementEnum(
+      body.environment,
+      SYSTEM_ANNOUNCEMENT_ENVIRONMENTS,
+      "environment",
+    );
+  }
+
+  if (body.isActive !== undefined) {
+    nextPayload.isActive = body.isActive;
+  }
+
+  if (body.startsAt !== undefined) {
+    nextPayload.startsAt = startsAt;
+  }
+
+  if (body.endsAt !== undefined) {
+    nextPayload.endsAt = endsAt;
+  }
+
+  if (body.minAppVersion !== undefined) {
+    nextPayload.minAppVersion = minAppVersion;
+  }
+
+  if (body.maxAppVersion !== undefined) {
+    nextPayload.maxAppVersion = maxAppVersion;
+  }
+
+  if (body.ctaLabel !== undefined) {
+    nextPayload.ctaLabel = ctaLabel;
+  }
+
+  if (body.ctaUrl !== undefined) {
+    nextPayload.ctaUrl = ctaUrl;
+  }
+
+  return nextPayload;
 };
 
 const deleteOwnedUserData = async (
@@ -340,6 +531,190 @@ const handleAdminAuditLogs = async (
     200,
     logs.map((log) => toAdminAuditLogEntry(log)),
   );
+};
+
+const handleAdminSystemAnnouncements = async (
+  request: VercelRequest,
+  response: VercelResponse,
+): Promise<VercelResponse> => {
+  const adminUser = await requireAdminUser(request);
+
+  if (request.method === "GET") {
+    const announcements = await listAllSystemAnnouncements();
+    const counts = await getAnnouncementStateCounts(
+      announcements.map((announcement) => announcement._id!.toString()),
+    );
+
+    return sendJson(
+      response,
+      200,
+      announcements.map((announcement) => {
+        const announcementId = announcement._id!.toString();
+        const stateCounts = counts[announcementId] || {
+          seenCount: 0,
+          dismissedCount: 0,
+        };
+
+        return {
+          ...toPublicSystemAnnouncement(announcement),
+          seenCount: stateCounts.seenCount,
+          dismissedCount: stateCounts.dismissedCount,
+        };
+      }),
+    );
+  }
+
+  if (request.method === "POST") {
+    const body = getRequestBody(request);
+    const payload = normalizeSystemAnnouncementInput(body, "create");
+
+    const announcement = await insertSystemAnnouncement({
+      title: payload.title!,
+      body: payload.body!,
+      kind: payload.kind || "feature",
+      severity: payload.severity || "info",
+      isActive: payload.isActive ?? true,
+      startsAt: payload.startsAt,
+      endsAt: payload.endsAt,
+      minAppVersion: payload.minAppVersion,
+      maxAppVersion: payload.maxAppVersion,
+      environment: payload.environment || "all",
+      ctaLabel: payload.ctaLabel,
+      ctaUrl: payload.ctaUrl,
+    });
+
+    await createAdminAuditLog({
+      actorUserId: adminUser.sub,
+      actorEmail: adminUser.email,
+      action: "admin.announcement.created",
+      targetUserId: announcement._id!.toString(),
+      targetUserEmail: announcement.title,
+      details: {
+        environment: announcement.environment,
+        isActive: announcement.isActive,
+        severity: announcement.severity,
+      },
+    });
+
+    return sendJson(response, 201, toPublicSystemAnnouncement(announcement));
+  }
+
+  return methodNotAllowed(response, ["GET", "POST"]);
+};
+
+const handleAdminSystemAnnouncementUpdate = async (
+  request: VercelRequest,
+  response: VercelResponse,
+): Promise<VercelResponse> => {
+  if (request.method !== "POST") {
+    return methodNotAllowed(response, ["POST"]);
+  }
+
+  const adminUser = await requireAdminUser(request);
+  const body = getRequestBody(request);
+  const announcementId = (body.announcementId || "").trim();
+
+  if (!announcementId) {
+    throw new ApiError(400, "BAD_REQUEST", "Announcement ID is required.");
+  }
+
+  const existingAnnouncement = await findSystemAnnouncementById(announcementId);
+
+  if (!existingAnnouncement) {
+    throw new ApiError(404, "NOT_FOUND", "Announcement not found.");
+  }
+
+  const payload = normalizeSystemAnnouncementInput(body, "update");
+
+  if (Object.keys(payload).length === 0) {
+    throw new ApiError(400, "BAD_REQUEST", "No announcement changes were provided.");
+  }
+
+  const updatedAnnouncement = await updateSystemAnnouncementById(
+    announcementId,
+    payload,
+  );
+
+  if (!updatedAnnouncement) {
+    throw new ApiError(
+      500,
+      "INTERNAL_SERVER_ERROR",
+      "Failed to update announcement.",
+    );
+  }
+
+  const becameActive =
+    existingAnnouncement.isActive === false && updatedAnnouncement.isActive === true;
+  const becameInactive =
+    existingAnnouncement.isActive === true && updatedAnnouncement.isActive === false;
+
+  await createAdminAuditLog({
+    actorUserId: adminUser.sub,
+    actorEmail: adminUser.email,
+    action: becameActive
+      ? "admin.announcement.activated"
+      : becameInactive
+        ? "admin.announcement.deactivated"
+        : "admin.announcement.updated",
+    targetUserId: updatedAnnouncement._id!.toString(),
+    targetUserEmail: updatedAnnouncement.title,
+    details: {
+      previousIsActive: existingAnnouncement.isActive,
+      nextIsActive: updatedAnnouncement.isActive,
+      environment: updatedAnnouncement.environment,
+      severity: updatedAnnouncement.severity,
+    },
+  });
+
+  return sendJson(response, 200, toPublicSystemAnnouncement(updatedAnnouncement));
+};
+
+const handleAdminSystemAnnouncementDelete = async (
+  request: VercelRequest,
+  response: VercelResponse,
+): Promise<VercelResponse> => {
+  if (request.method !== "POST") {
+    return methodNotAllowed(response, ["POST"]);
+  }
+
+  const adminUser = await requireAdminUser(request);
+  const body = getRequestBody(request);
+  const announcementId = (body.announcementId || "").trim();
+
+  if (!announcementId) {
+    throw new ApiError(400, "BAD_REQUEST", "Announcement ID is required.");
+  }
+
+  const existingAnnouncement = await findSystemAnnouncementById(announcementId);
+
+  if (!existingAnnouncement) {
+    throw new ApiError(404, "NOT_FOUND", "Announcement not found.");
+  }
+
+  const deleted = await deleteSystemAnnouncementById(announcementId);
+
+  if (!deleted) {
+    throw new ApiError(
+      500,
+      "INTERNAL_SERVER_ERROR",
+      "Failed to delete announcement.",
+    );
+  }
+
+  await createAdminAuditLog({
+    actorUserId: adminUser.sub,
+    actorEmail: adminUser.email,
+    action: "admin.announcement.deleted",
+    targetUserId: announcementId,
+    targetUserEmail: existingAnnouncement.title,
+    details: {
+      environment: existingAnnouncement.environment,
+      isActive: existingAnnouncement.isActive,
+      severity: existingAnnouncement.severity,
+    },
+  });
+
+  return sendJson(response, 200, { success: true });
 };
 
 const handleSystemAnnouncements = async (
@@ -956,6 +1331,18 @@ export default async function handler(
 
     if (action === "admin-audit-logs") {
       return handleAdminAuditLogs(request, response);
+    }
+
+    if (action === "admin-system-announcements") {
+      return handleAdminSystemAnnouncements(request, response);
+    }
+
+    if (action === "admin-system-announcement-update") {
+      return handleAdminSystemAnnouncementUpdate(request, response);
+    }
+
+    if (action === "admin-system-announcement-delete") {
+      return handleAdminSystemAnnouncementDelete(request, response);
     }
 
     if (action === "admin-user-detail") {

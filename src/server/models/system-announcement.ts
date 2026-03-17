@@ -55,6 +55,21 @@ export type PublicSystemAnnouncement = {
   updatedAt: string;
 };
 
+export type SystemAnnouncementInput = {
+  title: string;
+  body: string;
+  kind: SystemAnnouncementKind;
+  severity: SystemAnnouncementSeverity;
+  isActive: boolean;
+  startsAt?: Date;
+  endsAt?: Date;
+  minAppVersion?: string;
+  maxAppVersion?: string;
+  environment: SystemAnnouncementEnvironment;
+  ctaLabel?: string;
+  ctaUrl?: string;
+};
+
 export const getSystemAnnouncementsCollection = async (): Promise<
   Collection<SystemAnnouncementDocument>
 > => {
@@ -93,6 +108,75 @@ export const findSystemAnnouncementById = async (
 
   const collection = await getSystemAnnouncementsCollection();
   return collection.findOne({ _id: new ObjectId(id) });
+};
+
+export const listAllSystemAnnouncements = async (): Promise<
+  SystemAnnouncementDocument[]
+> => {
+  await ensureSystemAnnouncementIndexes();
+
+  const collection = await getSystemAnnouncementsCollection();
+  return collection.find({}, { sort: { createdAt: -1 } }).toArray();
+};
+
+export const insertSystemAnnouncement = async (
+  input: SystemAnnouncementInput,
+): Promise<SystemAnnouncementDocument> => {
+  await ensureSystemAnnouncementIndexes();
+
+  const collection = await getSystemAnnouncementsCollection();
+  const now = new Date();
+  const document: SystemAnnouncementDocument = {
+    ...input,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  const result = await collection.insertOne(document);
+
+  return {
+    ...document,
+    _id: result.insertedId,
+  };
+};
+
+export const updateSystemAnnouncementById = async (
+  id: string,
+  update: Partial<SystemAnnouncementInput>,
+): Promise<SystemAnnouncementDocument | null> => {
+  if (!ObjectId.isValid(id)) {
+    return null;
+  }
+
+  const collection = await getSystemAnnouncementsCollection();
+  const result = await collection.updateOne(
+    { _id: new ObjectId(id) },
+    {
+      $set: {
+        ...update,
+        updatedAt: new Date(),
+      },
+    },
+  );
+
+  if (result.matchedCount !== 1) {
+    return null;
+  }
+
+  return findSystemAnnouncementById(id);
+};
+
+export const deleteSystemAnnouncementById = async (
+  id: string,
+): Promise<boolean> => {
+  if (!ObjectId.isValid(id)) {
+    return false;
+  }
+
+  const collection = await getSystemAnnouncementsCollection();
+  const result = await collection.deleteOne({ _id: new ObjectId(id) });
+
+  return result.deletedCount === 1;
 };
 
 const normalizeVersionPart = (value: string | undefined): number => {

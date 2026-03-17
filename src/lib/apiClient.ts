@@ -184,7 +184,12 @@ export type AdminAuditLogRecord = {
     | "admin.user.promoted"
     | "admin.user.demoted"
     | "admin.user.password_reset"
-    | "admin.user.deleted";
+    | "admin.user.deleted"
+    | "admin.announcement.created"
+    | "admin.announcement.updated"
+    | "admin.announcement.deleted"
+    | "admin.announcement.activated"
+    | "admin.announcement.deactivated";
   targetUserId?: string;
   targetUserEmail?: string;
   details?: Record<string, unknown>;
@@ -209,6 +214,11 @@ export type SystemAnnouncementRecord = {
   updatedAt: string;
   isSeen: boolean;
   dismissedAt?: string;
+};
+
+export type AdminSystemAnnouncementRecord = SystemAnnouncementRecord & {
+  seenCount: number;
+  dismissedCount: number;
 };
 
 export class ApiClientError extends Error {
@@ -335,6 +345,59 @@ export const authApi = {
     apiRequest<AdminAuditLogRecord[]>("/auth/admin-audit-logs", {
       auth: true,
       method: "GET",
+    }),
+  getAdminSystemAnnouncements: () =>
+    apiRequest<AdminSystemAnnouncementRecord[]>(
+      "/auth/admin-system-announcements",
+      {
+        auth: true,
+        method: "GET",
+      },
+    ),
+  createAdminSystemAnnouncement: (payload: {
+    title: string;
+    announcementBody: string;
+    kind: "release" | "maintenance" | "warning" | "feature";
+    severity: "info" | "success" | "warning" | "critical";
+    isActive: boolean;
+    startsAt?: string;
+    endsAt?: string;
+    minAppVersion?: string;
+    maxAppVersion?: string;
+    environment: "all" | "preview" | "production";
+    ctaLabel?: string;
+    ctaUrl?: string;
+  }) =>
+    apiRequest<SystemAnnouncementRecord>("/auth/admin-system-announcements", {
+      auth: true,
+      method: "POST",
+      body: payload,
+    }),
+  updateAdminSystemAnnouncement: (payload: {
+    announcementId: string;
+    title?: string;
+    announcementBody?: string;
+    kind?: "release" | "maintenance" | "warning" | "feature";
+    severity?: "info" | "success" | "warning" | "critical";
+    isActive?: boolean;
+    startsAt?: string;
+    endsAt?: string;
+    minAppVersion?: string;
+    maxAppVersion?: string;
+    environment?: "all" | "preview" | "production";
+    ctaLabel?: string;
+    ctaUrl?: string;
+  }) =>
+    apiRequest<SystemAnnouncementRecord>("/auth/admin-system-announcement-update", {
+      auth: true,
+      method: "POST",
+      body: payload,
+    }),
+  deleteAdminSystemAnnouncement: (announcementId: string) =>
+    apiRequest<{ success: boolean }>("/auth/admin-system-announcement-delete", {
+      auth: true,
+      method: "POST",
+      body: { announcementId },
     }),
   getSystemAnnouncements: () =>
     apiRequest<SystemAnnouncementRecord[]>("/auth/system-announcements", {

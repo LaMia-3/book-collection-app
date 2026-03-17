@@ -9,7 +9,12 @@ export type AdminAuditAction =
   | "admin.user.promoted"
   | "admin.user.demoted"
   | "admin.user.password_reset"
-  | "admin.user.deleted";
+  | "admin.user.deleted"
+  | "admin.announcement.created"
+  | "admin.announcement.updated"
+  | "admin.announcement.deleted"
+  | "admin.announcement.activated"
+  | "admin.announcement.deactivated";
 
 export type AdminAuditLogDocument = {
   _id?: ObjectId;
