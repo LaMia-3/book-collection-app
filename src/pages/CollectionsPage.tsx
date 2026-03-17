@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Settings } from '@/components/Settings';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Filter, SortAsc, SortDesc, Grid, List, Trash2, Edit, Image, ChevronLeft, Search, X, Grid3X3 } from 'lucide-react';
@@ -47,17 +47,8 @@ const CollectionsPage: React.FC = () => {
   const { toast } = useToast();
   
   // Load collections on component mount
-  useEffect(() => {
-    loadCollections();
-  }, []);
-  
-  // Filter and sort collections when collections, searchQuery, or sortOrder changes
-  useEffect(() => {
-    filterAndSortCollections();
-  }, [collections, searchQuery, sortOrder]);
-  
   // Load collections from repository
-  const loadCollections = async () => {
+  const loadCollections = useCallback(async () => {
     setIsLoading(true);
     try {
       const allCollections = await collectionRepository.getAll();
@@ -80,10 +71,10 @@ const CollectionsPage: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [toast]);
   
   // Filter and sort collections based on search query and sort order
-  const filterAndSortCollections = () => {
+  const filterAndSortCollections = useCallback(() => {
     let filtered = [...collections];
     
     // Apply search filter if query exists
@@ -103,7 +94,16 @@ const CollectionsPage: React.FC = () => {
     }
     
     setFilteredCollections(filtered);
-  };
+  }, [collections, searchQuery, sortOrder]);
+
+  useEffect(() => {
+    loadCollections();
+  }, [loadCollections]);
+  
+  // Filter and sort collections when collections, searchQuery, or sortOrder changes
+  useEffect(() => {
+    filterAndSortCollections();
+  }, [filterAndSortCollections]);
   
   // Handle creating a new collection
   const handleCreateCollection = async () => {
@@ -393,9 +393,9 @@ const CollectionsPage: React.FC = () => {
       onSettingsClick={() => setShowSettings(true)}
       addButtonLabel="Add Collection"
       searchComponent={
-        <div className="flex items-center gap-2 w-full">
+        <div className="flex w-full flex-wrap items-center gap-2 sm:flex-nowrap">
           {/* Search input */}
-          <div className="relative flex-grow">
+          <div className="relative w-full min-w-0 sm:flex-grow">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
             <Input
               type="text"
@@ -420,7 +420,7 @@ const CollectionsPage: React.FC = () => {
             value={sortOrder}
             onValueChange={(value) => setSortOrder(value as 'alphabetical' | 'recent')}
           >
-            <SelectTrigger className="w-[140px] h-10">
+            <SelectTrigger className="h-10 w-full sm:w-[140px]">
               <SelectValue placeholder="Sort by" />
             </SelectTrigger>
             <SelectContent>
@@ -430,7 +430,7 @@ const CollectionsPage: React.FC = () => {
           </Select>
           
           {/* View Toggle Buttons */}
-          <div className="flex">
+          <div className="ml-auto flex shrink-0">
             <Button
               variant={viewMode === 'grid' ? 'default' : 'outline'}
               size="icon"

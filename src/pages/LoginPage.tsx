@@ -1,0 +1,144 @@
+import { FormEvent, useState } from "react";
+import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
+
+import { AuthEntryShell } from "@/components/auth/AuthEntryShell";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
+import { useAuth } from "@/hooks/useAuth";
+import appScreenshot from "../../docs/app-screenshot.png";
+
+type LocationState = {
+  from?: string;
+  message?: string;
+};
+
+export default function LoginPage() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { authError, isAuthenticated, isLoadingAuth, login } = useAuth();
+  const locationState = location.state as LocationState | null;
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [pageError, setPageError] = useState<string | null>(null);
+
+  if (isAuthenticated) {
+    return <Navigate to="/" replace />;
+  }
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setPageError(null);
+
+    try {
+      await login({ email, password });
+      const from = (location.state as LocationState | null)?.from || "/";
+      navigate(from, { replace: true });
+    } catch (error) {
+      setPageError(error instanceof Error ? error.message : "Login failed.");
+    }
+  };
+
+  return (
+    <AuthEntryShell
+      authCard={
+        <Card className="w-full border-border/60 bg-card/95 shadow-elegant">
+          <CardHeader>
+            <CardTitle>Sign In</CardTitle>
+            <CardDescription>
+              Access your account-backed library with your credentials.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form className="space-y-4" onSubmit={handleSubmit}>
+              {locationState?.message && !pageError && !authError && (
+                <p className="text-sm text-muted-foreground">{locationState.message}</p>
+              )}
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium" htmlFor="email">
+                  Email
+                </label>
+                <Input
+                  autoComplete="email"
+                  id="email"
+                  onChange={(event) => setEmail(event.target.value)}
+                  type="email"
+                  value={email}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium" htmlFor="password">
+                  Password
+                </label>
+                <PasswordInput
+                  autoComplete="current-password"
+                  id="password"
+                  onChange={(event) => setPassword(event.target.value)}
+                  value={password}
+                />
+              </div>
+
+              {(pageError || authError) && (
+                <p className="text-sm text-destructive">{pageError || authError}</p>
+              )}
+
+              <Button className="w-full" disabled={isLoadingAuth} type="submit">
+                {isLoadingAuth ? "Signing in..." : "Sign In"}
+              </Button>
+            </form>
+
+            <p className="mt-4 text-sm text-muted-foreground">
+              Forgot your password?{" "}
+              <Link
+                className="text-primary underline-offset-4 hover:underline"
+                to="/forgot-password"
+              >
+                Reset it
+              </Link>
+            </p>
+
+            <p className="mt-2 text-sm text-muted-foreground">
+              Need an account?{" "}
+              <Link
+                className="text-primary underline-offset-4 hover:underline"
+                to="/register"
+              >
+                Create one
+              </Link>
+            </p>
+          </CardContent>
+        </Card>
+      }
+      authSupplement={
+        <Card className="w-full overflow-hidden border-border/60 bg-card/95 shadow-elegant">
+          <div className="border-b border-border/60 px-4 py-3">
+            <p className="text-sm font-medium text-foreground">
+              What the app looks like
+            </p>
+            <p className="text-sm text-muted-foreground">
+              A bookshelf-style library with collections, series tracking, and
+              reading goals built into the same view.
+            </p>
+          </div>
+          <div className="p-3">
+            <img
+              alt="Book Collection App library dashboard screenshot"
+              className="w-full rounded-2xl border border-border/60 shadow-sm"
+              loading="lazy"
+              src={appScreenshot}
+            />
+          </div>
+        </Card>
+      }
+    />
+  );
+}

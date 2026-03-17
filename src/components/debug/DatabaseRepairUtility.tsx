@@ -32,17 +32,17 @@ export const DatabaseRepairUtility: React.FC = () => {
       
       if (repaired) {
         setRepairStatus('success');
-        setStatusMessage('Database repair completed successfully. Refresh the page to see changes.');
+        setStatusMessage('Local cache repair completed successfully. Refresh the page to reload browser data.');
         toast({
-          title: 'Database Repair Successful',
-          description: 'The database has been repaired. Please refresh the page to see changes.',
+          title: 'Local Cache Repair Successful',
+          description: 'The browser cache has been repaired. Refresh the page to reload data.',
         });
       } else {
         setRepairStatus('error');
-        setStatusMessage('Database repair failed. Try resetting the database instead.');
+        setStatusMessage('Local cache repair failed. Try resetting the browser cache instead.');
         toast({
-          title: 'Database Repair Failed',
-          description: 'Could not repair the database. Try resetting the database instead.',
+          title: 'Local Cache Repair Failed',
+          description: 'Could not repair the browser cache. Try resetting the local cache instead.',
           variant: 'destructive'
         });
       }
@@ -50,7 +50,7 @@ export const DatabaseRepairUtility: React.FC = () => {
       setRepairStatus('error');
       setStatusMessage(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
       toast({
-        title: 'Database Repair Error',
+        title: 'Local Cache Repair Error',
         description: `An error occurred: ${error instanceof Error ? error.message : 'Unknown error'}`,
         variant: 'destructive'
       });
@@ -61,7 +61,7 @@ export const DatabaseRepairUtility: React.FC = () => {
 
   // Handle database reset
   const handleResetDatabase = async () => {
-    if (!window.confirm('WARNING: This will delete all your data! Are you sure you want to reset the database?')) {
+    if (!window.confirm('WARNING: This will clear browser-local IndexedDB data on this device. Remote account data in MongoDB will not be deleted. Continue?')) {
       return;
     }
     
@@ -72,16 +72,16 @@ export const DatabaseRepairUtility: React.FC = () => {
     try {
       await indexedDBService.resetDatabase();
       setResetStatus('success');
-      setStatusMessage('Database reset successful. Refresh the page to start fresh.');
+      setStatusMessage('Local browser cache reset successful. Refresh the page to reload from the current source of truth.');
       toast({
-        title: 'Database Reset Successful',
-        description: 'The database has been reset. Please refresh the page to start fresh.',
+        title: 'Local Cache Reset Successful',
+        description: 'The browser cache has been reset. Refresh the page to reload data.',
       });
     } catch (error) {
       setResetStatus('error');
       setStatusMessage(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
       toast({
-        title: 'Database Reset Error',
+        title: 'Local Cache Reset Error',
         description: `An error occurred: ${error instanceof Error ? error.message : 'Unknown error'}`,
         variant: 'destructive'
       });
@@ -95,10 +95,10 @@ export const DatabaseRepairUtility: React.FC = () => {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Database className="h-5 w-5" />
-          Database Repair Utility
+          Local Cache Repair Utility
         </CardTitle>
         <CardDescription>
-          Use these tools to fix database issues. Only use when experiencing problems.
+          Repair or reset browser-local IndexedDB stores on this device. These actions do not delete MongoDB account records.
         </CardDescription>
       </CardHeader>
       
@@ -116,9 +116,9 @@ export const DatabaseRepairUtility: React.FC = () => {
         )}
         
         <div className="space-y-2">
-          <h3 className="text-sm font-medium">Repair Options</h3>
+          <h3 className="text-sm font-medium">Browser Cache Options</h3>
           <p className="text-sm text-muted-foreground">
-            Try repairing first. If that doesn't work, reset the database as a last resort.
+            Try repair first. If that fails, reset the browser-local cache as a last resort.
           </p>
         </div>
       </CardContent>
@@ -135,7 +135,7 @@ export const DatabaseRepairUtility: React.FC = () => {
           ) : (
             <RefreshCw className="h-4 w-4" />
           )}
-          Repair Database
+          Repair Local Cache
         </Button>
         
         <Button
@@ -149,7 +149,7 @@ export const DatabaseRepairUtility: React.FC = () => {
           ) : (
             <Trash2 className="h-4 w-4" />
           )}
-          Reset Database
+          Reset Local Cache
         </Button>
       </CardFooter>
     </Card>

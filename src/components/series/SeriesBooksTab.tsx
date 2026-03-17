@@ -11,19 +11,29 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { Plus, GripVertical, BookOpen, Bookmark, BookX } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { enhancedStorageService } from '@/services/storage/EnhancedStorageService';
+import { bookRepository } from '@/repositories/BookRepository';
+import { seriesService } from '@/services/SeriesService';
 
 interface SeriesBooksTabProps {
   series: Series;
   books: Book[];
   allBooks: Book[];
   onUpdateBook?: (updatedBook: Book) => void;
+  onBooksAddedToSeries?: (addedBooks: Book[]) => void;
+  onBookRemovedFromSeries?: (bookId: string) => void;
 }
 
 /**
  * Tab for managing books in a series
  */
-export const SeriesBooksTab = ({ series, books, allBooks, onUpdateBook }: SeriesBooksTabProps) => {
+export const SeriesBooksTab = ({
+  series,
+  books,
+  allBooks,
+  onUpdateBook,
+  onBooksAddedToSeries,
+  onBookRemovedFromSeries,
+}: SeriesBooksTabProps) => {
   const { toast } = useToast();
   const [readingOrder, setReadingOrder] = useState<'publication' | 'chronological' | 'custom'>(
     series.readingOrder || 'publication'
@@ -119,23 +129,12 @@ export const SeriesBooksTab = ({ series, books, allBooks, onUpdateBook }: Series
     const newCustomOrder = items.map(book => book.id);
     
     try {
-      // Get the current series from the storage service
-      const currentSeries = await enhancedStorageService.getSeriesById(series.id);
-      if (currentSeries) {
-        // Update the series with new custom order
-        const updatedSeries = {
-          ...currentSeries,
-          customOrder: newCustomOrder
-        };
-        
-        // Save the updated series using the storage service
-        await enhancedStorageService.saveSeries(updatedSeries);
-        
-        toast({
-          title: "Series order updated",
-          description: "The reading order has been updated."
-        });
-      }
+      await seriesService.setReadingOrder(series.id, 'custom', newCustomOrder);
+      
+      toast({
+        title: "Series order updated",
+        description: "The reading order has been updated."
+      });
     } catch (error) {
       console.error("Error updating series order:", error);
       toast({
@@ -163,50 +162,31 @@ export const SeriesBooksTab = ({ series, books, allBooks, onUpdateBook }: Series
     }
     
     try {
-      // Get the current series
-      const currentSeries = await enhancedStorageService.getSeriesById(series.id);
-      
-      if (currentSeries) {
-        // Update the series with new books
-        const updatedSeries = {
-          ...currentSeries,
-          books: [...currentSeries.books, ...booksToAdd]
-        };
-        
-        // Update each book to include series information
-        for (const bookId of booksToAdd) {
-          // Get the book from storage
-          const book = await enhancedStorageService.getBookById(bookId);
-          if (book) {
-            // Update book with series information
-            const updatedBook = {
-              ...book,
-              isPartOfSeries: true,
-              seriesId: series.id
-              // Note: We're not setting volumeNumber here as that would require user input
-            };
-            
-            // Save the updated book
-            await enhancedStorageService.saveBook(updatedBook);
-          }
-        }
-        
-        // Save the updated series
-        await enhancedStorageService.saveSeries(updatedSeries);
-        
-        toast({
-          title: "Books added",
-          description: `${booksToAdd.length} book${booksToAdd.length > 1 ? 's' : ''} added to the series.`
+      const addedBooks: Book[] = [];
+
+      for (const bookId of booksToAdd) {
+        await seriesService.addBookToSeries(series.id, bookId);
+
+        const existingBook = allBooks.find((book) => book.id === bookId);
+        const updatedBook = await bookRepository.update(bookId, {
+          isPartOfSeries: true,
+          seriesId: series.id,
+          volumeNumber: existingBook?.volumeNumber,
+          seriesPosition: existingBook?.seriesPosition,
         });
-        
-        // Reset state
-        setSelectedBookIds({});
-        setIsAddingBooks(false);
-        
-        // In a real app, we would refetch the data here
-        // For now, just reload the page
-        window.location.reload();
+
+        addedBooks.push(updatedBook);
       }
+
+      onBooksAddedToSeries?.(addedBooks);
+
+      toast({
+        title: "Books added",
+        description: `${booksToAdd.length} book${booksToAdd.length > 1 ? 's' : ''} added to the series.`
+      });
+      
+      setSelectedBookIds({});
+      setIsAddingBooks(false);
     } catch (error) {
       console.error("Error adding books to series:", error);
       toast({
@@ -221,16 +201,19 @@ export const SeriesBooksTab = ({ series, books, allBooks, onUpdateBook }: Series
   const handleRemoveBook = async (bookId: string) => {
     if (confirm("Remove this book from the series?")) {
       try {
-        // Use the enhanced storage service to remove the book from series
-        await enhancedStorageService.removeBookFromSeries(bookId, series.id);
+        await seriesService.removeBookFromSeries(series.id, bookId);
+        await bookRepository.update(bookId, {
+          isPartOfSeries: false,
+          seriesId: undefined,
+          volumeNumber: undefined,
+          seriesPosition: undefined,
+        });
+        onBookRemovedFromSeries?.(bookId);
         
         toast({
           title: "Book removed",
           description: "The book has been removed from the series."
         });
-        
-        // Refresh the page to see the updated data
-        window.location.reload();
       } catch (error) {
         console.error("Error removing book from series:", error);
         toast({
@@ -259,7 +242,7 @@ export const SeriesBooksTab = ({ series, books, allBooks, onUpdateBook }: Series
               <Label htmlFor="reading-order">Reading Order:</Label>
               <Select 
                 value={readingOrder} 
-                onValueChange={(value) => setReadingOrder(value as any)}
+                onValueChange={(value) => setReadingOrder(value as 'publication' | 'chronological' | 'custom')}
               >
                 <SelectTrigger id="reading-order" className="w-[180px]">
                   <SelectValue />

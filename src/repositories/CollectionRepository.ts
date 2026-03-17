@@ -1,7 +1,40 @@
 import { Collection, CollectionCreationData, CollectionUpdateData } from '@/types/collection';
+import { Book } from '@/types/book';
 import { DatabaseService } from '@/services/DatabaseService';
 import { enhancedStorageService } from '@/services/storage/EnhancedStorageService';
+import { bookRepository } from '@/repositories/BookRepository';
 import { v4 as uuidv4 } from 'uuid';
+import { ApiClientError, collectionsApi, CollectionRecord } from '@/lib/apiClient';
+import { getStoredAuthToken } from '@/lib/auth-storage';
+
+type StoredCollection = Collection & {
+  dateAdded?: string;
+  lastModified?: string;
+};
+
+const isAuthenticatedSession = (): boolean => Boolean(getStoredAuthToken());
+
+const normalizeRemoteCollection = (collection: CollectionRecord): Collection => ({
+  id: collection.id,
+  name: collection.name,
+  description: collection.description,
+  bookIds: collection.bookIds || [],
+  color: collection.color,
+  imageUrl: collection.imageUrl,
+  createdAt: new Date(collection.createdAt),
+  updatedAt: new Date(collection.updatedAt),
+});
+
+const serializeCollection = (collection: Collection): CollectionRecord => ({
+  id: collection.id,
+  name: collection.name,
+  description: collection.description,
+  bookIds: collection.bookIds || [],
+  color: collection.color,
+  imageUrl: collection.imageUrl,
+  createdAt: collection.createdAt.toISOString(),
+  updatedAt: collection.updatedAt.toISOString(),
+});
 
 /**
  * Repository for managing collection data
@@ -19,6 +52,11 @@ export class CollectionRepository {
    * Get all collections in the database
    */
   async getAll(): Promise<Collection[]> {
+    if (isAuthenticatedSession()) {
+      const collections = await collectionsApi.getAll();
+      return collections.map(normalizeRemoteCollection);
+    }
+
     try {
       // Get collections from IndexedDB as the source of truth
       const collectionsFromDB = await enhancedStorageService.getCollections();
@@ -26,7 +64,7 @@ export class CollectionRepository {
       // Convert from IndexedDB format to the app's Collection format
       const convertedCollections = collectionsFromDB.map(collection => {
         // Extract dateAdded and lastModified from the DB format
-        const { dateAdded, lastModified, ...rest } = collection as any;
+        const { dateAdded, lastModified, ...rest } = collection as StoredCollection;
         
         // Return the UI Collection format
         return {
@@ -47,12 +85,25 @@ export class CollectionRepository {
    * Get a collection by ID
    */
   async getById(id: string): Promise<Collection | null> {
+    if (isAuthenticatedSession()) {
+      try {
+        const collection = await collectionsApi.getById(id);
+        return normalizeRemoteCollection(collection);
+      } catch (error) {
+        if (error instanceof ApiClientError && error.status === 404) {
+          return null;
+        }
+
+        throw error;
+      }
+    }
+
     try {
       // Get from IndexedDB as the source of truth
       const collectionFromDB = await enhancedStorageService.getCollectionById(id);
       if (collectionFromDB) {
         // Extract dateAdded and lastModified from the DB format
-        const { dateAdded, lastModified, ...rest } = collectionFromDB as any;
+        const { dateAdded, lastModified, ...rest } = collectionFromDB as StoredCollection;
         
         // Convert to the app's Collection format
         const convertedCollection = {
@@ -84,15 +135,20 @@ export class CollectionRepository {
    * Add a new collection to the database
    */
   async add(collection: CollectionCreationData): Promise<Collection> {
-    const now = new Date();
+    const now = collection.updatedAt || collection.createdAt || new Date();
     const newCollection: Collection = {
       ...collection,
-      id: `collection-${uuidv4()}`,
+      id: collection.id || `collection-${uuidv4()}`,
       bookIds: collection.bookIds || [],
-      createdAt: now,
-      updatedAt: now
+      createdAt: collection.createdAt || now,
+      updatedAt: collection.updatedAt || now
     };
     
+    if (isAuthenticatedSession()) {
+      const createdCollection = await collectionsApi.create(serializeCollection(newCollection));
+      return normalizeRemoteCollection(createdCollection);
+    }
+
     try {
       // Add to IndexedDB as the source of truth
       const enhancedCollection = {
@@ -102,7 +158,7 @@ export class CollectionRepository {
         lastModified: now.toISOString(),
       };
       
-      await enhancedStorageService.saveCollection(enhancedCollection as any);
+      await enhancedStorageService.saveCollection(enhancedCollection as StoredCollection);
       return newCollection;
     } catch (error) {
       console.error('Error adding collection:', error);
@@ -124,6 +180,14 @@ export class CollectionRepository {
       updatedAt: now
     };
     
+    if (isAuthenticatedSession()) {
+      const remoteCollection = await collectionsApi.update(
+        id,
+        serializeCollection(updatedCollection),
+      );
+      return normalizeRemoteCollection(remoteCollection);
+    }
+
     try {
       // Update IndexedDB as the source of truth
       const enhancedCollection = {
@@ -133,7 +197,7 @@ export class CollectionRepository {
         lastModified: now.toISOString()
       };
       
-      await enhancedStorageService.saveCollection(enhancedCollection as any);
+      await enhancedStorageService.saveCollection(enhancedCollection as StoredCollection);
     } catch (error) {
       console.error(`Error updating collection ${id}:`, error);
       throw error; // Re-throw to notify calling code of the failure
@@ -183,10 +247,11 @@ export class CollectionRepository {
       if (!updatedCollection) return false;
       
       // Update the book's collection references
-      const book = await enhancedStorageService.getBookById(bookId);
+      const book = await bookRepository.getById(bookId);
       if (book && book.collectionIds) {
-        book.collectionIds = book.collectionIds.filter(id => id !== collectionId);
-        await enhancedStorageService.saveBook(book);
+        await bookRepository.update(bookId, {
+          collectionIds: book.collectionIds.filter(id => id !== collectionId),
+        });
       }
       
       return true;
@@ -199,14 +264,14 @@ export class CollectionRepository {
   /**
    * Get all books in a collection
    */
-  async getBooksInCollection(collectionId: string): Promise<any[]> {
+  async getBooksInCollection(collectionId: string): Promise<Book[]> {
     try {
       // Get the collection
       const collection = await this.getById(collectionId);
       if (!collection) return [];
       
       // Get all books
-      const allBooks = await enhancedStorageService.getBooks();
+      const allBooks = await bookRepository.getAll();
       
       // Filter books that are in this collection
       return allBooks.filter(book => {
@@ -231,17 +296,19 @@ export class CollectionRepository {
       const collection = await this.getById(id);
       if (!collection) return false;
       
-      // Delete from IndexedDB as the source of truth
-      await enhancedStorageService.deleteCollection(id);
+      if (isAuthenticatedSession()) {
+        await collectionsApi.delete(id);
+      } else {
+        await enhancedStorageService.deleteCollection(id);
+      }
       
       // Update all books that reference this collection
-      const books = await enhancedStorageService.getBooks();
+      const books = await bookRepository.getAll();
       for (const book of books) {
         if (book.collectionIds && book.collectionIds.includes(id)) {
-          // Remove this collection from the book's collections
-          const updatedCollectionIds = book.collectionIds.filter(collId => collId !== id);
-          book.collectionIds = updatedCollectionIds;
-          await enhancedStorageService.saveBook(book);
+          await bookRepository.update(book.id, {
+            collectionIds: book.collectionIds.filter(collId => collId !== id),
+          });
         }
       }
       

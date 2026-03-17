@@ -3,7 +3,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, BookOpen, Bug, Shield, Heart, ExternalLink, Sparkles } from 'lucide-react';
 
-const TABS = ['changelog', 'known-issues', 'privacy', 'about'] as const;
+const TABS = ['changelog', 'known-issues', 'privacy', 'roadmap', 'about'] as const;
 type TabValue = typeof TABS[number];
 
 const AboutPage = () => {
@@ -35,24 +35,24 @@ const AboutPage = () => {
         </p>
 
         <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5">
-            <TabsTrigger value="changelog" className="flex items-center gap-1.5 text-xs sm:text-sm">
+          <TabsList className="flex h-auto w-full justify-start gap-1 overflow-x-auto p-1 sm:grid sm:grid-cols-5 sm:overflow-visible">
+            <TabsTrigger value="changelog" className="shrink-0 flex items-center gap-1.5 text-xs sm:text-sm">
               <BookOpen className="h-3.5 w-3.5 hidden sm:inline" />
               Changelog
             </TabsTrigger>
-            <TabsTrigger value="known-issues" className="flex items-center gap-1.5 text-xs sm:text-sm">
+            <TabsTrigger value="known-issues" className="shrink-0 flex items-center gap-1.5 text-xs sm:text-sm">
               <Bug className="h-3.5 w-3.5 hidden sm:inline" />
               Known Issues
             </TabsTrigger>
-            <TabsTrigger value="privacy" className="flex items-center gap-1.5 text-xs sm:text-sm">
+            <TabsTrigger value="privacy" className="shrink-0 flex items-center gap-1.5 text-xs sm:text-sm">
               <Shield className="h-3.5 w-3.5 hidden sm:inline" />
               Privacy
             </TabsTrigger>
-            <TabsTrigger value="roadmap" className="flex items-center gap-1.5 text-xs sm:text-sm">
+            <TabsTrigger value="roadmap" className="shrink-0 flex items-center gap-1.5 text-xs sm:text-sm">
               <Sparkles className="h-3.5 w-3.5 hidden sm:inline" />
               Roadmap
             </TabsTrigger>
-            <TabsTrigger value="about" className="flex items-center gap-1.5 text-xs sm:text-sm">
+            <TabsTrigger value="about" className="shrink-0 flex items-center gap-1.5 text-xs sm:text-sm">
               <Heart className="h-3.5 w-3.5 hidden sm:inline" />
               About
             </TabsTrigger>
@@ -63,8 +63,41 @@ const AboutPage = () => {
             <div className="bg-card rounded-lg p-6 shadow-elegant space-y-8">
               <div>
                 <div className="flex items-center gap-3 mb-3">
-                  <span className="text-sm font-semibold bg-primary/10 text-primary px-2.5 py-0.5 rounded-full">v1.2.2</span>
+                  <span className="text-sm font-semibold bg-primary/10 text-primary px-2.5 py-0.5 rounded-full">v2.0.0</span>
                   <span className="text-sm text-muted-foreground">Latest</span>
+                </div>
+                <h3 className="text-lg font-semibold mb-2">Your Library, Now Tied to Your Account</h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Version 2.0.0 turns the app into an account-based reading library, adds stronger account tools, and makes updates easier to manage inside the app.
+                </p>
+                <div className="space-y-5">
+                  <div>
+                    <h4 className="text-sm font-semibold mb-1.5">What&apos;s New</h4>
+                    <ul className="space-y-1.5 text-sm text-muted-foreground list-disc list-inside">
+                      <li>Your library is now connected to your account, so your books, series, collections, settings, and tracked items are no longer limited to one browser.</li>
+                      <li>Older browser-stored libraries can now be imported into the new account-based version with a guided migration flow.</li>
+                      <li>You can now manage your account more safely with better email and password controls, plus clearer delete and reset actions.</li>
+                      <li>System updates now appear inside Notifications under a dedicated <strong>App Updates</strong> tab, separate from future book alerts.</li>
+                      <li>The sign-in experience has been upgraded with clearer app information, easier navigation to help pages, and a more polished first impression.</li>
+                      <li>Settings have been reorganized so everyday options, library actions, and account actions are easier to find.</li>
+                      <li>Admin tools now support user management, role changes, password resets, account deletion, and audit history.</li>
+                    </ul>
+                  </div>
+
+                  <div>
+                    <h4 className="text-sm font-semibold mb-1.5">Still Being Improved</h4>
+                    <ul className="space-y-1.5 text-sm text-muted-foreground list-disc list-inside">
+                      <li>Password recovery still needs follow-up testing and final hardening.</li>
+                      <li>More quality-of-life cleanup is planned for settings, admin presentation, and small usability details.</li>
+                      <li>Additional testing is still planned across migration, account security, announcements, and destructive actions.</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center gap-3 mb-3">
+                  <span className="text-sm font-semibold bg-muted text-muted-foreground px-2.5 py-0.5 rounded-full">v1.2.2</span>
                 </div>
                 <h3 className="text-lg font-semibold mb-2">Bug Fix — Book Editing</h3>
                 <ul className="space-y-1.5 text-sm text-muted-foreground list-disc list-inside">
@@ -178,7 +211,7 @@ const AboutPage = () => {
                   <div>
                     <h4 className="text-sm font-semibold mb-1.5">Data & Storage</h4>
                     <ul className="space-y-1.5 text-sm text-muted-foreground list-disc list-inside">
-                      <li>All data stored locally in IndexedDB — no server, no account required</li>
+                      <li>Local-first IndexedDB storage with no server or account requirement</li>
                       <li>Database preloading for fast startup</li>
                       <li>Database repair utility for troubleshooting</li>
                     </ul>
@@ -241,21 +274,35 @@ const AboutPage = () => {
           <TabsContent value="roadmap" className="space-y-6">
             <div className="bg-card rounded-lg p-6 shadow-elegant space-y-6">
               <p className="text-sm text-muted-foreground">
-                Features and improvements we're planning for future releases:
+                Remaining v2 work and upcoming improvements:
               </p>
 
               <div className="space-y-4">
                 <div className="border-l-4 border-purple-500 pl-4 py-1">
-                  <h4 className="font-medium text-sm">Improved series auto-detection</h4>
+                  <h4 className="font-medium text-sm">Password recovery polish</h4>
                   <p className="text-sm text-muted-foreground">
-                    Better series matching using multiple data sources and smarter title parsing to automatically detect when books belong to a series.
+                    Finish hardening the forgot-password flow with more testing and final usability cleanup.
                   </p>
                 </div>
 
                 <div className="border-l-4 border-purple-500 pl-4 py-1">
-                  <h4 className="font-medium text-sm">New book release notifications</h4>
+                  <h4 className="font-medium text-sm">Quality-of-life cleanup</h4>
                   <p className="text-sm text-muted-foreground">
-                    Get notified when a new book is coming out in a series you're tracking, so you never miss the next installment.
+                    Continue refining Settings, account details, and admin screens so the most important actions are easier to find and use.
+                  </p>
+                </div>
+
+                <div className="border-l-4 border-purple-500 pl-4 py-1">
+                  <h4 className="font-medium text-sm">Better book alerts</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Expand the notifications experience so release tracking and reading-related alerts become more useful alongside app updates.
+                  </p>
+                </div>
+
+                <div className="border-l-4 border-purple-500 pl-4 py-1">
+                  <h4 className="font-medium text-sm">Testing and stability</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Add broader test coverage and finish end-to-end QA across accounts, migration, notifications, and destructive actions.
                   </p>
                 </div>
               </div>
@@ -270,52 +317,65 @@ const AboutPage = () => {
           <TabsContent value="privacy" className="space-y-6">
             <div className="bg-card rounded-lg p-6 shadow-elegant space-y-6">
               <div>
-                <h3 className="text-lg font-semibold mb-2">Your Data Stays With You</h3>
+                <h3 className="text-lg font-semibold mb-2">Account-Based Storage</h3>
                 <p className="text-sm text-muted-foreground">
-                  This app stores all your data locally in your browser using IndexedDB.
-                  No data is sent to any server, and no account is required.
+                  This app now stores account and library data on a remote MongoDB database through Vercel-hosted API functions.
+                  An account is required to use the authenticated app experience.
                 </p>
               </div>
 
               <div>
                 <h3 className="text-lg font-semibold mb-2">What We Store</h3>
                 <ul className="space-y-1.5 text-sm text-muted-foreground list-disc list-inside">
+                  <li><strong>Account data</strong> — email address, password hash, timestamps, and optional preferred name</li>
                   <li><strong>Books</strong> — title, author, status, dates, ratings, notes, and cover images</li>
                   <li><strong>Series</strong> — series names, reading order, and book assignments</li>
                   <li><strong>Collections</strong> — collection names, descriptions, and book assignments</li>
-                  <li><strong>Settings</strong> — your display preferences and reading goals</li>
+                  <li><strong>Upcoming releases and notifications</strong> — tracked release data, book-alert notification state, and system-announcement seen or dismissed state</li>
+                  <li><strong>Settings</strong> — your display preferences, reading goals, and migration status metadata</li>
                 </ul>
+              </div>
+
+              <div>
+                <h3 className="text-lg font-semibold mb-2">Local Browser Storage</h3>
+                <p className="text-sm text-muted-foreground">
+                  The app may also use local browser storage such as IndexedDB or localStorage for legacy migration support,
+                  temporary device-specific cache behavior, and migration compatibility on a specific device. Local browser storage is not the primary source of truth for authenticated accounts.
+                </p>
               </div>
 
               <div>
                 <h3 className="text-lg font-semibold mb-2">External Services</h3>
                 <p className="text-sm text-muted-foreground">
-                  The app connects to two external APIs when you search for or add a book:
+                  The app connects to external services for book lookup and password recovery:
                 </p>
                 <ul className="space-y-1.5 text-sm text-muted-foreground list-disc list-inside mt-2">
                   <li><strong>Google Books API</strong> — search, book metadata, and cover images</li>
                   <li><strong>Open Library API</strong> — search, book metadata, cover images, and series detection</li>
+                  <li><strong>Resend</strong> — delivery of one-time password reset codes by email</li>
                 </ul>
                 <p className="text-sm text-muted-foreground mt-2">
-                  No personal data is sent to either service — only your search queries. You can choose your
-                  preferred provider in Settings.
+                  Search queries and book lookup requests may be sent to those providers when you use related features.
+                  Your account password is not sent to the book providers, and reset emails are sent only when you start a password recovery flow. You can choose your preferred book-search provider in Settings.
                 </p>
               </div>
 
               <div>
                 <h3 className="text-lg font-semibold mb-2">Data Portability</h3>
                 <p className="text-sm text-muted-foreground">
-                  You can export all your data at any time via Settings → Create Backup. This creates a
-                  JSON file you can use to restore your library on any device. CSV export is also available
-                  for book data.
+                  You can export library data through Settings. Standard export, full backup and restore, and legacy browser migration are separate flows so it is clearer what comes from your account data versus older browser-only data.
                 </p>
               </div>
 
               <div>
-                <h3 className="text-lg font-semibold mb-2">Clearing Your Data</h3>
-                <p className="text-sm text-muted-foreground">
-                  You can delete or reset your library at any time via Settings. Clearing your browser data
-                  will also remove all app data. There is no way to recover data once deleted unless you have a backup.
+                <h3 className="text-lg font-semibold mb-2">Deleting Your Data</h3>
+                <ul className="space-y-1.5 text-sm text-muted-foreground list-disc list-inside">
+                  <li><strong>Delete Library</strong> removes books from your account library, removes their references from series and collections, deletes book-linked notifications, and clears stale device cache afterward</li>
+                  <li><strong>Reset Library</strong> removes books, series, collections, upcoming releases, and notifications for the signed-in account</li>
+                  <li><strong>Delete Account</strong> removes the user account and all associated remote data</li>
+                </ul>
+                <p className="text-sm text-muted-foreground mt-2">
+                  Deleted data cannot be recovered unless you have an export or backup.
                 </p>
               </div>
             </div>
@@ -346,7 +406,7 @@ const AboutPage = () => {
                   </p>
                 </blockquote>
                 <p className="text-sm text-muted-foreground mt-3">
-                  So that's exactly what we built. No accounts, no subscriptions, no tracking — just you and your books.
+                  So that&apos;s exactly what we built. The app started as a local-only bookshelf and is now evolving into an authenticated reading tracker with account-backed storage and migration support.
                 </p>
               </div>
 
@@ -361,7 +421,7 @@ const AboutPage = () => {
               <div>
                 <h3 className="text-lg font-semibold mb-2">Built With</h3>
                 <div className="flex flex-wrap gap-2">
-                  {['React', 'TypeScript', 'Tailwind CSS', 'Radix UI', 'IndexedDB', 'Vite'].map((tech) => (
+                  {['React', 'TypeScript', 'Tailwind CSS', 'Radix UI', 'Vite', 'Vercel Functions', 'MongoDB'].map((tech) => (
                     <span
                       key={tech}
                       className="text-xs bg-muted text-muted-foreground px-2.5 py-1 rounded-full"

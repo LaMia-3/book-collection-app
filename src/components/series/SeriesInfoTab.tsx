@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Pencil, Save, X, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { enhancedStorageService } from '@/services/storage/EnhancedStorageService';
+import { seriesRepository } from '@/repositories/SeriesRepository';
 
 interface SeriesInfoTabProps {
   series: Series;
@@ -52,39 +52,7 @@ export const SeriesInfoTab = ({ series, onSeriesUpdated }: SeriesInfoTabProps) =
         createdAt: editedSeries.createdAt || series.createdAt || new Date()
       };
       
-      // Save to IndexedDB (exclusive source of truth)
-      await enhancedStorageService.initialize();
-      
-      // Create a proper IndexedDB Series object
-      const indexedDBSeries = {
-        id: series.id,
-        name: editedSeries.name,
-        description: editedSeries.description,
-        author: editedSeries.author,
-        coverImage: editedSeries.coverImage,
-        books: editedSeries.books || series.books || [],
-        totalBooks: editedSeries.books?.length || series.books?.length || 0,
-        completedBooks: 0, // Default if not tracking
-        readingProgress: 0, // Default if not tracking
-        readingOrder: editedSeries.readingOrder || series.readingOrder || 'publication',
-        customOrder: editedSeries.customOrder || series.customOrder,
-        status: editedSeries.status || series.status,
-        isTracked: typeof editedSeries.isTracked === 'boolean' ? editedSeries.isTracked : series.isTracked,
-        dateAdded: series.dateAdded || new Date().toISOString(),
-        lastModified: new Date().toISOString(),
-        // Handle required fields not in the UI Series type but needed for IndexedDB
-        categories: series.genre || [],
-        apiEnriched: series.apiEnriched || false,
-        hasUpcoming: series.hasUpcoming || false
-      };
-      
-      // Log what we're about to save
-      console.log('Saving series to IndexedDB:', indexedDBSeries);
-      
-      // Save to IndexedDB - the source of truth
-      await enhancedStorageService.saveSeries(indexedDBSeries);
-      
-      console.log('Series saved successfully to IndexedDB');
+      await seriesRepository.update(series.id, uiUpdatedSeries);
       
       // No longer need to update localStorage as IndexedDB is now the exclusive source of truth
       
@@ -244,7 +212,7 @@ export const SeriesInfoTab = ({ series, onSeriesUpdated }: SeriesInfoTabProps) =
                 <Label htmlFor="status">Status</Label>
                 <Select
                   value={editedSeries.status || "ongoing"}
-                  onValueChange={(value) => setEditedSeries({...editedSeries, status: value as any})}
+                  onValueChange={(value) => setEditedSeries({...editedSeries, status: value as Series['status']})}
                 >
                   <SelectTrigger id="status">
                     <SelectValue />
@@ -261,7 +229,7 @@ export const SeriesInfoTab = ({ series, onSeriesUpdated }: SeriesInfoTabProps) =
                 <Label htmlFor="readingOrder">Default Reading Order</Label>
                 <Select
                   value={editedSeries.readingOrder}
-                  onValueChange={(value) => setEditedSeries({...editedSeries, readingOrder: value as any})}
+                  onValueChange={(value) => setEditedSeries({...editedSeries, readingOrder: value as Series['readingOrder']})}
                 >
                   <SelectTrigger id="readingOrder">
                     <SelectValue />

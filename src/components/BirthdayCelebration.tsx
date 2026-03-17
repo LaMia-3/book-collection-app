@@ -1,119 +1,100 @@
 import React, { useEffect, useState } from 'react';
 import { useSettings } from '@/contexts/SettingsContext';
+import { useAuth } from '@/hooks/useAuth';
 import { Cake, X } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { enhancedStorageService } from '@/services/storage/EnhancedStorageService';
 import { createLogger } from '@/utils/loggingUtils';
 
+const log = createLogger('BirthdayCelebration');
+
+const getTodayFormatted = () => {
+  const now = new Date();
+  const formattedDate = `${now.getMonth() + 1}/${now.getDate()}`;
+  log.debug(`Today's formatted date: ${formattedDate} (from date object: ${now.toISOString()})`);
+  return formattedDate;
+};
+
+const getBirthdayMonthDay = (birthdayString: string) => {
+  try {
+    log.debug(`Processing birthday string: ${birthdayString}`);
+    
+    if (birthdayString.includes('/')) {
+      log.debug('Detected MM/DD/YYYY format with slashes');
+      const parts = birthdayString.split('/');
+      
+      if (parts.length === 3) {
+        const month = parseInt(parts[0], 10);
+        const day = parseInt(parts[1], 10);
+        
+        if (!isNaN(month) && !isNaN(day) && month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+          const formattedBirthday = `${month}/${day}`;
+          log.debug(`Parsed MM/DD/YYYY format as: ${formattedBirthday}`);
+          return formattedBirthday;
+        } else {
+          log.warn(`Invalid MM/DD/YYYY format: ${birthdayString}`);
+        }
+      }
+    }
+    
+    if (birthdayString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      log.debug('Detected YYYY-MM-DD format');
+      const parts = birthdayString.split('-');
+      const year = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10);
+      const day = parseInt(parts[2], 10);
+      
+      if (!isNaN(year) && !isNaN(month) && !isNaN(day) && 
+          month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+        const formattedBirthday = `${month}/${day}`;
+        log.debug(`Parsed YYYY-MM-DD format as: ${formattedBirthday}`);
+        return formattedBirthday;
+      }
+    }
+    
+    const dateStr = birthdayString.includes('T') ? birthdayString : `${birthdayString}T12:00:00`;
+    const date = new Date(dateStr);
+    
+    if (isNaN(date.getTime())) {
+      log.warn(`Invalid birthday date string: ${birthdayString}`);
+      return null;
+    }
+    
+    const formattedBirthday = `${date.getMonth() + 1}/${date.getDate()}`;
+    log.debug(`Parsed birthday as: ${formattedBirthday}`);
+    return formattedBirthday;
+  } catch (e) {
+    log.error(`Error parsing birthday date: ${birthdayString}`, e);
+    return null;
+  }
+};
+
 export const BirthdayCelebration: React.FC = () => {
-  const log = createLogger('BirthdayCelebration');
-  const { settings } = useSettings();
+  const { settings, updateSettings } = useSettings();
+  const { user } = useAuth();
   const [showCelebration, setShowCelebration] = useState(false);
   const [dismissed, setDismissed] = useState(false);
+  const preferredName = user?.preferredName || settings.preferredName;
   
   // Store dismissed status in IndexedDB with the current date to track it persistently
   // The key includes the date so it will reset each day
   const today = new Date().toISOString().split('T')[0];
   const dismissStorageKey = `birthday-celebration-dismissed-${today}`;
   
-  // Get today's date in MM/DD format for comparison
-  const getTodayFormatted = () => {
-    const now = new Date();
-    // Make sure we're getting the local date components
-    // Return month and day as numbers
-    const formattedDate = `${now.getMonth() + 1}/${now.getDate()}`;
-    log.debug(`Today's formatted date: ${formattedDate} (from date object: ${now.toISOString()})`);
-    return formattedDate;
-  };
-  
-  // Extract month and day from birthday
-  const getBirthdayMonthDay = (birthdayString: string) => {
-    try {
-      log.debug(`Processing birthday string: ${birthdayString}`);
-      
-      // Special handling for MM/DD/YYYY format with slashes
-      if (birthdayString.includes('/')) {
-        log.debug('Detected MM/DD/YYYY format with slashes');
-        const parts = birthdayString.split('/');
-        
-        // Check if we have MM/DD/YYYY format (3 parts)
-        if (parts.length === 3) {
-          const month = parseInt(parts[0], 10);
-          const day = parseInt(parts[1], 10);
-          
-          // Validate month and day
-          if (!isNaN(month) && !isNaN(day) && month >= 1 && month <= 12 && day >= 1 && day <= 31) {
-            const formattedBirthday = `${month}/${day}`;
-            log.debug(`Parsed MM/DD/YYYY format as: ${formattedBirthday}`);
-            return formattedBirthday;
-          } else {
-            log.warn(`Invalid MM/DD/YYYY format: ${birthdayString}`);
-          }
-        }
-      }
-      
-      // Special handling for YYYY-MM-DD format (ISO date string)
-      if (birthdayString.match(/^\d{4}-\d{2}-\d{2}$/)) {
-        log.debug('Detected YYYY-MM-DD format');
-        const parts = birthdayString.split('-');
-        const year = parseInt(parts[0], 10);
-        const month = parseInt(parts[1], 10);
-        const day = parseInt(parts[2], 10);
-        
-        // Validate month and day
-        if (!isNaN(year) && !isNaN(month) && !isNaN(day) && 
-            month >= 1 && month <= 12 && day >= 1 && day <= 31) {
-          const formattedBirthday = `${month}/${day}`;
-          log.debug(`Parsed YYYY-MM-DD format as: ${formattedBirthday}`);
-          return formattedBirthday;
-        }
-      }
-      
-      // Fallback to standard date parsing for other formats
-      // Create date object ensuring it's parsed as local time
-      const dateStr = birthdayString.includes('T') ? birthdayString : `${birthdayString}T12:00:00`;
-      const date = new Date(dateStr);
-      
-      // Check if the date is valid
-      if (isNaN(date.getTime())) {
-        log.warn(`Invalid birthday date string: ${birthdayString}`);
-        return null;
-      }
-      
-      // Return month and day as numbers to match the todayFormatted format
-      const formattedBirthday = `${date.getMonth() + 1}/${date.getDate()}`;
-      log.debug(`Parsed birthday as: ${formattedBirthday}`);
-      return formattedBirthday;
-    } catch (e) {
-      log.error(`Error parsing birthday date: ${birthdayString}`, e);
-      return null;
-    }
-  };
-  
-  // Check for dismissed status on load from IndexedDB
+  // Check for dismissed status from the current settings source.
   useEffect(() => {
-    const checkDismissed = async () => {
-      try {
-        // Initialize storage service
-        await enhancedStorageService.initialize();
-        
-        // Get from IndexedDB
-        const settings = await enhancedStorageService.getSettings();
-        const notificationSettings = settings?.notifications || {};
-        
-        log.debug(`Checking dismissed status for key: ${dismissStorageKey}`);
-        if (notificationSettings[dismissStorageKey] === true) {
-          log.info('Birthday celebration already dismissed today');
-          setDismissed(true);
-          return;
-        }
-        log.debug('Birthday celebration not yet dismissed today');
-      } catch (error) {
-        log.error('Error checking birthday celebration dismissed status:', error);
-      }
-    };
-    checkDismissed();
-  }, [dismissStorageKey]);
+    const notificationSettings = settings.notifications || {};
+
+    log.debug(`Checking dismissed status for key: ${dismissStorageKey}`);
+
+    if (notificationSettings[dismissStorageKey] === true) {
+      log.info('Birthday celebration already dismissed today');
+      setDismissed(true);
+      return;
+    }
+
+    setDismissed(false);
+    log.debug('Birthday celebration not yet dismissed today');
+  }, [dismissStorageKey, settings.notifications]);
   
   // Check if today is the user's birthday
   useEffect(() => {
@@ -170,18 +151,15 @@ export const BirthdayCelebration: React.FC = () => {
       <div className="flex items-center gap-3">
         <Cake className="h-6 w-6 text-white" />
         <div>
-          <h3 className="font-semibold text-lg">Happy Birthday{settings.preferredName ? `, ${settings.preferredName}` : ''}!</h3>
+          <h3 className="font-semibold text-lg">Happy Birthday{preferredName ? `, ${preferredName}` : ''}!</h3>
           <p className="text-sm">Enjoy your special day with your favorite books!</p>
         </div>
         <button 
           onClick={async () => {
             try {
-              // Store the dismissed state in IndexedDB only
-              const settings = await enhancedStorageService.getSettings() || {};
               const notificationSettings = settings.notifications || {};
-              
-              await enhancedStorageService.saveSettings({
-                ...settings,
+
+              await updateSettings({
                 notifications: {
                   ...notificationSettings,
                   [dismissStorageKey]: true

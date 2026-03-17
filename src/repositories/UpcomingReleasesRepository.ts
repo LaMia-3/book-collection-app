@@ -1,6 +1,46 @@
 import { UpcomingBook } from '@/types/series';
 import { DatabaseService } from '@/services/DatabaseService';
 import { v4 as uuidv4 } from 'uuid';
+import { getStoredAuthToken } from '@/lib/auth-storage';
+import { ApiClientError, upcomingReleasesApi, UpcomingReleaseRecord } from '@/lib/apiClient';
+
+const isAuthenticatedSession = (): boolean => Boolean(getStoredAuthToken());
+
+const normalizeRemoteUpcomingRelease = (
+  release: UpcomingReleaseRecord,
+): UpcomingBook => ({
+  id: release.id,
+  title: release.title,
+  seriesId: release.seriesId,
+  seriesName: release.seriesName,
+  volumeNumber: release.volumeNumber,
+  author: release.author,
+  expectedReleaseDate: release.expectedReleaseDate
+    ? new Date(release.expectedReleaseDate)
+    : undefined,
+  coverImageUrl: release.coverImageUrl,
+  preOrderLink: release.preOrderLink,
+  synopsis: release.synopsis,
+  isUserContributed: release.isUserContributed,
+  amazonProductId: release.amazonProductId,
+});
+
+const serializeUpcomingRelease = (
+  release: UpcomingBook,
+): UpcomingReleaseRecord => ({
+  id: release.id,
+  title: release.title,
+  seriesId: release.seriesId,
+  seriesName: release.seriesName,
+  volumeNumber: release.volumeNumber,
+  author: release.author,
+  expectedReleaseDate: release.expectedReleaseDate?.toISOString(),
+  coverImageUrl: release.coverImageUrl,
+  preOrderLink: release.preOrderLink,
+  synopsis: release.synopsis,
+  isUserContributed: release.isUserContributed,
+  amazonProductId: release.amazonProductId,
+});
 
 /**
  * Repository for managing upcoming book releases in the database
@@ -17,6 +57,11 @@ export class UpcomingReleasesRepository {
    * Get all upcoming book releases
    */
   async getAll(): Promise<UpcomingBook[]> {
+    if (isAuthenticatedSession()) {
+      const releases = await upcomingReleasesApi.getAll();
+      return releases.map(normalizeRemoteUpcomingRelease);
+    }
+
     return this.dbService.getAll<UpcomingBook>(this.storeName);
   }
   
@@ -32,6 +77,19 @@ export class UpcomingReleasesRepository {
    * Get upcoming release by ID
    */
   async getById(id: string): Promise<UpcomingBook | null> {
+    if (isAuthenticatedSession()) {
+      try {
+        const release = await upcomingReleasesApi.getById(id);
+        return normalizeRemoteUpcomingRelease(release);
+      } catch (error) {
+        if (error instanceof ApiClientError && error.status === 404) {
+          return null;
+        }
+
+        throw error;
+      }
+    }
+
     return this.dbService.getById<UpcomingBook>(this.storeName, id);
   }
   
@@ -59,11 +117,18 @@ export class UpcomingReleasesRepository {
   /**
    * Add a new upcoming book release
    */
-  async add(upcomingBook: Omit<UpcomingBook, 'id'>): Promise<UpcomingBook> {
+  async add(upcomingBook: Omit<UpcomingBook, 'id'> & { id?: string }): Promise<UpcomingBook> {
     const newBook: UpcomingBook = {
-      id: `upcoming-${uuidv4()}`,
+      id: upcomingBook.id || `upcoming-${uuidv4()}`,
       ...upcomingBook
     };
+
+    if (isAuthenticatedSession()) {
+      const createdRelease = await upcomingReleasesApi.create(
+        serializeUpcomingRelease(newBook),
+      );
+      return normalizeRemoteUpcomingRelease(createdRelease);
+    }
     
     await this.dbService.add(this.storeName, newBook);
     return newBook;
@@ -80,6 +145,14 @@ export class UpcomingReleasesRepository {
       ...release,
       ...updates
     };
+
+    if (isAuthenticatedSession()) {
+      const remoteRelease = await upcomingReleasesApi.update(
+        id,
+        serializeUpcomingRelease(updatedRelease),
+      );
+      return normalizeRemoteUpcomingRelease(remoteRelease);
+    }
     
     await this.dbService.update(this.storeName, id, updatedRelease);
     return updatedRelease;
@@ -110,6 +183,11 @@ export class UpcomingReleasesRepository {
    * Delete an upcoming book release
    */
   async delete(id: string): Promise<boolean> {
+    if (isAuthenticatedSession()) {
+      const result = await upcomingReleasesApi.delete(id);
+      return result.success;
+    }
+
     return this.dbService.delete(this.storeName, id);
   }
   

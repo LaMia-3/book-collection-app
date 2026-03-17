@@ -20,7 +20,7 @@ import { Switch } from "@/components/ui/switch";
 import { Loader2 } from "lucide-react";
 import { useToast } from '@/hooks/use-toast';
 import { Series } from '@/types/indexeddb/Series';
-import { enhancedStorageService } from '@/services/storage/EnhancedStorageService';
+import { seriesRepository } from '@/repositories/SeriesRepository';
 
 interface SeriesEditDialogProps {
   series: Series;
@@ -59,8 +59,10 @@ export function SeriesEditDialog({ series, isOpen, onClose, onSave }: SeriesEdit
     
     setIsSaving(true);
     try {
-      // Update the series in IndexedDB
-      await enhancedStorageService.saveSeries(editedSeries);
+      await seriesRepository.update(editedSeries.id, {
+        ...editedSeries,
+        genre: editedSeries.categories,
+      });
       
       // Call the onSave callback with the updated series
       onSave(editedSeries);

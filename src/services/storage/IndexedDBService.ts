@@ -683,6 +683,15 @@ export class IndexedDBService {
         
         // Close the repaired connection
         repairedDb.close();
+
+        // Discard any stale cached connection so the next initDb() call
+        // reopens against the repaired schema version.
+        if (this.db) {
+          this.db.close();
+          this.db = null;
+        }
+        this.initPromise = null;
+        this.isInitializing = false;
         
         log.info('Database repair completed');
         this.showUserNotification('Database has been repaired. Please refresh the page.', 'info');

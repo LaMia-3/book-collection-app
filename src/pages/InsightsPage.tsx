@@ -5,33 +5,28 @@ import { EnhancedHeader } from '@/components/navigation/EnhancedHeader';
 import { InsightsView } from '@/components/InsightsView';
 import { GoalsTab } from '@/components/GoalsTab';
 import { useSettings } from '@/contexts/SettingsContext';
+import { useAuth } from '@/hooks/useAuth';
 import { useLibrarySettings } from '@/hooks/useLibrarySettings';
+import { bookRepository } from '@/repositories/BookRepository';
 
 const InsightsPage = () => {
   const { settings } = useSettings();
+  const { user } = useAuth();
   const [booksCompletedThisMonth, setBooksCompletedThisMonth] = useState<number>(0);
   
   const { books, setBooks, settingsProps, setShowSettings } = useLibrarySettings({
     onLibraryCleared: () => setBooksCompletedThisMonth(0),
   });
   
-  // Load books from IndexedDB
+  // Load books through the repository so authenticated sessions use the API path.
   useEffect(() => {
-    const loadBooksFromIndexedDB = async () => {
+    const loadBooks = async () => {
       try {
-        // Import the storage service
-        const { enhancedStorageService } = await import('@/services/storage/EnhancedStorageService');
-        
-        // Get books from IndexedDB
-        const indexedDBBooks = await enhancedStorageService.getBooks();
-        
-        // Convert to UI book format
-        const uiBooks = indexedDBBooks.map(book => ({
+        const repositoryBooks = await bookRepository.getAll();
+        const uiBooks = repositoryBooks.map(book => ({
           ...book,
-          // Map fields with different names
           addedDate: book.addedDate || new Date().toISOString(),
           completedDate: book.completedDate,
-          // Ensure all required fields are present
           isPartOfSeries: book.isPartOfSeries || false,
           spineColor: book.spineColor || 1
         }));
@@ -60,17 +55,18 @@ const InsightsPage = () => {
         
         setBooksCompletedThisMonth(completedThisMonth);
       } catch (error) {
-        console.error("Error loading books from IndexedDB:", error);
+        console.error("Error loading books:", error);
         setBooks([]);
       }
     };
     
-    loadBooksFromIndexedDB();
-  }, []);
+    loadBooks();
+  }, [setBooks]);
   
   // Calculate library name
-  const libraryName = settings.preferredName 
-    ? `${settings.preferredName}'s Reading Insights`
+  const preferredName = user?.preferredName || settings.preferredName;
+  const libraryName = preferredName
+    ? `${preferredName}'s Reading Insights`
     : "My Reading Insights";
   
   return (

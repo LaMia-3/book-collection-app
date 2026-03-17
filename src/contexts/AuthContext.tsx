@@ -1,0 +1,208 @@
+import { ReactNode, useEffect, useState } from "react";
+
+import {
+  ApiClientError,
+  authApi,
+} from "@/lib/apiClient";
+import {
+  AuthUser,
+  clearStoredAuthSession,
+  getStoredAuthToken,
+  getStoredAuthUser,
+  setStoredAuthToken,
+  setStoredAuthUser,
+} from "@/lib/auth-storage";
+import {
+  AuthContext,
+  AuthContextValue,
+  LoginInput,
+  RegisterInput,
+} from "@/contexts/auth-context";
+
+export const AuthProvider = ({ children }: { children: ReactNode }) => {
+  const [user, setUser] = useState<AuthUser | null>(getStoredAuthUser());
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [isLoadingAuth, setIsLoadingAuth] = useState(true);
+
+  useEffect(() => {
+    const bootstrapAuth = async () => {
+      const token = getStoredAuthToken();
+
+      if (!token) {
+        setIsLoadingAuth(false);
+        return;
+      }
+
+      try {
+        const currentUser = await authApi.me();
+        setStoredAuthUser(currentUser);
+        setUser(currentUser);
+      } catch (error) {
+        clearStoredAuthSession();
+        setUser(null);
+        setAuthError(
+          error instanceof ApiClientError
+            ? error.message
+            : "Unable to restore your session.",
+        );
+      } finally {
+        setIsLoadingAuth(false);
+      }
+    };
+
+    void bootstrapAuth();
+  }, []);
+
+  const login = async (input: LoginInput) => {
+    setAuthError(null);
+    setIsLoadingAuth(true);
+
+    try {
+      const { token, user: authenticatedUser } = await authApi.login(input);
+      setStoredAuthToken(token);
+      setStoredAuthUser(authenticatedUser);
+      setUser(authenticatedUser);
+    } catch (error) {
+      clearStoredAuthSession();
+      setUser(null);
+      setAuthError(
+        error instanceof ApiClientError ? error.message : "Login failed.",
+      );
+      throw error;
+    } finally {
+      setIsLoadingAuth(false);
+    }
+  };
+
+  const register = async (input: RegisterInput) => {
+    setAuthError(null);
+    setIsLoadingAuth(true);
+
+    try {
+      const { token, user: authenticatedUser } = await authApi.register(input);
+      setStoredAuthToken(token);
+      setStoredAuthUser(authenticatedUser);
+      setUser(authenticatedUser);
+    } catch (error) {
+      clearStoredAuthSession();
+      setUser(null);
+      setAuthError(
+        error instanceof ApiClientError
+          ? error.message
+          : "Registration failed.",
+      );
+      throw error;
+    } finally {
+      setIsLoadingAuth(false);
+    }
+  };
+
+  const logout = () => {
+    clearStoredAuthSession();
+    setUser(null);
+    setAuthError(null);
+  };
+
+  const deleteAccount = async () => {
+    setAuthError(null);
+    setIsLoadingAuth(true);
+
+    try {
+      await authApi.deleteAccount();
+      clearStoredAuthSession();
+      setUser(null);
+    } catch (error) {
+      setAuthError(
+        error instanceof ApiClientError
+          ? error.message
+          : "Account deletion failed.",
+      );
+      throw error;
+    } finally {
+      setIsLoadingAuth(false);
+    }
+  };
+
+  const changeEmail = async (input: {
+    currentPassword: string;
+    email: string;
+  }) => {
+    setAuthError(null);
+    setIsLoadingAuth(true);
+
+    try {
+      const { token, user: authenticatedUser } = await authApi.changeEmail(input);
+      setStoredAuthToken(token);
+      setStoredAuthUser(authenticatedUser);
+      setUser(authenticatedUser);
+    } catch (error) {
+      setAuthError(
+        error instanceof ApiClientError ? error.message : "Email change failed.",
+      );
+      throw error;
+    } finally {
+      setIsLoadingAuth(false);
+    }
+  };
+
+  const changePreferredName = async (input: {
+    preferredName?: string;
+  }) => {
+    setAuthError(null);
+    setIsLoadingAuth(true);
+
+    try {
+      const authenticatedUser = await authApi.changePreferredName(input);
+      setStoredAuthUser(authenticatedUser);
+      setUser(authenticatedUser);
+    } catch (error) {
+      setAuthError(
+        error instanceof ApiClientError
+          ? error.message
+          : "Preferred name change failed.",
+      );
+      throw error;
+    } finally {
+      setIsLoadingAuth(false);
+    }
+  };
+
+  const changePassword = async (input: {
+    currentPassword: string;
+    newPassword: string;
+  }) => {
+    setAuthError(null);
+    setIsLoadingAuth(true);
+
+    try {
+      await authApi.changePassword(input);
+      clearStoredAuthSession();
+      setUser(null);
+    } catch (error) {
+      setAuthError(
+        error instanceof ApiClientError
+          ? error.message
+          : "Password change failed.",
+      );
+      throw error;
+    } finally {
+      setIsLoadingAuth(false);
+    }
+  };
+
+  const value: AuthContextValue = {
+    authError,
+    changeEmail,
+    changePreferredName,
+    changePassword,
+    deleteAccount,
+    isAuthenticated: Boolean(user),
+    isLoadingAuth,
+    login,
+    logout,
+    register,
+    user,
+  };
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+};

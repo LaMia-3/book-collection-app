@@ -1,6 +1,40 @@
 import { Notification, NotificationType } from '@/types/notification';
 import { DatabaseService } from '@/services/DatabaseService';
 import { v4 as uuidv4 } from 'uuid';
+import { getStoredAuthToken } from '@/lib/auth-storage';
+import { ApiClientError, notificationsApi, NotificationRecord } from '@/lib/apiClient';
+
+const isAuthenticatedSession = (): boolean => Boolean(getStoredAuthToken());
+
+const normalizeRemoteNotification = (
+  notification: NotificationRecord,
+): Notification => ({
+  id: notification.id,
+  title: notification.title,
+  message: notification.message,
+  type: notification.type,
+  createdAt: new Date(notification.createdAt),
+  isRead: notification.isRead,
+  isDismissed: notification.isDismissed,
+  seriesId: notification.seriesId,
+  bookId: notification.bookId,
+  actionUrl: notification.actionUrl,
+});
+
+const serializeNotification = (
+  notification: Notification,
+): NotificationRecord => ({
+  id: notification.id,
+  title: notification.title,
+  message: notification.message,
+  type: notification.type,
+  createdAt: notification.createdAt.toISOString(),
+  isRead: notification.isRead,
+  isDismissed: notification.isDismissed,
+  seriesId: notification.seriesId,
+  bookId: notification.bookId,
+  actionUrl: notification.actionUrl,
+});
 
 /**
  * Repository for managing notifications in the database
@@ -17,6 +51,11 @@ export class NotificationRepository {
    * Get all notifications
    */
   async getAll(): Promise<Notification[]> {
+    if (isAuthenticatedSession()) {
+      const notifications = await notificationsApi.getAll();
+      return notifications.map(normalizeRemoteNotification);
+    }
+
     return this.dbService.getAll<Notification>(this.storeName);
   }
   
@@ -24,6 +63,19 @@ export class NotificationRepository {
    * Get a notification by ID
    */
   async getById(id: string): Promise<Notification | null> {
+    if (isAuthenticatedSession()) {
+      try {
+        const notification = await notificationsApi.getById(id);
+        return normalizeRemoteNotification(notification);
+      } catch (error) {
+        if (error instanceof ApiClientError && error.status === 404) {
+          return null;
+        }
+
+        throw error;
+      }
+    }
+
     return this.dbService.getById<Notification>(this.storeName, id);
   }
   
@@ -56,16 +108,30 @@ export class NotificationRepository {
   /**
    * Add a new notification
    */
-  async add(notification: Omit<Notification, 'id' | 'createdAt' | 'isRead' | 'isDismissed'>): Promise<Notification> {
-    const now = new Date();
+  async add(
+    notification: Omit<Notification, 'id' | 'createdAt' | 'isRead' | 'isDismissed'> & {
+      id?: string;
+      createdAt?: Date;
+      isRead?: boolean;
+      isDismissed?: boolean;
+    },
+  ): Promise<Notification> {
+    const now = notification.createdAt || new Date();
     
     const newNotification: Notification = {
-      id: `notification-${uuidv4()}`,
+      id: notification.id || `notification-${uuidv4()}`,
       ...notification,
       createdAt: now,
-      isRead: false,
-      isDismissed: false
+      isRead: notification.isRead ?? false,
+      isDismissed: notification.isDismissed ?? false
     };
+
+    if (isAuthenticatedSession()) {
+      const createdNotification = await notificationsApi.create(
+        serializeNotification(newNotification),
+      );
+      return normalizeRemoteNotification(createdNotification);
+    }
     
     await this.dbService.add(this.storeName, newNotification);
     return newNotification;
@@ -82,7 +148,37 @@ export class NotificationRepository {
       ...notification,
       isRead: true
     };
+
+    if (isAuthenticatedSession()) {
+      const remoteNotification = await notificationsApi.update(
+        id,
+        serializeNotification(updatedNotification),
+      );
+      return normalizeRemoteNotification(remoteNotification);
+    }
     
+    await this.dbService.update(this.storeName, id, updatedNotification);
+    return updatedNotification;
+  }
+
+  async update(id: string, updates: Partial<Notification>): Promise<Notification | null> {
+    const notification = await this.getById(id);
+    if (!notification) return null;
+
+    const updatedNotification: Notification = {
+      ...notification,
+      ...updates,
+      id,
+    };
+
+    if (isAuthenticatedSession()) {
+      const remoteNotification = await notificationsApi.update(
+        id,
+        serializeNotification(updatedNotification),
+      );
+      return normalizeRemoteNotification(remoteNotification);
+    }
+
     await this.dbService.update(this.storeName, id, updatedNotification);
     return updatedNotification;
   }
@@ -111,6 +207,14 @@ export class NotificationRepository {
       ...notification,
       isDismissed: true
     };
+
+    if (isAuthenticatedSession()) {
+      const remoteNotification = await notificationsApi.update(
+        id,
+        serializeNotification(updatedNotification),
+      );
+      return normalizeRemoteNotification(remoteNotification);
+    }
     
     await this.dbService.update(this.storeName, id, updatedNotification);
     return updatedNotification;
@@ -120,6 +224,11 @@ export class NotificationRepository {
    * Delete a notification
    */
   async delete(id: string): Promise<boolean> {
+    if (isAuthenticatedSession()) {
+      const result = await notificationsApi.delete(id);
+      return result.success;
+    }
+
     return this.dbService.delete(this.storeName, id);
   }
   

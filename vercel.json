@@ -1,8 +1,35 @@
 {
-  "rewrites": [
+  "routes": [
     {
-      "source": "/(.*)",
-      "destination": "/index.html"
+      "src": "/api/auth/(login|register|me|account|admin-users|admin-audit-logs|admin-system-announcements|admin-system-announcement-update|admin-system-announcement-delete|admin-user-detail|admin-delete-account|admin-set-role|admin-reset-password|system-announcements|system-announcement-seen|system-announcement-dismiss|change-email|change-preferred-name|change-password|forgot-password|verify-reset-otp|reset-password)",
+      "dest": "/api/auth/[action]?action=$1"
+    },
+    {
+      "src": "/api/books/([^/]+)",
+      "dest": "/api/books/[id]?id=$1"
+    },
+    {
+      "src": "/api/collections/([^/]+)",
+      "dest": "/api/collections/[id]?id=$1"
+    },
+    {
+      "src": "/api/series/([^/]+)",
+      "dest": "/api/series/[id]?id=$1"
+    },
+    {
+      "src": "/api/notifications/([^/]+)",
+      "dest": "/api/notifications/[id]?id=$1"
+    },
+    {
+      "src": "/api/upcoming-releases/([^/]+)",
+      "dest": "/api/upcoming-releases/[id]?id=$1"
+    },
+    {
+      "handle": "filesystem"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
     }
   ]
 }

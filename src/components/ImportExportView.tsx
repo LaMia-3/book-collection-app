@@ -1,15 +1,32 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { Download, Upload, FileJson, FileSpreadsheet, Archive, RefreshCw, AlertTriangle, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { Progress } from '@/components/ui/progress';
 import { ImportFormatHelp } from './ImportFormatHelp';
 
 import { Book } from '@/types/book';
 import { useImport } from '@/contexts/ImportContext';
 import { useSettings } from '@/contexts/SettingsContext';
+import { useAuth } from '@/hooks/useAuth';
 import { booksToCSV, booksToJSON, downloadFile } from '@/utils/exportUtils';
-import { importFromCSV, importFromJSON, ImportResult } from '@/utils/importUtils';
-import { createBackup, restoreFromBackup } from '@/utils/backupUtils';
+import { importFromCSV, importFromJSON } from '@/utils/importUtils';
+import {
+  getLegacyImportSummary,
+  importLegacyLibrary,
+  LEGACY_IMPORT_ORDER,
+  type LegacyImportExecutionResult,
+} from '@/services/migration/legacyLibraryImport';
+import type { LegacyLibrarySnapshot, LegacyMigrationEntity } from '@/services/migration/legacyLibraryMigration';
+
+const LEGACY_ENTITY_LABELS: Record<LegacyMigrationEntity, string> = {
+  settings: 'Settings',
+  series: 'Series',
+  books: 'Books',
+  collections: 'Collections',
+  upcomingReleases: 'Upcoming Releases',
+  notifications: 'Notifications',
+};
 
 type ImportExportViewProps = {
   books: Book[];
@@ -28,8 +45,9 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
 }) => {
   // Get import context functions for background processing
   const { startImport, updateImportProgress, completeImport, errorImport, setCancelCallback } = useImport();
-  // Get settings for preferred name
+  const { isAuthenticated, user } = useAuth();
   const { settings } = useSettings();
+  const preferredName = user?.preferredName || settings.preferredName;
   
   // State for file inputs and operation status
   const [csvFile, setCsvFile] = useState<File | null>(null);
@@ -40,11 +58,89 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
     type: 'success' | 'error' | 'info';
     message: string;
   } | null>(null);
+  const [legacySummary, setLegacySummary] = useState<LegacyLibrarySnapshot | null>(null);
+  const [legacyImportResult, setLegacyImportResult] = useState<LegacyImportExecutionResult | null>(null);
+  const [legacyProgress, setLegacyProgress] = useState({
+    progress: 0,
+    summary: '',
+    details: '',
+  });
 
   // Input references
   const csvInputRef = React.useRef<HTMLInputElement>(null);
   const jsonInputRef = React.useRef<HTMLInputElement>(null);
   const backupInputRef = React.useRef<HTMLInputElement>(null);
+
+  const legacySummaryRows = useMemo(() => {
+    if (!legacySummary) {
+      return [];
+    }
+
+    return LEGACY_IMPORT_ORDER
+      .map((entity) => ({
+        entity,
+        label: LEGACY_ENTITY_LABELS[entity],
+        count: legacySummary.totalCounts[entity] || 0,
+      }))
+      .filter((row) => row.count > 0);
+  }, [legacySummary]);
+
+  const dataScopeLabel = isAuthenticated ? 'your authenticated account library' : "this browser's local library";
+
+  const loadLegacySummary = useCallback(async () => {
+    if (!isAuthenticated) {
+      setLegacySummary(null);
+      setLegacyImportResult(null);
+      setLegacyProgress({ progress: 0, summary: '', details: '' });
+      return;
+    }
+
+    try {
+      const summary = await getLegacyImportSummary();
+      setLegacySummary(summary);
+    } catch (error) {
+      setStatusMessage({
+        type: 'error',
+        message: `Failed to inspect legacy browser data: ${error instanceof Error ? error.message : String(error)}`,
+      });
+    }
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const syncLegacySummary = async () => {
+      if (!isAuthenticated) {
+        if (isMounted) {
+          setLegacySummary(null);
+          setLegacyImportResult(null);
+          setLegacyProgress({ progress: 0, summary: '', details: '' });
+        }
+        return;
+      }
+
+      try {
+        const summary = await getLegacyImportSummary();
+
+        if (isMounted) {
+          setLegacySummary(summary);
+        }
+      } catch (error) {
+        if (isMounted) {
+          setStatusMessage({
+            type: 'error',
+            message: `Failed to inspect legacy browser data: ${error instanceof Error ? error.message : String(error)}`,
+          });
+        }
+      }
+    };
+
+    syncLegacySummary();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isAuthenticated, loadLegacySummary]);
 
   // Handle file input changes
   const handleCsvFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -90,8 +186,21 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
         message: 'Preparing CSV export...'
       });
       
+      const [
+        { bookRepository },
+        { collectionRepository },
+      ] = await Promise.all([
+        import('@/repositories/BookRepository'),
+        import('@/repositories/CollectionRepository'),
+      ]);
+
+      const [exportBooks, exportCollections] = await Promise.all([
+        bookRepository.getAll(),
+        collectionRepository.getAll(),
+      ]);
+
       // Generate CSV content
-      const csvContent = booksToCSV(books);
+      const csvContent = booksToCSV(exportBooks, exportCollections);
       
       // Create filename with current date and time
       const now = new Date();
@@ -99,7 +208,7 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
       const timeStr = now.toTimeString().split(' ')[0].replace(/:/g, '-'); // HH-MM-SS
       
       // Create filename with preferred name if available
-      const prefix = settings?.preferredName ? `${settings.preferredName.toLowerCase().replace(/\s+/g, '-')}-library` : 'library';
+      const prefix = preferredName ? `${preferredName.toLowerCase().replace(/\s+/g, '-')}-library` : 'library';
       const filename = `${prefix}-export-${dateStr}-${timeStr}.csv`;
       
       // Download the file
@@ -107,7 +216,7 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
       
       setStatusMessage({
         type: 'success',
-        message: 'CSV exported successfully!'
+        message: `CSV exported successfully from ${dataScopeLabel}.`
       });
     } catch (error) {
       setStatusMessage({
@@ -128,8 +237,21 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
         message: 'Preparing JSON export...'
       });
       
+      const [
+        { bookRepository },
+        { collectionRepository },
+      ] = await Promise.all([
+        import('@/repositories/BookRepository'),
+        import('@/repositories/CollectionRepository'),
+      ]);
+
+      const [exportBooks, exportCollections] = await Promise.all([
+        bookRepository.getAll(),
+        collectionRepository.getAll(),
+      ]);
+
       // Generate JSON content
-      const jsonContent = booksToJSON(books);
+      const jsonContent = booksToJSON(exportBooks, exportCollections);
       
       // Create filename with current date and time
       const now = new Date();
@@ -137,7 +259,7 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
       const timeStr = now.toTimeString().split(' ')[0].replace(/:/g, '-'); // HH-MM-SS
       
       // Create filename with preferred name if available
-      const prefix = settings?.preferredName ? `${settings.preferredName.toLowerCase().replace(/\s+/g, '-')}-library` : 'library';
+      const prefix = preferredName ? `${preferredName.toLowerCase().replace(/\s+/g, '-')}-library` : 'library';
       const filename = `${prefix}-export-${dateStr}-${timeStr}.json`;
       
       // Download the file
@@ -145,7 +267,7 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
       
       setStatusMessage({
         type: 'success',
-        message: 'JSON exported successfully!'
+        message: `JSON exported successfully from ${dataScopeLabel}.`
       });
     } catch (error) {
       setStatusMessage({
@@ -230,7 +352,7 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
           // Show a success message with summary
           setStatusMessage({
             type: importResult.failed.length > 0 ? 'info' : 'success',
-            message: `Import completed: ${importResult.successful.length} books imported successfully, ${importResult.failed.length} failed.`
+            message: `Import completed into ${dataScopeLabel}: ${importResult.successful.length} books imported successfully, ${importResult.failed.length} failed.`
           });
           
           // Clear the file input
@@ -318,6 +440,10 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
             `Found ${importResult.total} books`, 
             `${importResult.successful.length} valid, ${importResult.failed.length} with issues`
           );
+
+          if ('series' in importResult || 'collections' in importResult) {
+            throw new Error('This JSON file includes full-library backup data. Use Restore Backup instead of JSON Import.');
+          }
           
           // If we have an onImportJSON callback, call it with the successful imports
           if (!signal.aborted && onImportJSON && importResult.successful.length > 0) {
@@ -339,7 +465,7 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
           // Show a success message with summary
           setStatusMessage({
             type: importResult.failed.length > 0 ? 'info' : 'success',
-            message: `Import completed: ${importResult.successful.length} books imported successfully, ${importResult.failed.length} failed.`
+            message: `Import completed into ${dataScopeLabel}: ${importResult.successful.length} books imported successfully, ${importResult.failed.length} failed.`
           });
           
           // Clear the file input
@@ -384,17 +510,15 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
         message: 'Creating backup...'
       });
       
-      // Create and download the backup (now async) with preferred name
-      await createBackup(books, settings?.preferredName);
-      
-      // Call the onCreateBackup prop if provided
       if (onCreateBackup) {
         await onCreateBackup();
+      } else {
+        throw new Error('Backup creation is not configured.');
       }
       
       setStatusMessage({
         type: 'success',
-        message: 'Backup created and downloaded successfully!'
+        message: `Backup created and downloaded successfully from ${dataScopeLabel}.`
       });
     } catch (error) {
       setStatusMessage({
@@ -423,15 +547,12 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
         message: `Restoring from ${backupFile.name}...`
       });
       
-      // Attempt to restore from the backup file
-      const result = await restoreFromBackup(backupFile);
-      
-      if (result.success && onRestoreBackup) {
+      if (onRestoreBackup) {
         await onRestoreBackup(backupFile);
         
         setStatusMessage({
           type: 'success',
-          message: result.message || 'Backup restored successfully!'
+          message: `Backup restored successfully into ${dataScopeLabel}.`
         });
         
         // Clear the file input
@@ -440,10 +561,7 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
           backupInputRef.current.value = '';
         }
       } else {
-        setStatusMessage({
-          type: 'error',
-          message: result.message || 'Failed to restore backup.'
-        });
+        throw new Error('Backup restore is not configured.');
       }
     } catch (error) {
       setStatusMessage({
@@ -455,13 +573,98 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
     }
   };
 
+  const handleImportLegacyBrowserData = async () => {
+    if (!legacySummary?.hasLegacyData) {
+      setStatusMessage({
+        type: 'info',
+        message: 'No legacy browser data was detected for this device.',
+      });
+      return;
+    }
+
+    try {
+      setIsLoading('legacyImport');
+      setLegacyImportResult(null);
+      setLegacyProgress({
+        progress: 0,
+        summary: 'Preparing legacy import',
+        details: 'Collecting browser data snapshot',
+      });
+
+      const result = await importLegacyLibrary({
+        snapshot: legacySummary,
+        onProgress: (progress, summary, details) => {
+          setLegacyProgress({
+            progress,
+            summary,
+            details: details || '',
+          });
+        },
+      });
+
+      setLegacyImportResult(result);
+      setLegacySummary(await getLegacyImportSummary());
+      setStatusMessage({
+        type:
+          result.status === 'completed'
+            ? 'success'
+            : result.status === 'failed'
+              ? 'error'
+              : 'info',
+        message:
+          result.status === 'completed'
+            ? 'Legacy browser data imported successfully.'
+            : result.status === 'failed'
+              ? `Legacy import finished with ${result.failures.length} failed record(s).`
+              : 'Legacy import was skipped.',
+      });
+    } catch (error) {
+      setStatusMessage({
+        type: 'error',
+        message: `Failed to import legacy browser data: ${error instanceof Error ? error.message : String(error)}`,
+      });
+    } finally {
+      setIsLoading(null);
+    }
+  };
+
+  const handleRepairLegacyIndexedDb = async () => {
+    try {
+      setIsLoading('repairLegacyIndexedDb');
+      setStatusMessage({
+        type: 'info',
+        message: 'Checking and repairing browser-local IndexedDB stores...',
+      });
+
+      const { IndexedDBService } = await import('@/services/storage/IndexedDBService');
+      const indexedDbService = new IndexedDBService();
+      const repaired = await indexedDbService.checkAndRepairDatabase();
+
+      await loadLegacySummary();
+
+      setStatusMessage({
+        type: repaired ? 'success' : 'error',
+        message: repaired
+          ? 'IndexedDB repair completed. Legacy browser data was rechecked.'
+          : 'IndexedDB repair did not complete successfully.',
+      });
+    } catch (error) {
+      setStatusMessage({
+        type: 'error',
+        message: `Failed to repair IndexedDB: ${error instanceof Error ? error.message : String(error)}`,
+      });
+    } finally {
+      setIsLoading(null);
+    }
+  };
+
   return (
     <div>
       <h2 className="text-xl font-semibold mb-6">Import & Export</h2>
       <p className="text-gray-600 mb-6">
-        Import books from CSV/JSON files or export your collection for backup or sharing.
+        Import, export, and restore data for {dataScopeLabel}. Legacy browser migration is separate from normal file import.
       </p>
-      
+
       {/* Status Message */}
       {statusMessage && (
         <div 
@@ -493,7 +696,7 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
         <Card className="p-6">
           <h2 className="text-xl font-semibold mb-4">Export</h2>
           <p className="text-gray-600 mb-4">
-            Export your library data (books, series, and collections) to CSV or JSON format.
+            Export book data from {dataScopeLabel}. Use Backup if you want a full library snapshot with books, series, and collections.
           </p>
           
           <div className="flex flex-col gap-6">
@@ -501,13 +704,13 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
               <div>
                 <h3 className="text-lg font-medium">CSV Export</h3>
                 <p className="text-gray-600 text-sm">
-                  Export your books to CSV format for use in spreadsheet applications. Includes collection references.
+                  Export books to CSV format for spreadsheets. This export includes book rows and collection-name references only.
                 </p>
               </div>
               <div className="mt-auto pt-4">
                 <Button 
                   onClick={handleExportCSV}
-                  disabled={isLoading !== null || books.length === 0}
+                  disabled={isLoading !== null}
                   className="w-full flex items-center justify-center gap-2"
                   variant="outline"
                 >
@@ -522,13 +725,13 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
               <div>
                 <h3 className="text-lg font-medium">JSON Export</h3>
                 <p className="text-gray-600 text-sm">
-                  Export your collection to JSON format with complete series and collection data. Recommended for full backups.
+                  Export books to JSON format with book metadata and collection-name references. This is not a full-library backup.
                 </p>
               </div>
               <div className="mt-auto pt-4">
                 <Button 
                   onClick={handleExportJSON}
-                  disabled={isLoading !== null || books.length === 0}
+                  disabled={isLoading !== null}
                   className="w-full flex items-center justify-center gap-2"
                   variant="outline"
                 >
@@ -548,14 +751,127 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
             <ImportFormatHelp />
           </div>
           <p className="text-gray-600 mb-4">
-            Import books from CSV files or import complete library data (books, series, and collections) from JSON files.
+            Import books from CSV or JSON files into {dataScopeLabel}. For full-library backups with series and collections, use Backup Restore instead.
           </p>
           
           <div className="flex flex-col gap-6">
+            {isAuthenticated && (
+              <div className="space-y-4 border rounded-lg p-4 bg-muted/20">
+                <div>
+                  <h3 className="text-lg font-medium">Legacy Browser Data</h3>
+                  <p className="text-gray-600 text-sm">
+                    Detect and import data from older IndexedDB and localStorage browser stores into your authenticated account library.
+                  </p>
+                </div>
+
+                {legacySummary ? (
+                  <>
+                    <div className="text-sm text-gray-600">
+                      <p>
+                        Detection status:{' '}
+                        <strong>{legacySummary.hasLegacyData ? 'legacy data found' : 'no legacy data found'}</strong>
+                      </p>
+                      {legacySummary.sourceDatabases.length > 0 && (
+                        <p>Sources: {legacySummary.sourceDatabases.join(', ')}</p>
+                      )}
+                      <p>
+                        Last migration status:{' '}
+                        <strong>{settings.migration?.legacyImport?.status || 'not-started'}</strong>
+                      </p>
+                      <p>Post-migration local cache policy: retained</p>
+                    </div>
+
+                    {legacySummaryRows.length > 0 && (
+                      <div className="grid grid-cols-2 gap-3 text-sm">
+                        {legacySummaryRows.map((row) => (
+                          <div key={row.entity} className="rounded border px-3 py-2 bg-background">
+                            <span className="font-medium">{row.label}</span>
+                            <span className="ml-2 text-gray-600">{row.count}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="text-sm text-gray-600">
+                      <p>Import order: {LEGACY_IMPORT_ORDER.map((entity) => LEGACY_ENTITY_LABELS[entity]).join(' -> ')}</p>
+                      <p>Duplicate handling: upsert by stable ID, preferring the primary IndexedDB source first.</p>
+                    </div>
+
+                    {isLoading === 'legacyImport' && (
+                      <div className="space-y-2">
+                        <Progress value={legacyProgress.progress} className="h-2" />
+                        <p className="text-sm font-medium">{legacyProgress.summary}</p>
+                        {legacyProgress.details && (
+                          <p className="text-sm text-gray-600">{legacyProgress.details}</p>
+                        )}
+                      </div>
+                    )}
+
+                    {legacyImportResult && (
+                      <div className="space-y-2 text-sm">
+                        <p>
+                          Import result:{' '}
+                          <strong>{legacyImportResult.status}</strong>
+                        </p>
+                        <p>
+                          Imported: {Object.values(legacyImportResult.importedCounts).reduce((sum, count) => sum + (count || 0), 0)} records
+                          {' '}| Updated: {Object.values(legacyImportResult.updatedCounts).reduce((sum, count) => sum + (count || 0), 0)} records
+                        </p>
+                        {legacyImportResult.failures.length > 0 && (
+                          <div className="rounded border border-amber-300 bg-amber-50 p-3 text-amber-900">
+                            <p className="font-medium">
+                              {legacyImportResult.failures.length} record(s) failed during import
+                            </p>
+                            {legacyImportResult.failures.slice(0, 5).map((failure, index) => (
+                              <p key={`${failure.entity}-${failure.id || index}`}>
+                                {LEGACY_ENTITY_LABELS[failure.entity]}{failure.id ? ` (${failure.id})` : ''}: {failure.reason}
+                              </p>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    <div className="flex flex-col gap-3 md:flex-row md:flex-wrap">
+                      <Button
+                        onClick={handleImportLegacyBrowserData}
+                        disabled={isLoading !== null || !legacySummary.hasLegacyData}
+                        className="flex items-center gap-2"
+                      >
+                        <Download size={18} />
+                        <span>
+                          {settings.migration?.legacyImport?.status === 'failed'
+                            ? 'Retry Legacy Import'
+                            : 'Import Legacy Browser Data'}
+                        </span>
+                        {isLoading === 'legacyImport' && <RefreshCw className="animate-spin" size={18} />}
+                      </Button>
+
+                      <Button
+                        onClick={handleRepairLegacyIndexedDb}
+                        disabled={isLoading !== null}
+                        variant="outline"
+                        className="flex items-center gap-2"
+                      >
+                        <RefreshCw size={18} className={isLoading === 'repairLegacyIndexedDb' ? 'animate-spin' : ''} />
+                        <span>Repair IndexedDB</span>
+                      </Button>
+                    </div>
+
+                    <p className="text-xs text-gray-500">
+                      Repair IndexedDB only affects browser-local data on this device. It does not change your account data in MongoDB.
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-sm text-gray-600">Inspecting local browser data...</p>
+                )}
+              </div>
+            )}
+
             <div className="space-y-4">
               <h3 className="text-lg font-medium">CSV Import</h3>
               <p className="text-gray-600 text-sm">
-                Import books from a CSV file.
+                Import books from a CSV file into {dataScopeLabel}.
               </p>
               <input 
                 type="file" 
@@ -596,7 +912,7 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
             <div className="space-y-4">
               <h3 className="text-lg font-medium">JSON Import</h3>
               <p className="text-gray-600 text-sm">
-                Import books, series, and collections from a JSON file. Supports both simple book arrays and enhanced format with complete library data.
+                Import books from a JSON array or exported book JSON into {dataScopeLabel}. Full-library backup files should be restored from the Backup & Restore section instead.
               </p>
               <input 
                 type="file" 
@@ -640,18 +956,18 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
         <Card className="p-6 md:col-span-2">
           <h2 className="text-xl font-semibold mb-4">Backup & Restore</h2>
           <p className="text-gray-600 mb-4">
-            Create backups of your entire collection or restore from a previous backup.
+            Create or restore a full-library snapshot for {dataScopeLabel}.
           </p>
           
           <div className="flex flex-col gap-6">
             <div className="space-y-4">
               <h3 className="text-lg font-medium">Create Backup</h3>
               <p className="text-gray-600 text-sm">
-                Download a complete backup file of your entire library, including books, series, and collections that you can restore later.
+                Download a complete backup file of your books, series, and collections from {dataScopeLabel}.
               </p>
               <Button 
                 onClick={handleCreateBackup}
-                disabled={isLoading !== null || books.length === 0}
+                disabled={isLoading !== null}
                 className="flex items-center gap-2"
               >
                 <Archive size={18} />
@@ -663,8 +979,8 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
             <div className="space-y-4">
               <h3 className="text-lg font-medium">Restore Backup</h3>
               <p className="text-gray-600 text-sm">
-                Restore your entire library (books, series, and collections) from a previously created backup file.
-                <strong className="block text-red-600 mt-1">Warning:</strong> This will replace your current library data.
+                Restore books, series, and collections from a previously created backup into {dataScopeLabel}.
+                <strong className="block text-red-600 mt-1">Warning:</strong> This may overwrite records with matching IDs in your current library.
               </p>
               <div>
                 <input 

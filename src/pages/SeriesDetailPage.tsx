@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useSettings } from "@/contexts/SettingsContext";
 import { useToast } from "@/hooks/use-toast";
@@ -13,8 +13,10 @@ import { UpcomingReleasesTab } from '@/components/series/UpcomingReleasesTab';
 import { SeriesEditDialog } from '@/components/series/SeriesEditDialog';
 import { seriesApiService } from '@/services/api/SeriesApiService';
 import { upcomingReleasesApiService } from '@/services/api/UpcomingReleasesApiService';
-import { enhancedStorageService } from '@/services/storage/EnhancedStorageService';
 import { PageHeader, HeaderActionButton } from '@/components/ui/page-header';
+import { bookRepository } from '@/repositories/BookRepository';
+import { seriesRepository } from '@/repositories/SeriesRepository';
+import { seriesService } from '@/services/SeriesService';
 
 /**
  * Detailed view of a specific series
@@ -32,78 +34,8 @@ const SeriesDetailPage = () => {
   const [activeTab, setActiveTab] = useState<string>('books');
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
-  // Load series and related books
-  useEffect(() => {
-    const loadData = async () => {
-      setIsLoading(true);
-      
-      try {
-        await enhancedStorageService.initialize();
-        
-        // Load series from IndexedDB
-        const seriesFromDB = await enhancedStorageService.getSeriesById(seriesId || '');
-        if (seriesFromDB) {
-          // Convert IndexedDB series to UI format
-          const currentSeries: Series = {
-            ...seriesFromDB,
-            // Add UI-specific fields for compatibility
-            createdAt: new Date(seriesFromDB.dateAdded),
-            updatedAt: new Date(seriesFromDB.lastModified),
-            // Any other fields needed for UI compatibility
-            addedDate: seriesFromDB.dateAdded,
-          } as Series;
-          
-          setSeries(currentSeries);
-          
-          // Load all books from IndexedDB
-          const booksFromDB = await enhancedStorageService.getBooks();
-          // Convert IndexedDB books to UI book format
-          const uiBooks = booksFromDB.map(book => ({
-            ...book,
-            // Convert fields for UI format
-            addedDate: (book as any).dateAdded || new Date().toISOString(),
-            completedDate: (book as any).dateCompleted,
-          } as Book));
-          
-          setBooks(uiBooks);
-          
-          // Filter for books in this series
-          const seriesBooksData = uiBooks.filter(book => 
-            currentSeries.books.includes(book.id)
-          );
-          setSeriesBooks(seriesBooksData);
-          
-          // If series has a representative book, try to enhance series data from APIs
-          if (seriesBooksData.length > 0 && !currentSeries.apiEnriched) {
-            refreshSeriesData(currentSeries, seriesBooksData[0]);
-          }
-        } else {
-          // Series not found
-          toast({
-            title: "Series not found",
-            description: "The requested series could not be found.",
-            variant: "destructive"
-          });
-          navigate('/series');
-        }
-      } catch (error) {
-        console.error("Error loading series data:", error);
-        toast({
-          title: "Error loading series",
-          description: "There was a problem loading the series data.",
-          variant: "destructive"
-        });
-        navigate('/series');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    
-    loadData();
-  }, [seriesId, navigate, toast]);
-  
   // Function to refresh series data from APIs
-  const refreshSeriesData = async (currentSeries: Series, representativeBook: Book) => {
+  const refreshSeriesData = useCallback(async (currentSeries: Series, representativeBook: Book) => {
     if (!currentSeries || isRefreshing) return;
     
     setIsRefreshing(true);
@@ -129,11 +61,7 @@ const SeriesDetailPage = () => {
           apiEnriched: true
         };
         
-        // Save to IndexedDB
-        await enhancedStorageService.saveSeries({
-          ...updatedSeries,
-          lastModified: new Date().toISOString()
-        });
+        await seriesRepository.update(updatedSeries.id, updatedSeries);
         
         // Update state
         setSeries(updatedSeries);
@@ -147,7 +75,53 @@ const SeriesDetailPage = () => {
     } finally {
       setIsRefreshing(false);
     }
-  };
+  }, [isRefreshing]);
+
+  // Load series and related books
+  useEffect(() => {
+    const loadData = async () => {
+      setIsLoading(true);
+      
+      try {
+        const currentSeries = await seriesRepository.getById(seriesId || '');
+        if (currentSeries) {
+          setSeries(currentSeries);
+          const repositoryBooks = await bookRepository.getAll();
+          setBooks(repositoryBooks);
+          
+          // Filter for books in this series
+          const seriesBooksData = repositoryBooks.filter(book => 
+            currentSeries.books.includes(book.id)
+          );
+          setSeriesBooks(seriesBooksData);
+          
+          // If series has a representative book, try to enhance series data from APIs
+          if (seriesBooksData.length > 0 && !currentSeries.apiEnriched) {
+            refreshSeriesData(currentSeries, seriesBooksData[0]);
+          }
+        } else {
+          toast({
+            title: "Series not found",
+            description: "The requested series could not be found.",
+            variant: "destructive"
+          });
+          navigate('/series');
+        }
+      } catch (error) {
+        console.error("Error loading series data:", error);
+        toast({
+          title: "Error loading series",
+          description: "There was a problem loading the series data.",
+          variant: "destructive"
+        });
+        navigate('/series');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    loadData();
+  }, [navigate, refreshSeriesData, seriesId, toast]);
   
   // Function to check for upcoming releases
   const checkForUpcomingReleases = async (currentSeries: Series) => {
@@ -166,11 +140,7 @@ const SeriesDetailPage = () => {
           hasUpcoming: true
         };
         
-        // Save to IndexedDB
-        await enhancedStorageService.saveSeries({
-          ...updatedSeries,
-          lastModified: new Date().toISOString()
-        });
+        await seriesRepository.update(updatedSeries.id, updatedSeries);
         
         // Update state
         setSeries(updatedSeries);
@@ -187,11 +157,7 @@ const SeriesDetailPage = () => {
     const updatedSeries: Series = { ...series, isTracked: !series.isTracked };
     
     try {
-      // Save to IndexedDB
-      await enhancedStorageService.saveSeries({
-        ...updatedSeries,
-        lastModified: new Date().toISOString()
-      });
+      await seriesRepository.update(updatedSeries.id, updatedSeries);
       
       // Update state
       setSeries(updatedSeries);
@@ -218,11 +184,7 @@ const SeriesDetailPage = () => {
     
     if (window.confirm(`Are you sure you want to delete the series "${series.name}"? Books will remain in your collection but will no longer be associated with this series. This cannot be undone.`)) {
       try {
-        // Initialize storage service
-        await enhancedStorageService.initialize();
-        
-        // Delete the series from IndexedDB
-        await enhancedStorageService.deleteSeries(seriesId);
+        await seriesService.deleteSeries(seriesId);
         
         toast({
           title: "Series Deleted",
@@ -391,6 +353,50 @@ const SeriesDetailPage = () => {
               );
               setSeriesBooks(updatedSeriesBooks);
             }}
+            onBooksAddedToSeries={(addedBooks) => {
+              setBooks((prevBooks) =>
+                prevBooks.map((book) => {
+                  const addedBook = addedBooks.find((candidate) => candidate.id === book.id);
+                  return addedBook || book;
+                }),
+              );
+              setSeriesBooks((prevBooks) => [
+                ...prevBooks,
+                ...addedBooks.filter((addedBook) => !prevBooks.some((book) => book.id === addedBook.id)),
+              ]);
+              setSeries((prevSeries) =>
+                prevSeries
+                  ? {
+                      ...prevSeries,
+                      books: [...new Set([...prevSeries.books, ...addedBooks.map((book) => book.id)])],
+                    }
+                  : prevSeries,
+              );
+            }}
+            onBookRemovedFromSeries={(bookId) => {
+              setBooks((prevBooks) =>
+                prevBooks.map((book) =>
+                  book.id === bookId
+                    ? {
+                        ...book,
+                        isPartOfSeries: false,
+                        seriesId: undefined,
+                        volumeNumber: undefined,
+                        seriesPosition: undefined,
+                      }
+                    : book,
+                ),
+              );
+              setSeriesBooks((prevBooks) => prevBooks.filter((book) => book.id !== bookId));
+              setSeries((prevSeries) =>
+                prevSeries
+                  ? {
+                      ...prevSeries,
+                      books: prevSeries.books.filter((id) => id !== bookId),
+                    }
+                  : prevSeries,
+              );
+            }}
           />
         </TabsContent>
         
@@ -416,12 +422,9 @@ const SeriesDetailPage = () => {
           isOpen={isEditDialogOpen}
           onClose={() => setIsEditDialogOpen(false)}
           onSave={(updatedSeries) => {
-            // Use type assertion since the type definitions might be out of sync
-            // with the actual implementation across the app
             setSeries({
               ...updatedSeries,
-              // Ensure these fields are present
-              createdAt: (updatedSeries as any).createdAt || series.createdAt || new Date(),
+              createdAt: updatedSeries.createdAt || series.createdAt || new Date(),
               updatedAt: new Date(),
             } as Series);
             setIsEditDialogOpen(false);

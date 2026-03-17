@@ -1,64 +1,103 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { BrowserRouter, Navigate, Outlet, Route, Routes } from "react-router-dom";
+
+import BirthdayCelebration from "@/components/BirthdayCelebration";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import ImportStatusDisplay from "@/components/ImportStatusDisplay";
+import { DatabasePreloader } from "@/components/DatabasePreloader";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster as Sonner } from "@/components/ui/sonner";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { UIProvider } from "./components/ui-common/UIProvider";
-import { ImportProvider } from "./contexts/ImportContext";
-import { SettingsProvider } from "./contexts/SettingsContext";
-import PaletteProvider from "./contexts/PaletteContext";
-import BirthdayCelebration from "./components/BirthdayCelebration";
-import ImportStatusDisplay from "./components/ImportStatusDisplay";
-import { DatabasePreloader } from "./components/DatabasePreloader";
-import Index from "./pages/Index";
-import SeriesPage from "./pages/SeriesPage";
-import SeriesDetailPage from "./pages/SeriesDetailPage";
-import CollectionsPage from "./pages/CollectionsPage";
-import CollectionDetailPage from "./pages/CollectionDetailPage";
-import InsightsPage from "./pages/InsightsPage";
-// TestBackendPage has been integrated into AdminPage as a tab
-import AdminPage from "./pages/AdminPage";
-import AboutPage from "./pages/AboutPage";
-// StatisticsPage removed - functionality moved to Reading Insights tab
-import NotFound from "./pages/NotFound";
-import LocalStorageCheck from "./components/debug/LocalStorageCheck";
-// IndexedDBTester component is now used within AdminPage
+import { UIProvider } from "@/components/ui-common/UIProvider";
+import LocalStorageCheck from "@/components/debug/LocalStorageCheck";
+import { ImportProvider } from "@/contexts/ImportContext";
+import { SettingsProvider } from "@/contexts/SettingsContext";
+import { AuthProvider } from "@/contexts/AuthContext";
+import PaletteProvider from "@/contexts/PaletteContext";
+import AboutPage from "@/pages/AboutPage";
+import AdminPage from "@/pages/AdminPage";
+import CollectionDetailPage from "@/pages/CollectionDetailPage";
+import CollectionsPage from "@/pages/CollectionsPage";
+import Index from "@/pages/Index";
+import InsightsPage from "@/pages/InsightsPage";
+import LoginPage from "@/pages/LoginPage";
+import NotFound from "@/pages/NotFound";
+import ForgotPasswordPage from "@/pages/ForgotPasswordPage";
+import RegisterPage from "@/pages/RegisterPage";
+import ResetPasswordPage from "@/pages/ResetPasswordPage";
+import SeriesDetailPage from "@/pages/SeriesDetailPage";
+import SeriesPage from "@/pages/SeriesPage";
 
 const queryClient = new QueryClient();
 
+const ProtectedLibraryLayout = () => (
+  <ProtectedRoute>
+    <SettingsProvider>
+      <PaletteProvider>
+        <ImportProvider>
+          <ImportStatusDisplay />
+          <BirthdayCelebration />
+          <DatabasePreloader>
+            <Outlet />
+          </DatabasePreloader>
+        </ImportProvider>
+      </PaletteProvider>
+    </SettingsProvider>
+  </ProtectedRoute>
+);
+
+const AppRoutes = () => (
+  <Routes>
+    <Route path="/login" element={<LoginPage />} />
+    <Route path="/register" element={<RegisterPage />} />
+    <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+    <Route path="/reset-password" element={<ResetPasswordPage />} />
+    <Route path="/about" element={<AboutPage />} />
+
+    <Route element={<ProtectedLibraryLayout />}>
+      <Route path="/" element={<Index />} />
+      <Route path="/series" element={<SeriesPage />} />
+      <Route path="/series/:seriesId" element={<SeriesDetailPage />} />
+      <Route path="/collections" element={<CollectionsPage />} />
+      <Route
+        path="/collections/:collectionId"
+        element={<CollectionDetailPage />}
+      />
+      <Route path="/insights" element={<InsightsPage />} />
+      <Route
+        path="/test-backend"
+        element={<Navigate to="/admin?tab=backend-test" replace />}
+      />
+      <Route
+        path="/admin"
+        element={
+          <ProtectedRoute requireAdmin>
+            <AdminPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/test-indexeddb"
+        element={<Navigate to="/admin?tab=indexeddb-test" replace />}
+      />
+      <Route path="/storage-check" element={<LocalStorageCheck />} />
+    </Route>
+
+    <Route path="*" element={<NotFound />} />
+  </Routes>
+);
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <UIProvider>
-      <SettingsProvider>
-        <PaletteProvider>
-          <ImportProvider>
-            <TooltipProvider>
-              <Sonner />
-              <ImportStatusDisplay />
-              <BirthdayCelebration />
-              <DatabasePreloader>
-              <BrowserRouter>
-                <Routes>
-                  <Route path="/" element={<Index />} />
-                  <Route path="/series" element={<SeriesPage />} />
-                  <Route path="/series/:seriesId" element={<SeriesDetailPage />} />
-                  <Route path="/collections" element={<CollectionsPage />} />
-                  <Route path="/collections/:collectionId" element={<CollectionDetailPage />} />
-                  <Route path="/insights" element={<InsightsPage />} />
-                  <Route path="/test-backend" element={<Navigate to="/admin?tab=backend-test" replace />} />
-                  <Route path="/admin" element={<AdminPage />} />
-                  <Route path="/test-indexeddb" element={<Navigate to="/admin?tab=indexeddb-test" replace />} />
-                  <Route path="/storage-check" element={<LocalStorageCheck />} />
-                  <Route path="/about" element={<AboutPage />} />
-                  {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-                  <Route path="*" element={<NotFound />} />
-                </Routes>
-              </BrowserRouter>
-              </DatabasePreloader>
-            </TooltipProvider>
-          </ImportProvider>
-        </PaletteProvider>
-      </SettingsProvider>
-    </UIProvider>
+    <BrowserRouter>
+      <UIProvider>
+        <AuthProvider>
+          <TooltipProvider>
+            <Sonner />
+            <AppRoutes />
+          </TooltipProvider>
+        </AuthProvider>
+      </UIProvider>
+    </BrowserRouter>
   </QueryClientProvider>
 );
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Book } from '@/types/book';
 import { Series, SeriesCreationData } from '@/types/series';
 import {
@@ -17,7 +17,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from '@/hooks/use-toast';
-import { enhancedStorageService } from '@/services/storage/EnhancedStorageService';
+import { bookRepository } from '@/repositories/BookRepository';
+import { seriesRepository } from '@/repositories/SeriesRepository';
 
 interface CreateSeriesDialogProps {
   open: boolean;
@@ -47,23 +48,12 @@ export const CreateSeriesDialog = ({
   });
   const [selectedBookIds, setSelectedBookIds] = useState<Record<string, boolean>>({});
   
-  // Fetch books directly from IndexedDB when dialog opens or when switching to books step
-  useEffect(() => {
-    if (open && step === 'books') {
-      loadBooksNotInSeries();
-    }
-  }, [open, step]);
-  
-  // Function to load books not already in a series directly from IndexedDB
-  const loadBooksNotInSeries = async () => {
+  // Load books through the repository so authenticated sessions use the API path.
+  const loadBooksNotInSeries = useCallback(async () => {
     setIsLoading(true);
     try {
-      // Initialize storage service
-      await enhancedStorageService.initialize();
-      
-      // Get all books directly from IndexedDB
-      const allBooks = await enhancedStorageService.getBooks();
-      console.log('All books from IndexedDB:', allBooks.length);
+      const allBooks = await bookRepository.getAll();
+      console.log('All books from repository:', allBooks.length);
       
       // Get all books that are not already part of a series
       const booksNotInSeries = allBooks.filter(book => {
@@ -92,7 +82,7 @@ export const CreateSeriesDialog = ({
       
       setAvailableBooks(uiBooks);
     } catch (error) {
-      console.error('Error loading books from IndexedDB:', error);
+      console.error('Error loading books:', error);
       toast({
         title: 'Error loading books',
         description: 'Could not load books from your collection.',
@@ -101,7 +91,14 @@ export const CreateSeriesDialog = ({
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [toast]);
+
+  // Fetch books when dialog opens or when switching to books step
+  useEffect(() => {
+    if (open && step === 'books') {
+      loadBooksNotInSeries();
+    }
+  }, [loadBooksNotInSeries, open, step]);
   
   const handleNextStep = () => {
     if (!seriesData.name.trim()) {
@@ -128,7 +125,7 @@ export const CreateSeriesDialog = ({
         .filter(([_, isSelected]) => isSelected)
         .map(([id]) => id);
       
-      // Create a new series with proper IndexedDB fields
+      // Create a new series through the repository so authenticated sessions use the API path.
       const now = new Date();
       const newSeries = {
         id: `series-${Date.now()}`,
@@ -137,8 +134,6 @@ export const CreateSeriesDialog = ({
         author: seriesData.author,
         books: bookIds,
         totalBooks: bookIds.length,
-        completedBooks: 0,
-        readingProgress: 0,
         readingOrder: 'publication' as 'publication' | 'chronological' | 'custom', // Use type assertion for enum
         isTracked: seriesData.isTracked,
         dateAdded: now.toISOString(),
@@ -148,21 +143,20 @@ export const CreateSeriesDialog = ({
         updatedAt: now
       };
       
-      // Save to IndexedDB
-      await enhancedStorageService.saveSeries(newSeries);
+      const createdSeries = await seriesRepository.add({
+        ...newSeries,
+        genre: undefined,
+      });
       
-      // Update selected books with seriesId
+      // Update selected books with seriesId through the book repository
       for (const bookId of bookIds) {
-        const book = await enhancedStorageService.getBookById(bookId);
-        if (book) {
-          book.seriesId = newSeries.id;
-          // Update the book with timestamp
-          // Skip setting lastModified as it doesn't exist on the Book type
-          await enhancedStorageService.saveBook(book);
-        }
+        await bookRepository.update(bookId, {
+          isPartOfSeries: true,
+          seriesId: createdSeries.id,
+        });
       }
       
-      onSeriesCreated(newSeries as any);
+      onSeriesCreated(createdSeries);
       
       // Reset form
       setSeriesData({
@@ -178,7 +172,7 @@ export const CreateSeriesDialog = ({
       
       toast({
         title: "Series created",
-        description: `Successfully created "${newSeries.name}" series with ${bookIds.length} books`
+        description: `Successfully created "${createdSeries.name}" series with ${bookIds.length} books`
       });
     } catch (error) {
       console.error('Error creating series:', error);
