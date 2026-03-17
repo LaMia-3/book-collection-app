@@ -5,7 +5,8 @@ import { PrimaryNavigation } from './PrimaryNavigation';
 import { SecondaryNavigation } from './SecondaryNavigation';
 import { ViewMode } from '@/components/ViewToggle';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, Settings, Bell, Search, PenLine } from 'lucide-react';
+import { PlusCircle, Settings, Search, PenLine } from 'lucide-react';
+import { NotificationBell } from '@/components/notifications/NotificationBell';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -88,11 +89,7 @@ export function EnhancedHeader({
               )
             )}
             {showNotifications && (
-              <HeaderActionButton
-                icon={<Bell className="h-4 w-4" />}
-                label="Notifications"
-                onClick={() => {}}
-              />
+              <NotificationBell />
             )}
             {onSettingsClick && (
               <HeaderActionButton

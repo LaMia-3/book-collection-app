@@ -3,22 +3,30 @@ import { Button } from '@/components/ui/button';
 import { NotificationFeed } from './NotificationFeed';
 import { Bell } from 'lucide-react';
 import { notificationService } from '@/services/NotificationService';
+import { authApi } from '@/lib/apiClient';
+import { useAuth } from '@/hooks/useAuth';
 
 /**
  * Notification bell with count badge for the header
  */
 export const NotificationBell = () => {
+  const { isAuthenticated } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const bellRef = useRef<HTMLDivElement>(null);
   
-  // Load and count unread notifications
   useEffect(() => {
     const countUnreadNotifications = async () => {
       try {
-        // Use the notification service to get unread notifications
-        const unreadNotifications = await notificationService.getUnreadNotifications();
-        setUnreadCount(unreadNotifications.length);
+        const [unreadNotifications, announcements] = await Promise.all([
+          notificationService.getUnreadNotifications(),
+          isAuthenticated ? authApi.getSystemAnnouncements() : Promise.resolve([]),
+        ]);
+
+        setUnreadCount(
+          unreadNotifications.length +
+            announcements.filter((announcement) => !announcement.isSeen).length,
+        );
       } catch (error) {
         console.error("Error counting notifications:", error);
         setUnreadCount(0);
@@ -35,7 +43,7 @@ export const NotificationBell = () => {
     return () => {
       clearInterval(intervalId);
     };
-  }, []);
+  }, [isAuthenticated]);
   
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -66,14 +74,15 @@ export const NotificationBell = () => {
     <div className="relative" ref={bellRef}>
       <Button
         variant="ghost"
-        size="icon"
-        className="relative rounded-full"
+        size="sm"
+        className="relative inline-flex items-center gap-2 rounded-md px-3"
         onClick={handleToggle}
         title="Notifications"
       >
         <Bell className="h-5 w-5" />
+        <span className="hidden md:inline">Notifications</span>
         {unreadCount > 0 && (
-          <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-medium text-primary-foreground">
+          <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-medium text-primary-foreground">
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}

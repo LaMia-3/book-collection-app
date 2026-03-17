@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { Notification } from '@/types/notification';
 import { NotificationCard } from './NotificationCard';
+import { AppUpdateCard } from './AppUpdateCard';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { CheckSquare, Bell, Settings, Trash } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { notificationService } from '@/services/NotificationService';
+import { ApiClientError, authApi, SystemAnnouncementRecord } from '@/lib/apiClient';
+import { useAuth } from '@/hooks/useAuth';
 
 interface NotificationFeedProps {
   onClose: () => void;
@@ -16,44 +19,51 @@ interface NotificationFeedProps {
  * Component for displaying notification feed
  */
 export const NotificationFeed = ({ onClose }: NotificationFeedProps) => {
+  const { isAuthenticated } = useAuth();
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState<'all' | 'unread'>('unread');
+  const [activeTab, setActiveTab] = useState<'app-updates' | 'book-alerts'>('book-alerts');
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [announcements, setAnnouncements] = useState<SystemAnnouncementRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
-  // Count unread notifications
-  const unreadCount = notifications.filter(n => !n.isRead).length;
+  const unreadBookAlertsCount = notifications.filter(n => !n.isRead).length;
+  const unreadAppUpdatesCount = announcements.filter(a => !a.isSeen).length;
   
-  // Load notifications from the real notification service
   useEffect(() => {
-    const loadNotifications = async () => {
+    const loadNotificationData = async () => {
       setIsLoading(true);
       
       try {
-        // Use the notification service to get all notifications
-        const allNotifications = await notificationService.getAllNotifications();
+        const [allNotifications, activeAnnouncements] = await Promise.all([
+          notificationService.getAllNotifications(),
+          isAuthenticated ? authApi.getSystemAnnouncements() : Promise.resolve([]),
+        ]);
+
         setNotifications(allNotifications);
+        setAnnouncements(activeAnnouncements);
         
-        // If we have no notifications, trigger a check for upcoming releases
-        // This will populate notifications if there are upcoming book releases
         if (allNotifications.length === 0) {
-          console.log('No notifications found, checking for upcoming releases');
           await notificationService.checkForUpcomingReleases();
-          
-          // Fetch notifications again after the check
           const updatedNotifications = await notificationService.getAllNotifications();
           setNotifications(updatedNotifications);
+        }
+
+        if (activeAnnouncements.some((announcement) => !announcement.isSeen)) {
+          setActiveTab('app-updates');
+        } else {
+          setActiveTab('book-alerts');
         }
       } catch (error) {
         console.error("Error loading notifications:", error);
         setNotifications([]);
+        setAnnouncements([]);
       } finally {
         setIsLoading(false);
       }
     };
     
-    loadNotifications();
-  }, []);
+    void loadNotificationData();
+  }, [isAuthenticated]);
   
   // Mark notification as read
   const handleMarkAsRead = async (id: string) => {
@@ -74,7 +84,7 @@ export const NotificationFeed = ({ onClose }: NotificationFeedProps) => {
   
   // Mark all as read
   const handleMarkAllAsRead = async () => {
-    if (unreadCount === 0) return;
+    if (unreadBookAlertsCount === 0) return;
     
     try {
       const markedCount = await notificationService.markAllAsRead();
@@ -93,6 +103,82 @@ export const NotificationFeed = ({ onClose }: NotificationFeedProps) => {
       });
     } catch (error) {
       console.error("Error marking all notifications as read:", error);
+    }
+  };
+
+  const handleMarkAnnouncementAsRead = async (id: string) => {
+    try {
+      await authApi.markSystemAnnouncementSeen(id);
+      setAnnouncements((currentAnnouncements) =>
+        currentAnnouncements.map((announcement) =>
+          announcement.id === id
+            ? { ...announcement, isSeen: true }
+            : announcement,
+        ),
+      );
+    } catch (error) {
+      console.error("Error marking announcement as read:", error);
+      toast({
+        variant: 'destructive',
+        title: 'Unable to mark app update as read',
+        description:
+          error instanceof ApiClientError
+            ? error.message
+            : 'The app update could not be updated.',
+      });
+    }
+  };
+
+  const handleDismissAnnouncement = async (id: string) => {
+    try {
+      await authApi.dismissSystemAnnouncement(id);
+      setAnnouncements((currentAnnouncements) =>
+        currentAnnouncements.filter((announcement) => announcement.id !== id),
+      );
+    } catch (error) {
+      console.error("Error dismissing announcement:", error);
+      toast({
+        variant: 'destructive',
+        title: 'Unable to dismiss app update',
+        description:
+          error instanceof ApiClientError
+            ? error.message
+            : 'The app update could not be dismissed.',
+      });
+    }
+  };
+
+  const handleMarkAllAnnouncementsAsRead = async () => {
+    if (unreadAppUpdatesCount === 0) return;
+
+    try {
+      await Promise.all(
+        announcements
+          .filter((announcement) => !announcement.isSeen)
+          .map((announcement) => authApi.markSystemAnnouncementSeen(announcement.id)),
+      );
+
+      setAnnouncements((currentAnnouncements) =>
+        currentAnnouncements.map((announcement) => ({
+          ...announcement,
+          isSeen: true,
+        })),
+      );
+
+      toast({
+        title: 'All app updates marked as read',
+        description: `${unreadAppUpdatesCount} updates marked as read`,
+      });
+    } catch (error) {
+      console.error("Error marking all announcements as read:", error);
+      toast({
+        variant: 'destructive',
+        title: 'Unable to update app updates',
+        description:
+          error instanceof ApiClientError
+            ? error.message
+            : 'App update state could not be updated.',
+      });
     }
   };
   
@@ -132,20 +218,15 @@ export const NotificationFeed = ({ onClose }: NotificationFeedProps) => {
     }
   };
   
-  // Filter notifications based on active tab
-  const filteredNotifications = notifications.filter(notification => 
-    activeTab === 'all' || !notification.isRead
-  );
-  
   return (
     <div className="w-full max-w-sm bg-background border rounded-lg shadow-lg overflow-hidden">
       <div className="flex items-center justify-between p-4 border-b">
         <div className="flex items-center gap-2">
           <Bell className="h-5 w-5" />
           <h2 className="font-medium">Notifications</h2>
-          {unreadCount > 0 && (
+          {unreadBookAlertsCount + unreadAppUpdatesCount > 0 && (
             <span className="bg-primary text-primary-foreground text-xs rounded-full px-2 py-0.5">
-              {unreadCount}
+              {unreadBookAlertsCount + unreadAppUpdatesCount}
             </span>
           )}
         </div>
@@ -169,14 +250,14 @@ export const NotificationFeed = ({ onClose }: NotificationFeedProps) => {
         </div>
       </div>
       
-      <Tabs value={activeTab} onValueChange={(value: any) => setActiveTab(value)} className="w-full">
+      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'app-updates' | 'book-alerts')} className="w-full">
         <div className="px-2 pt-2">
           <TabsList className="w-full grid grid-cols-2">
-            <TabsTrigger value="unread" className="text-sm">
-              Unread ({unreadCount})
+            <TabsTrigger value="app-updates" className="text-sm">
+              App Updates ({announcements.length})
             </TabsTrigger>
-            <TabsTrigger value="all" className="text-sm">
-              All ({notifications.length})
+            <TabsTrigger value="book-alerts" className="text-sm">
+              Book Alerts ({notifications.length})
             </TabsTrigger>
           </TabsList>
         </div>
@@ -198,15 +279,20 @@ export const NotificationFeed = ({ onClose }: NotificationFeedProps) => {
           </div>
         ) : (
           <>
-            <TabsContent value="unread" className="mt-0">
-              {filteredNotifications.length === 0 ? (
+            <TabsContent value="app-updates" className="mt-0">
+              {announcements.length === 0 ? (
                 <div className="py-8 text-center">
-                  <p className="text-muted-foreground">No unread notifications</p>
+                  <p className="text-muted-foreground">No app updates</p>
                 </div>
               ) : (
                 <>
                   <div className="p-2 border-b">
-                    <Button variant="ghost" size="sm" className="w-full flex justify-center gap-2 h-8 text-xs" onClick={handleMarkAllAsRead}>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full flex justify-center gap-2 h-8 text-xs"
+                      onClick={handleMarkAllAnnouncementsAsRead}
+                    >
                       <CheckSquare className="h-3.5 w-3.5" />
                       Mark all as read
                     </Button>
@@ -214,12 +300,12 @@ export const NotificationFeed = ({ onClose }: NotificationFeedProps) => {
                   <div className="h-[300px] overflow-hidden">
                     <ScrollArea className="h-full pr-2">
                       <div className="p-2 space-y-2">
-                        {filteredNotifications.map(notification => (
-                          <NotificationCard
-                            key={notification.id}
-                            notification={notification}
-                            onMarkAsRead={handleMarkAsRead}
-                            onDismiss={handleDismiss}
+                        {announcements.map((announcement) => (
+                          <AppUpdateCard
+                            key={announcement.id}
+                            announcement={announcement}
+                            onMarkAsRead={handleMarkAnnouncementAsRead}
+                            onDismiss={handleDismissAnnouncement}
                           />
                         ))}
                       </div>
@@ -229,17 +315,17 @@ export const NotificationFeed = ({ onClose }: NotificationFeedProps) => {
               )}
             </TabsContent>
             
-            <TabsContent value="all" className="mt-0">
+            <TabsContent value="book-alerts" className="mt-0">
               {notifications.length === 0 ? (
                 <div className="py-8 text-center">
-                  <p className="text-muted-foreground">No notifications</p>
+                  <p className="text-muted-foreground">No book alerts</p>
                 </div>
               ) : (
                 <>
                   <div className="p-2 border-b">
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       className="w-full flex justify-center gap-2 h-8 text-xs"
                       onClick={handleClearAll}
                     >

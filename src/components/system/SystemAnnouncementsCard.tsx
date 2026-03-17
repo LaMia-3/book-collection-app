@@ -1,16 +1,18 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { ExternalLink, Megaphone, X } from "lucide-react";
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { ApiClientError, authApi, SystemAnnouncementRecord } from "@/lib/apiClient";
 
-const severityClassNames: Record<SystemAnnouncementRecord["severity"], string> = {
-  info: "border-blue-200 bg-blue-50 text-blue-900 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-100",
-  success: "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-100",
-  warning: "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100",
-  critical: "border-red-200 bg-red-50 text-red-900 dark:border-red-900 dark:bg-red-950 dark:text-red-100",
+const severityBannerClassNames: Record<
+  SystemAnnouncementRecord["severity"],
+  string
+> = {
+  info: "border-sky-500/50 bg-slate-900/95",
+  success: "border-emerald-500/50 bg-slate-900/95",
+  warning: "border-amber-500/50 bg-slate-900/95",
+  critical: "border-rose-500/60 bg-slate-950/95",
 };
 
 export const SystemAnnouncementsCard = () => {
@@ -84,75 +86,81 @@ export const SystemAnnouncementsCard = () => {
     }
   };
 
-  if (!isAuthenticated || (!isLoadingAnnouncements && announcements.length === 0)) {
+  const featuredAnnouncement = useMemo(
+    () => announcements[0] ?? null,
+    [announcements],
+  );
+
+  if (
+    !isAuthenticated ||
+    isLoadingAnnouncements ||
+    !featuredAnnouncement
+  ) {
     return null;
   }
 
   return (
-    <Card className="mb-8 mx-4 shadow-elegant">
-      <CardHeader>
-        <CardTitle>What&apos;s New</CardTitle>
-        <CardDescription>
-          Product updates, maintenance notes, and other app-level announcements.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {isLoadingAnnouncements ? (
-          <p className="text-sm text-muted-foreground">Loading system announcements…</p>
-        ) : (
-          announcements.map((announcement) => (
-            <div
-              key={announcement.id}
-              className={`rounded-lg border p-4 ${severityClassNames[announcement.severity]}`}
-            >
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-semibold">{announcement.title}</h3>
-                    {!announcement.isSeen ? (
-                      <span className="rounded-full border px-2 py-0.5 text-xs font-medium">
-                        New
-                      </span>
-                    ) : null}
-                  </div>
-                  <p className="text-sm">{announcement.body}</p>
-                  {announcement.ctaLabel && announcement.ctaUrl ? (
-                    <a
-                      href={announcement.ctaUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-block text-sm font-medium underline"
-                    >
-                      {announcement.ctaLabel}
-                    </a>
-                  ) : null}
-                </div>
+    <div
+      className={`fixed left-1/2 top-24 z-40 w-[calc(100%-2rem)] max-w-4xl -translate-x-1/2 rounded-xl border px-6 py-4 text-white shadow-lg backdrop-blur-sm md:top-20 ${severityBannerClassNames[featuredAnnouncement.severity]}`}
+    >
+      <div className="flex items-start gap-3">
+        <Megaphone className="mt-1 h-6 w-6 shrink-0 text-white" />
+        <div className="min-w-0 flex-1 space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-white/70">
+              What&apos;s New
+            </p>
+            {!featuredAnnouncement.isSeen ? (
+              <span className="rounded-full border border-white/15 bg-white/10 px-2 py-0.5 text-xs font-medium text-white">
+                New
+              </span>
+            ) : null}
+            {announcements.length > 1 ? (
+              <span className="rounded-full border border-white/15 bg-white/10 px-2 py-0.5 text-xs font-medium text-white">
+                +{announcements.length - 1} more
+              </span>
+            ) : null}
+          </div>
 
-                <div className="flex flex-wrap gap-2">
-                  {!announcement.isSeen ? (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => void handleMarkSeen(announcement.id)}
-                    >
-                      Mark Read
-                    </Button>
-                  ) : null}
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => void handleDismiss(announcement.id)}
-                  >
-                    Dismiss
-                  </Button>
-                </div>
-              </div>
-            </div>
-          ))
-        )}
-      </CardContent>
-    </Card>
+          <div>
+            <h3 className="text-lg font-semibold">{featuredAnnouncement.title}</h3>
+            <p className="text-sm text-white/90">{featuredAnnouncement.body}</p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {featuredAnnouncement.ctaLabel && featuredAnnouncement.ctaUrl ? (
+              <a
+                href={featuredAnnouncement.ctaUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 rounded-md border border-white/15 bg-white/10 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-white/15"
+              >
+                {featuredAnnouncement.ctaLabel}
+                <ExternalLink className="h-4 w-4" />
+              </a>
+            ) : null}
+
+            {!featuredAnnouncement.isSeen ? (
+              <button
+                type="button"
+                onClick={() => void handleMarkSeen(featuredAnnouncement.id)}
+                className="rounded-md bg-white px-3 py-1.5 text-sm font-medium text-slate-900 transition-colors hover:bg-white/90"
+              >
+                Mark Read
+              </button>
+            ) : null}
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => void handleDismiss(featuredAnnouncement.id)}
+          className="rounded-full p-1 text-white/80 transition-colors hover:bg-white/10 hover:text-white"
+          aria-label="Dismiss announcement"
+        >
+          <X className="h-5 w-5" />
+        </button>
+      </div>
+    </div>
   );
 };
