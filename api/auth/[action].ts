@@ -2,6 +2,7 @@ import { VercelRequest, VercelResponse } from "@vercel/node";
 import { MongoServerError } from "mongodb";
 
 import { ApiError, methodNotAllowed, sendError, sendJson } from "../../src/server/lib/api-response.js";
+import { ensureBootstrapAdminUser } from "../../src/server/lib/admin-bootstrap.js";
 import { signAuthToken } from "../../src/server/lib/auth.js";
 import { sendPasswordResetEmail } from "../../src/server/lib/email.js";
 import {
@@ -444,6 +445,7 @@ export default async function handler(
   response: VercelResponse,
 ): Promise<VercelResponse | void> {
   try {
+    await ensureBootstrapAdminUser();
     const action = resolveAction(request);
 
     if (action === "register") {

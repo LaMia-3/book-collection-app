@@ -2,6 +2,7 @@ export type AuthUser = {
   id: string;
   email: string;
   preferredName?: string;
+  role: "user" | "admin";
   createdAt: string;
   updatedAt: string;
 };

@@ -67,7 +67,14 @@ const AppRoutes = () => (
         path="/test-backend"
         element={<Navigate to="/admin?tab=backend-test" replace />}
       />
-      <Route path="/admin" element={<AdminPage />} />
+      <Route
+        path="/admin"
+        element={
+          <ProtectedRoute requireAdmin>
+            <AdminPage />
+          </ProtectedRoute>
+        }
+      />
       <Route
         path="/test-indexeddb"
         element={<Navigate to="/admin?tab=indexeddb-test" replace />}

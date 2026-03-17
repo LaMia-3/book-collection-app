@@ -9,8 +9,14 @@ const LoadingScreen = () => (
   </div>
 );
 
-export const ProtectedRoute = ({ children }: { children: ReactNode }) => {
-  const { isAuthenticated, isLoadingAuth } = useAuth();
+export const ProtectedRoute = ({
+  children,
+  requireAdmin = false,
+}: {
+  children: ReactNode;
+  requireAdmin?: boolean;
+}) => {
+  const { isAuthenticated, isLoadingAuth, user } = useAuth();
   const location = useLocation();
 
   if (isLoadingAuth) {
@@ -19,6 +25,10 @@ export const ProtectedRoute = ({ children }: { children: ReactNode }) => {
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  }
+
+  if (requireAdmin && user?.role !== "admin") {
+    return <Navigate to="/" replace />;
   }
 
   return <>{children}</>;

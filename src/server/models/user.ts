@@ -4,12 +4,14 @@ import { getMongoDb } from "../lib/mongodb.js";
 
 export const USERS_COLLECTION = "users";
 let ensureUserIndexesPromise: Promise<string> | null = null;
+export type UserRole = "user" | "admin";
 
 export type UserDocument = {
   _id?: ObjectId;
   email: string;
   passwordHash: string;
   preferredName?: string;
+  role?: UserRole;
   createdAt: Date;
   sessionInvalidBefore?: Date;
   updatedAt: Date;
@@ -19,6 +21,7 @@ export type PublicUser = {
   id: string;
   email: string;
   preferredName?: string;
+  role: UserRole;
   createdAt: string;
   updatedAt: string;
 };
@@ -27,6 +30,7 @@ export type CreateUserInput = {
   email: string;
   passwordHash: string;
   preferredName?: string;
+  role?: UserRole;
 };
 
 export const normalizeUserEmail = (email: string): string =>
@@ -127,6 +131,32 @@ export const updateUserEmailById = async (
   return findUserById(id);
 };
 
+export const updateUserRoleById = async (
+  id: string,
+  role: UserRole,
+): Promise<UserDocument | null> => {
+  if (!ObjectId.isValid(id)) {
+    return null;
+  }
+
+  const usersCollection = await getUsersCollection();
+  const result = await usersCollection.updateOne(
+    { _id: new ObjectId(id) },
+    {
+      $set: {
+        role,
+        updatedAt: new Date(),
+      },
+    },
+  );
+
+  if (result.matchedCount !== 1) {
+    return null;
+  }
+
+  return findUserById(id);
+};
+
 export const invalidateUserSessionsById = async (id: string): Promise<boolean> => {
   if (!ObjectId.isValid(id)) {
     return false;
@@ -172,6 +202,7 @@ export const createUserDocument = ({
     email: normalizeUserEmail(email),
     passwordHash,
     preferredName: preferredName?.trim() || undefined,
+    role: role || "user",
     createdAt: now,
     updatedAt: now,
   };
@@ -186,6 +217,7 @@ export const toPublicUser = (user: UserDocument): PublicUser => {
     id: user._id.toString(),
     email: user.email,
     preferredName: user.preferredName,
+    role: user.role || "user",
     createdAt: user.createdAt.toISOString(),
     updatedAt: user.updatedAt.toISOString(),
   };
