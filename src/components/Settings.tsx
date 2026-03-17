@@ -25,12 +25,11 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { useNavigate } from 'react-router-dom';
 import { ImportExportView } from './ImportExportView';
-import { Settings as SettingsIcon, Trash2, AlertTriangle, Palette, Trophy, BookOpen, ArrowUp, ArrowDown, ListOrdered, Wrench, Sun, Moon, Monitor, Sliders, FileUp, FileDown, LogOut, Shield } from 'lucide-react';
+import { Settings as SettingsIcon, Trash2, AlertTriangle, Palette, Trophy, BookOpen, ArrowUp, ArrowDown, ListOrdered, Sun, Moon, Monitor, Sliders, FileUp, FileDown, LogOut, Shield } from 'lucide-react';
 import { useSettings } from '@/contexts/SettingsContext';
 import { useTheme } from '@/components/ui-common/ThemeProvider';
 import { PaletteSelector } from '@/components/PaletteSelector';
 import { GoalsTab } from '@/components/GoalsTab';
-import { indexedDBService } from '@/services/storage/IndexedDBService';
 import { useAuth } from '@/hooks/useAuth';
 import { ApiClientError } from '@/lib/apiClient';
 import type { UserSettings } from '@/types/user-settings';
@@ -44,7 +43,6 @@ interface SettingsProps {
   onImportJSON?: (file: File) => Promise<void>;
   onCreateBackup?: () => Promise<void>;
   onRestoreBackup?: (file: File) => Promise<void>;
-  onClearLocalCache?: () => Promise<void>;
   onDeleteAccount?: () => Promise<void>;
   onDeleteLibrary?: () => Promise<void>;
   onResetLibrary?: () => Promise<void>;
@@ -58,16 +56,13 @@ export const Settings: React.FC<SettingsProps> = ({
   onImportJSON,
   onCreateBackup,
   onRestoreBackup,
-  onClearLocalCache,
   onDeleteAccount,
   onDeleteLibrary,
   onResetLibrary
 }) => {
   const [activeTab, setActiveTab] = useState('general');
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
-  const [deleteMode, setDeleteMode] = useState<'delete' | 'reset' | 'account' | 'cache'>('delete');
-  const [isRepairing, setIsRepairing] = useState(false);
-  const [repairStatus, setRepairStatus] = useState<{success: boolean; message: string} | null>(null);
+  const [deleteMode, setDeleteMode] = useState<'delete' | 'reset' | 'account'>('delete');
   const { settings, updateSettings, isLoading } = useSettings();
   const { colorMode, setColorMode } = useTheme();
   const { changeEmail, changePassword, isAuthenticated, logout, user } = useAuth();
@@ -331,33 +326,6 @@ export const Settings: React.FC<SettingsProps> = ({
                 </span>
               </TabsTrigger>
               <TabsTrigger 
-                value="bookshelf-view" 
-                className="justify-start w-40 data-[state=active]:bg-muted"
-              >
-                <span className="flex items-center gap-2">
-                  <BookOpen className="h-4 w-4 text-primary" />
-                  Bookshelf View
-                </span>
-              </TabsTrigger>
-              <TabsTrigger 
-                value="account" 
-                className="justify-start w-40 data-[state=active]:bg-muted"
-              >
-                <span className="flex items-center gap-2">
-                  <Shield className="h-4 w-4 text-emerald-600" />
-                  Account
-                </span>
-              </TabsTrigger>
-              <TabsTrigger 
-                value="goals" 
-                className="justify-start w-40 data-[state=active]:bg-muted"
-              >
-                <span className="flex items-center gap-2">
-                  <Trophy className="h-4 w-4 text-amber-500" />
-                  Goals
-                </span>
-              </TabsTrigger>
-              <TabsTrigger 
                 value="appearance" 
                 className="justify-start w-40 data-[state=active]:bg-muted"
               >
@@ -376,21 +344,12 @@ export const Settings: React.FC<SettingsProps> = ({
                 </span>
               </TabsTrigger>
               <TabsTrigger 
-                value="troubleshooting" 
+                value="account" 
                 className="justify-start w-40 data-[state=active]:bg-muted"
               >
                 <span className="flex items-center gap-2">
-                  <Wrench className="h-4 w-4 text-blue-500" />
-                  Troubleshooting
-                </span>
-              </TabsTrigger>
-              <TabsTrigger 
-                value="delete-library" 
-                className="justify-start w-40 data-[state=active]:bg-destructive/10 text-destructive font-medium"
-              >
-                <span className="flex items-center gap-2">
-                  <Trash2 className="h-4 w-4" />
-                  Delete Library
+                  <Shield className="h-4 w-4 text-emerald-600" />
+                  Account
                 </span>
               </TabsTrigger>
               <Button
@@ -507,21 +466,67 @@ export const Settings: React.FC<SettingsProps> = ({
 
                     </div>
                   </div>
+
+                  <Separator />
+
+                  <div>
+                    <h4 className="text-md font-medium mb-3 flex items-center gap-2">
+                      <Trophy className="h-4 w-4 text-amber-500" />
+                      Reading Goals
+                    </h4>
+                    <GoalsTab />
+                  </div>
                 </div>
               </TabsContent>
-              
-              <TabsContent value="bookshelf-view" className="mt-0">
+
+              <TabsContent value="appearance" className="mt-0">
                 <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
-                  <BookOpen className="h-5 w-5 text-primary" />
-                  Bookshelf View Settings
+                  <Palette className="h-5 w-5 text-primary" />
+                  Appearance
                 </h3>
                 <p className="text-muted-foreground mb-6">
-                  Customize how your bookshelf is displayed and organized.
+                  Customize how the application looks.
                 </p>
-
+                
                 <div className="space-y-6">
-                  <div>
-                    <h4 className="text-md font-medium mb-3">Bookshelf View Organization</h4>
+                  <div className="border-b pb-6">
+                    <h4 className="text-base font-medium mb-2">Theme</h4>
+                    <div className="grid grid-cols-3 gap-4 mt-4">
+                      <div 
+                        className={`flex flex-col items-center justify-center p-6 rounded-lg border-2 cursor-pointer transition-all ${colorMode === 'light' ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/50'}`}
+                        onClick={() => setColorMode('light')}
+                      >
+                        <Sun className="h-8 w-8 text-yellow-500 mb-2" />
+                        <span className="text-center font-medium">Light</span>
+                      </div>
+                      
+                      <div 
+                        className={`flex flex-col items-center justify-center p-6 rounded-lg border-2 cursor-pointer transition-all ${colorMode === 'dark' ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/50'}`}
+                        onClick={() => setColorMode('dark')}
+                      >
+                        <Moon className="h-8 w-8 text-gray-400 mb-2" />
+                        <span className="text-center font-medium">Dark</span>
+                      </div>
+                      
+                      <div 
+                        className={`flex flex-col items-center justify-center p-6 rounded-lg border-2 cursor-pointer transition-all ${colorMode === 'system' ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/50'}`}
+                        onClick={() => setColorMode('system')}
+                      >
+                        <Monitor className="h-8 w-8 text-gray-400 mb-2" />
+                        <span className="text-center font-medium">System</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="border-b pb-6">
+                    <h4 className="text-base font-medium mb-2 flex items-center gap-2">
+                      <BookOpen className="h-4 w-4 text-primary" />
+                      Bookshelf View
+                    </h4>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Control how your shelves are arranged and how books behave on hover.
+                    </p>
+
                     <div className="space-y-4">
                       <div className="grid gap-2 mb-5">
                         <div className="flex items-center space-x-2 mt-1">
@@ -536,37 +541,34 @@ export const Settings: React.FC<SettingsProps> = ({
                         </div>
                         <p className="text-xs text-muted-foreground">When enabled, DNF and On Hold books appear on the same shelf as Completed books</p>
                       </div>
-                      
+
                       <div className="grid gap-2">
                         <div className="flex items-center gap-2 mb-1">
                           <ListOrdered className="h-4 w-4 text-muted-foreground" />
                           <p className="text-sm font-medium">Shelf Order</p>
                         </div>
                         <p className="text-xs text-muted-foreground mb-3">Use the up and down arrows to arrange bookshelves in your preferred order</p>
-                        
+
                         <div className="space-y-2">
                           {shelfOrder.map((shelf, index) => {
-                            // If groupSpecialStatuses is enabled, don't show on-hold and dnf in the list
                             if (groupSpecialStatuses && (shelf === 'on-hold' || shelf === 'dnf')) {
                               return null;
                             }
-                            
+
                             return (
-                              <div 
+                              <div
                                 key={shelf}
                                 className="flex items-center justify-between p-3 bg-muted/50 rounded-md border shadow-sm"
                               >
                                 <div className="flex items-center gap-2">
                                   <span className="font-medium">{getShelfDisplayName(shelf)}</span>
-                                  
-                                  {/* Show note for completed if grouping is enabled */}
                                   {shelf === 'completed' && groupSpecialStatuses && (
                                     <span className="text-xs text-muted-foreground ml-2">
                                       (includes DNF and On Hold)
                                     </span>
                                   )}
                                 </div>
-                                
+
                                 <div className="flex gap-1">
                                   <button
                                     type="button"
@@ -595,14 +597,7 @@ export const Settings: React.FC<SettingsProps> = ({
                           Changes to shelf order are saved automatically
                         </p>
                       </div>
-                    </div>
-                  </div>
 
-                  <Separator />
-
-                  <div>
-                    <h4 className="text-md font-medium mb-3">Interactive Features</h4>
-                    <div className="space-y-4">
                       <div className="grid gap-2">
                         <div className="flex items-center space-x-2 mt-1">
                           <input
@@ -619,7 +614,24 @@ export const Settings: React.FC<SettingsProps> = ({
                     </div>
                   </div>
                   
+                  <div className="border-b pb-6">
+                    <h4 className="text-base font-medium mb-2">Book Spine Colors</h4>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Choose a color palette based on your favorite book cover to customize the appearance of your bookshelf.
+                    </p>
+                    <PaletteSelector />
+                  </div>
                 </div>
+              </TabsContent>
+
+              <TabsContent value="import-export" className="mt-0">
+                <ImportExportView 
+                  books={books}
+                  onImportCSV={onImportCSV}
+                  onImportJSON={onImportJSON}
+                  onCreateBackup={onCreateBackup}
+                  onRestoreBackup={onRestoreBackup}
+                />
               </TabsContent>
 
               <TabsContent value="account" className="mt-0">
@@ -628,7 +640,7 @@ export const Settings: React.FC<SettingsProps> = ({
                   Account Security
                 </h3>
                 <p className="text-muted-foreground mb-6">
-                  Manage the credentials tied to your account. Every change requires your current password.
+                  Manage the credentials tied to your account and the destructive actions related to your library.
                 </p>
 
                 <div className="space-y-6">
@@ -733,190 +745,7 @@ export const Settings: React.FC<SettingsProps> = ({
                       </Button>
                     </form>
                   </Card>
-                </div>
-              </TabsContent>
-              
-              <TabsContent value="goals" className="mt-0">
-                <GoalsTab />
-              </TabsContent>
 
-              <TabsContent value="appearance" className="mt-0">
-                <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
-                  <Palette className="h-5 w-5 text-primary" />
-                  Appearance
-                </h3>
-                <p className="text-muted-foreground mb-6">
-                  Customize how the application looks.
-                </p>
-                
-                <div className="space-y-6">
-                  <div className="border-b pb-6">
-                    <h4 className="text-base font-medium mb-2">Theme</h4>
-                    <div className="grid grid-cols-3 gap-4 mt-4">
-                      <div 
-                        className={`flex flex-col items-center justify-center p-6 rounded-lg border-2 cursor-pointer transition-all ${colorMode === 'light' ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/50'}`}
-                        onClick={() => setColorMode('light')}
-                      >
-                        <Sun className="h-8 w-8 text-yellow-500 mb-2" />
-                        <span className="text-center font-medium">Light</span>
-                      </div>
-                      
-                      <div 
-                        className={`flex flex-col items-center justify-center p-6 rounded-lg border-2 cursor-pointer transition-all ${colorMode === 'dark' ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/50'}`}
-                        onClick={() => setColorMode('dark')}
-                      >
-                        <Moon className="h-8 w-8 text-gray-400 mb-2" />
-                        <span className="text-center font-medium">Dark</span>
-                      </div>
-                      
-                      <div 
-                        className={`flex flex-col items-center justify-center p-6 rounded-lg border-2 cursor-pointer transition-all ${colorMode === 'system' ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/50'}`}
-                        onClick={() => setColorMode('system')}
-                      >
-                        <Monitor className="h-8 w-8 text-gray-400 mb-2" />
-                        <span className="text-center font-medium">System</span>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="border-b pb-6">
-                    <h4 className="text-base font-medium mb-2">Book Spine Colors</h4>
-                    <p className="text-sm text-muted-foreground mb-4">
-                      Choose a color palette based on your favorite book cover to customize the appearance of your bookshelf.
-                    </p>
-                    <PaletteSelector />
-                  </div>
-                </div>
-              </TabsContent>
-
-              <TabsContent value="import-export" className="mt-0">
-                <ImportExportView 
-                  books={books}
-                  onImportCSV={onImportCSV}
-                  onImportJSON={onImportJSON}
-                  onCreateBackup={onCreateBackup}
-                  onRestoreBackup={onRestoreBackup}
-                />
-              </TabsContent>
-              
-              <TabsContent value="troubleshooting" className="mt-0">
-                <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                  <Wrench className="h-5 w-5 text-blue-500" />
-                  Troubleshooting
-                </h3>
-                
-                <p className="text-muted-foreground mb-6">
-                  Tools to help resolve issues with the application and browser storage.
-                </p>
-                
-                <Card className="p-6 mb-6">
-                  <h4 className="font-medium mb-4">Database Repair</h4>
-                  <p className="text-sm text-muted-foreground mb-4">
-                    If you're experiencing issues with your book collection, such as missing data or errors when adding books, 
-                    you can try repairing the local browser database. This only affects browser storage and does not modify your account data in MongoDB.
-                  </p>
-                  
-                  {repairStatus && (
-                    <div className={`p-4 mb-4 rounded-md ${repairStatus.success ? 'bg-green-50 border border-green-200 text-green-700' : 'bg-red-50 border border-red-200 text-red-700'}`}>
-                      <p className="text-sm font-medium">{repairStatus.message}</p>
-                    </div>
-                  )}
-                  
-                  <Button 
-                    variant="outline" 
-                    className="flex items-center gap-2"
-                    onClick={async () => {
-                      setIsRepairing(true);
-                      setRepairStatus(null);
-                      try {
-                        const result = await indexedDBService.checkAndRepairDatabase();
-                        if (result) {
-                          setRepairStatus({
-                            success: true,
-                            message: "Database repair completed successfully. You may need to refresh the page to see changes."
-                          });
-                        } else {
-                          setRepairStatus({
-                            success: false,
-                            message: "Database repair failed. Please try again or contact support."
-                          });
-                        }
-                      } catch (error) {
-                        setRepairStatus({
-                          success: false,
-                          message: `Database repair failed: ${error instanceof Error ? error.message : 'Unknown error'}`
-                        });
-                      } finally {
-                        setIsRepairing(false);
-                      }
-                    }}
-                    disabled={isRepairing}
-                  >
-                    {isRepairing ? (
-                      <>
-                        <span className="animate-spin mr-2">⟳</span>
-                        Repairing...
-                      </>
-                    ) : (
-                      <>
-                        <Wrench className="h-4 w-4" />
-                        Repair Database
-                      </>
-                    )}
-                  </Button>
-                  
-                  <div className="mt-4 text-xs text-muted-foreground">
-                    <p className="font-medium">What this does:</p>
-                    <ul className="list-disc pl-5 space-y-1 mt-1">
-                      <li>Checks for missing local browser database stores</li>
-                      <li>Recreates corrupted local database structures</li>
-                      <li>Does not delete remote account data</li>
-                    </ul>
-                  </div>
-                </Card>
-
-                {isAuthenticated && (
-                  <Card className="p-6 mb-6">
-                    <h4 className="font-medium mb-4">Clear Local Cache Only</h4>
-                    <p className="text-sm text-muted-foreground mb-4">
-                      This clears IndexedDB and legacy browser cache data on this device only. Your account data in MongoDB will remain intact and will be reloaded after refresh.
-                    </p>
-
-                    <Button
-                      variant="outline"
-                      className="flex items-center gap-2"
-                      onClick={() => {
-                        setDeleteMode('cache');
-                        setShowDeleteConfirmation(true);
-                      }}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                      Clear Local Cache
-                    </Button>
-
-                    <div className="mt-4 text-xs text-muted-foreground">
-                      <p className="font-medium">What this does:</p>
-                      <ul className="list-disc pl-5 space-y-1 mt-1">
-                        <li>Clears browser-only IndexedDB and legacy localStorage data</li>
-                        <li>Keeps your signed-in account and MongoDB library intact</li>
-                        <li>Forces a fresh reload from the remote source of truth</li>
-                      </ul>
-                    </div>
-                  </Card>
-                )}
-              </TabsContent>
-              
-              <TabsContent value="delete-library" className="mt-0">
-                <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-destructive">
-                  <AlertTriangle className="h-5 w-5" />
-                  Delete Library
-                </h3>
-                
-                <p className="text-muted-foreground mb-6">
-                  Choose an option below to manage your {isAuthenticated ? 'remote account library' : 'local library'}. Browser-only cache repair stays in Troubleshooting so destructive actions here are easier to reason about.
-                </p>
-                
-                <div className="space-y-6">
                   <Card className="border-destructive/20 bg-destructive/5 p-6">
                     <h4 className="font-medium mb-2">Delete Library</h4>
                     <p className="text-sm text-muted-foreground mb-4">
@@ -932,9 +761,9 @@ export const Settings: React.FC<SettingsProps> = ({
                         <li>This device&apos;s stale local cache will be cleared after the remote deletion completes</li>
                       )}
                     </ul>
-                    
-                    <Button 
-                      variant="destructive" 
+
+                    <Button
+                      variant="destructive"
                       className="mt-2 flex items-center gap-2"
                       onClick={() => {
                         setDeleteMode('delete');
@@ -945,7 +774,7 @@ export const Settings: React.FC<SettingsProps> = ({
                       Delete Library
                     </Button>
                   </Card>
-                  
+
                   <Card className="border-destructive/20 bg-destructive/5 p-6">
                     <h4 className="font-medium mb-2">Reset Library</h4>
                     <p className="text-sm text-muted-foreground mb-4">
@@ -958,9 +787,9 @@ export const Settings: React.FC<SettingsProps> = ({
                       <li>All upcoming releases and notifications will be deleted</li>
                       <li>You will start with a completely empty library</li>
                     </ul>
-                    
-                    <Button 
-                      variant="destructive" 
+
+                    <Button
+                      variant="destructive"
                       className="mt-2 flex items-center gap-2"
                       onClick={() => {
                         setDeleteMode('reset');
@@ -1017,9 +846,7 @@ export const Settings: React.FC<SettingsProps> = ({
                     ? 'Delete Library?'
                     : deleteMode === 'reset'
                       ? 'Reset Library?'
-                      : deleteMode === 'account'
-                        ? 'Delete Account?'
-                        : 'Clear Local Cache?'}
+                      : 'Delete Account?'}
                 </AlertDialogTitle>
                 {/* Use a custom description to avoid DOM nesting issues */}
                 <div className="text-sm text-muted-foreground">
@@ -1037,15 +864,10 @@ export const Settings: React.FC<SettingsProps> = ({
                       <span className="block mb-2">Are you sure you want to completely reset your {isAuthenticated ? 'account library' : 'local library'}? This action <strong>cannot be undone</strong>.</span>
                       <span className="block mb-4">All books, series, collections, upcoming releases, and notifications will be permanently deleted.</span>
                     </>
-                  ) : deleteMode === 'account' ? (
+                  ) : (
                     <>
                       <span className="block mb-2">Are you sure you want to permanently delete your account? This action <strong>cannot be undone</strong>.</span>
                       <span className="block mb-4">Your account, library, settings, migration history, and all account-associated records will be permanently deleted.</span>
-                    </>
-                  ) : (
-                    <>
-                      <span className="block mb-2">Are you sure you want to clear this device&apos;s local cache? This will remove IndexedDB and legacy browser storage for this app.</span>
-                      <span className="block mb-4">Your signed-in account and remote MongoDB library will not be changed.</span>
                     </>
                   )}
                   <span className="block text-sm font-medium">We recommend exporting a backup before proceeding.</span>
@@ -1062,8 +884,6 @@ export const Settings: React.FC<SettingsProps> = ({
                       onResetLibrary();
                     } else if (deleteMode === 'account' && onDeleteAccount) {
                       onDeleteAccount();
-                    } else if (deleteMode === 'cache' && onClearLocalCache) {
-                      onClearLocalCache();
                     }
                     setShowDeleteConfirmation(false);
                   }}
@@ -1072,9 +892,7 @@ export const Settings: React.FC<SettingsProps> = ({
                     ? 'Yes, Delete Library'
                     : deleteMode === 'reset'
                       ? 'Yes, Reset Library'
-                      : deleteMode === 'account'
-                        ? 'Yes, Delete Account'
-                        : 'Yes, Clear Local Cache'}
+                      : 'Yes, Delete Account'}
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>

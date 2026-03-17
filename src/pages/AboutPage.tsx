@@ -79,7 +79,7 @@ const AboutPage = () => {
                       <li>Moved books, series, collections, upcoming releases, notifications, and user settings to per-user remote storage</li>
                       <li>Added ownership enforcement so one user cannot access another user&apos;s records</li>
                       <li>Added one-time legacy IndexedDB import with migration summary, retry flow, and duplicate protection</li>
-                      <li>Added delete library, reset library, clear local cache, and delete account actions for authenticated users</li>
+                      <li>Added delete library, reset library, and delete account actions for authenticated users</li>
                       <li>Updated destructive-action confirmations to reflect actual account and storage scope</li>
                     </ul>
                   </div>
@@ -372,7 +372,6 @@ const AboutPage = () => {
                 <ul className="space-y-1.5 text-sm text-muted-foreground list-disc list-inside">
                   <li><strong>Delete Library</strong> removes books while preserving series and collection structures</li>
                   <li><strong>Reset Library</strong> removes library records for the signed-in account</li>
-                  <li><strong>Clear Local Cache</strong> removes browser-only data on the current device without changing remote account data</li>
                   <li><strong>Delete Account</strong> removes the user account and all associated remote data</li>
                 </ul>
                 <p className="text-sm text-muted-foreground mt-2">

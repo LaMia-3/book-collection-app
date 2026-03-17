@@ -406,33 +406,6 @@ export function useLibrarySettings(options: UseLibrarySettingsOptions = {}) {
     }
   }, [deleteAccount, isAuthenticated, logout, onLibraryCleared, toast, updateBooks]);
 
-  const onClearLocalCache = useCallback(async () => {
-    try {
-      if (!isAuthenticated) {
-        throw new Error('Local cache clearing is only available for authenticated sessions.');
-      }
-
-      await clearAllClientLibraryData();
-
-      toast({
-        title: "Local Cache Cleared",
-        description: "Browser cache was cleared. Your account data in MongoDB was not changed.",
-      });
-
-      setTimeout(() => window.location.reload(), 500);
-
-      return Promise.resolve();
-    } catch (error) {
-      console.error('Error clearing local cache:', error);
-      toast({
-        title: "Error",
-        description: `Failed to clear local cache: ${error instanceof Error ? error.message : String(error)}`,
-        variant: "destructive",
-      });
-      return Promise.reject(error);
-    }
-  }, [isAuthenticated, toast]);
-
   const onImportCSV = useCallback(async (file: File) => {
     try {
       const { importFromCSV } = await import('@/utils/importUtils');
@@ -636,7 +609,6 @@ export function useLibrarySettings(options: UseLibrarySettingsOptions = {}) {
     isOpen: showSettings,
     onClose: () => setShowSettings(false),
     books,
-    onClearLocalCache,
     onDeleteAccount,
     onDeleteLibrary,
     onResetLibrary,
@@ -655,7 +627,6 @@ export function useLibrarySettings(options: UseLibrarySettingsOptions = {}) {
     // Expose individual actions if pages need them directly
     onDeleteLibrary,
     onDeleteAccount,
-    onClearLocalCache,
     onResetLibrary,
     onImportCSV,
     onImportJSON,
