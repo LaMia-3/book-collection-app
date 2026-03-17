@@ -159,6 +159,11 @@ export class EnhancedStorageService {
       try {
         // Initialize the IndexedDB service
         await this.db.initDb();
+
+        // Run one schema health check on startup so older browser databases
+        // are repaired before the first real read floods the console.
+        await this.db.checkAndRepairDatabase();
+        await this.db.initDb();
         
         // Set initialization flag
         this.isInitialized = true;

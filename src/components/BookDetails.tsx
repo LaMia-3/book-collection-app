@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, KeyboardEvent, useCallback } from "react";
+import React, { Suspense, useState, useEffect, useRef, KeyboardEvent, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Book } from "@/types/book";
 import { Series } from "@/types/series";
@@ -45,9 +45,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { SeriesInfoPanel } from '@/components/series/SeriesInfoPanel';
-import { SeriesAssignmentDialog } from '@/components/dialogs/SeriesAssignmentDialog';
-import { CreateSeriesDialog } from '@/components/series/CreateSeriesDialog';
-import BookCollectionAssignment from '@/components/BookCollectionAssignment';
 import { cn } from "@/lib/utils";
 import { cleanHtml } from "@/utils/textUtils";
 import { format, parse, isValid } from "date-fns";
@@ -74,6 +71,20 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { SeriesCreationData } from "@/types/series";
+
+const SeriesAssignmentDialog = React.lazy(() =>
+  import('@/components/dialogs/SeriesAssignmentDialog').then((module) => ({
+    default: module.SeriesAssignmentDialog,
+  }))
+);
+
+const CreateSeriesDialog = React.lazy(() =>
+  import('@/components/series/CreateSeriesDialog').then((module) => ({
+    default: module.CreateSeriesDialog,
+  }))
+);
+
+const BookCollectionAssignment = React.lazy(() => import('@/components/BookCollectionAssignment'));
 
 interface BookDetailsProps {
   book: Book;
@@ -1860,23 +1871,25 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
             {showCollectionsInfo && (
               <div className="bg-muted/30 p-4 rounded-md border">
                 {/* Only allow collection management in edit mode */}
-                {isViewMode ? (
-                  <BookCollectionAssignment 
-                    book={book} 
-                    onCollectionsUpdated={() => {
-                      // Refresh the book data after collections are updated
-                      onUpdate(editedBook);
-                    }}
-                  />
-                ) : (
-                  <BookCollectionAssignment 
-                    book={editedBook} 
-                    onCollectionsUpdated={() => {
-                      // Refresh the book data after collections are updated
-                      setEditedBook({...editedBook});
-                    }}
-                  />
-                )}
+                <Suspense fallback={<div className="text-sm text-muted-foreground">Loading collections...</div>}>
+                  {isViewMode ? (
+                    <BookCollectionAssignment 
+                      book={book} 
+                      onCollectionsUpdated={() => {
+                        // Refresh the book data after collections are updated
+                        onUpdate(editedBook);
+                      }}
+                    />
+                  ) : (
+                    <BookCollectionAssignment 
+                      book={editedBook} 
+                      onCollectionsUpdated={() => {
+                        // Refresh the book data after collections are updated
+                        setEditedBook({...editedBook});
+                      }}
+                    />
+                  )}
+                </Suspense>
               </div>
             )}
           </div>
@@ -2091,31 +2104,35 @@ export const BookDetails = ({ book, onUpdate, onDelete, onClose }: BookDetailsPr
           </AlertDialog>
           
           {/* Series Assignment Dialog */}
-          <SeriesAssignmentDialog
-            open={showSeriesAssignmentDialog}
-            onOpenChange={setShowSeriesAssignmentDialog}
-            book={book}
-            existingBooks={availableSeries.length > 0 ? availableSeries.map(s => ({ ...book, id: s.id })) : []}
-            detectedSeries={seriesDetectionResult}
-            onAssignSeries={handleAssignSeries}
-            onCreateNewSeries={handleCreateNewSeries}
-            mode="change"
-            currentBookSeriesId={selectedSeriesId}
-          />
+          <Suspense fallback={null}>
+            <SeriesAssignmentDialog
+              open={showSeriesAssignmentDialog}
+              onOpenChange={setShowSeriesAssignmentDialog}
+              book={book}
+              existingBooks={availableSeries.length > 0 ? availableSeries.map(s => ({ ...book, id: s.id })) : []}
+              detectedSeries={seriesDetectionResult}
+              onAssignSeries={handleAssignSeries}
+              onCreateNewSeries={handleCreateNewSeries}
+              mode="change"
+              currentBookSeriesId={selectedSeriesId}
+            />
+          </Suspense>
           
           {/* Create Series Dialog */}
-          <CreateSeriesDialog
-            open={showCreateSeriesDialog}
-            onOpenChange={setShowCreateSeriesDialog}
-            onSeriesCreated={(newSeries) => {
-              // Associate current book with new series
-              handleAssignSeries(book, newSeries.id);
-              toast({
-                title: "Book added to new series",
-                description: `Successfully added "${book.title}" to "${newSeries.name}" series`
-              });
-            }}
-          />
+          <Suspense fallback={null}>
+            <CreateSeriesDialog
+              open={showCreateSeriesDialog}
+              onOpenChange={setShowCreateSeriesDialog}
+              onSeriesCreated={(newSeries) => {
+                // Associate current book with new series
+                handleAssignSeries(book, newSeries.id);
+                toast({
+                  title: "Book added to new series",
+                  description: `Successfully added "${book.title}" to "${newSeries.name}" series`
+                });
+              }}
+            />
+          </Suspense>
         </CardContent>
       </Card>
       </DialogContent>
