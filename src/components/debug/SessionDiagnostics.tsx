@@ -131,6 +131,7 @@ export function SessionDiagnostics() {
               <p><span className="font-medium">Email:</span> {user?.email || 'Not signed in'}</p>
               <p><span className="font-medium">User ID:</span> {user?.id || 'Not signed in'}</p>
               <p><span className="font-medium">Role:</span> {user?.role || 'Not signed in'}</p>
+              <p><span className="font-medium">Last Login:</span> {user?.lastLoginAt ? new Date(user.lastLoginAt).toLocaleString() : 'Not recorded'}</p>
               <p><span className="font-medium">Preferred Name:</span> {user?.preferredName || 'Not set'}</p>
             </div>
           </div>

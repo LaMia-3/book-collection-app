@@ -13,6 +13,7 @@ export type UserDocument = {
   preferredName?: string;
   role?: UserRole;
   createdAt: Date;
+  lastLoginAt?: Date;
   sessionInvalidBefore?: Date;
   updatedAt: Date;
 };
@@ -23,6 +24,7 @@ export type PublicUser = {
   preferredName?: string;
   role: UserRole;
   createdAt: string;
+  lastLoginAt?: string;
   updatedAt: string;
 };
 
@@ -105,6 +107,32 @@ export const updateUserPasswordById = async (
   );
 
   return result.matchedCount === 1;
+};
+
+export const updateUserLastLoginById = async (
+  id: string,
+): Promise<UserDocument | null> => {
+  if (!ObjectId.isValid(id)) {
+    return null;
+  }
+
+  const usersCollection = await getUsersCollection();
+  const now = new Date();
+  const result = await usersCollection.updateOne(
+    { _id: new ObjectId(id) },
+    {
+      $set: {
+        lastLoginAt: now,
+        updatedAt: now,
+      },
+    },
+  );
+
+  if (result.matchedCount !== 1) {
+    return null;
+  }
+
+  return findUserById(id);
 };
 
 export const updateUserEmailById = async (
@@ -225,6 +253,7 @@ export const toPublicUser = (user: UserDocument): PublicUser => {
     preferredName: user.preferredName,
     role: user.role || "user",
     createdAt: user.createdAt.toISOString(),
+    lastLoginAt: user.lastLoginAt?.toISOString(),
     updatedAt: user.updatedAt.toISOString(),
   };
 };

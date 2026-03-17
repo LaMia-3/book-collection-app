@@ -35,6 +35,36 @@ type PasswordResetValidationResponse = {
   expiresAt: string;
 };
 
+type AdminUserDetailResponse = {
+  user: AuthUser;
+  counts: {
+    books: number;
+    series: number;
+    collections: number;
+    upcomingReleases: number;
+    notifications: number;
+  };
+  hasUserSettings: boolean;
+};
+
+type AdminDeleteAccountResponse = {
+  success: boolean;
+  deletedUser: {
+    id: string;
+    email: string;
+    preferredName?: string;
+    role: "user" | "admin";
+  };
+  summary: {
+    books: number;
+    series: number;
+    collections: number;
+    upcomingReleases: number;
+    notifications: number;
+    userSettings: number;
+  };
+};
+
 type BookRecord = {
   id: string;
   title: string;
@@ -248,19 +278,18 @@ export const authApi = {
       method: "GET",
     }),
   getAdminUserDetail: (userId: string) =>
-    apiRequest<{
-      user: AuthUser;
-      counts: {
-        books: number;
-        series: number;
-        collections: number;
-        upcomingReleases: number;
-        notifications: number;
-      };
-      hasUserSettings: boolean;
-    }>(`/auth/admin-user-detail?userId=${encodeURIComponent(userId)}`, {
+    apiRequest<AdminUserDetailResponse>(
+      `/auth/admin-user-detail?userId=${encodeURIComponent(userId)}`,
+      {
+        auth: true,
+        method: "GET",
+      },
+    ),
+  adminDeleteAccount: (payload: { userId: string }) =>
+    apiRequest<AdminDeleteAccountResponse>("/auth/admin-delete-account", {
       auth: true,
-      method: "GET",
+      method: "POST",
+      body: payload,
     }),
   changeEmail: (payload: { currentPassword: string; email: string }) =>
     apiRequest<AuthResponse>("/auth/change-email", {

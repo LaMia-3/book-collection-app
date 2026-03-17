@@ -28,6 +28,7 @@ import {
   listUsers,
   toPublicUser,
   updateUserEmailById,
+  updateUserLastLoginById,
   updateUserPasswordById,
 } from "../../src/server/models/user.js";
 import { getBooksCollection } from "../../src/server/models/book.js";
@@ -50,6 +51,16 @@ type AuthRequestBody = {
   otp?: string;
   password?: string;
   preferredName?: string;
+  userId?: string;
+};
+
+type DeletedAccountSummary = {
+  books: number;
+  series: number;
+  collections: number;
+  upcomingReleases: number;
+  notifications: number;
+  userSettings: number;
 };
 
 const getRequestBody = (request: VercelRequest): AuthRequestBody => {
@@ -86,6 +97,57 @@ const getQueryValue = (
 
 const getResetOtp = (value: string | undefined): string => {
   return (value || "").trim();
+};
+
+const deleteOwnedUserData = async (
+  userId: string,
+): Promise<DeletedAccountSummary> => {
+  const [
+    booksCollection,
+    seriesCollection,
+    collectionsCollection,
+    upcomingReleasesCollection,
+    notificationsCollection,
+    userSettingsCollection,
+  ] = await Promise.all([
+    getBooksCollection(),
+    getSeriesCollection(),
+    getCollectionsCollection(),
+    getUpcomingReleasesCollection(),
+    getNotificationsCollection(),
+    getUserSettingsCollection(),
+  ]);
+
+  const [
+    booksResult,
+    seriesResult,
+    collectionsResult,
+    upcomingReleasesResult,
+    notificationsResult,
+    userSettingsResult,
+  ] = await Promise.all([
+    booksCollection.deleteMany({ userId }),
+    seriesCollection.deleteMany({ userId }),
+    collectionsCollection.deleteMany({ userId }),
+    upcomingReleasesCollection.deleteMany({ userId }),
+    notificationsCollection.deleteMany({ userId }),
+    userSettingsCollection.deleteMany({ userId }),
+  ]);
+
+  const userDeleted = await deleteUserById(userId);
+
+  if (!userDeleted) {
+    throw new ApiError(500, "INTERNAL_SERVER_ERROR", "Failed to delete account.");
+  }
+
+  return {
+    books: booksResult.deletedCount,
+    series: seriesResult.deletedCount,
+    collections: collectionsResult.deletedCount,
+    upcomingReleases: upcomingReleasesResult.deletedCount,
+    notifications: notificationsResult.deletedCount,
+    userSettings: userSettingsResult.deletedCount,
+  };
 };
 
 const handleRegister = async (
@@ -154,14 +216,20 @@ const handleLogin = async (
     throw new ApiError(401, "UNAUTHORIZED", "Invalid credentials.");
   }
 
+  const loggedInUser = await updateUserLastLoginById(user._id!.toString());
+
+  if (!loggedInUser?._id) {
+    throw new ApiError(500, "INTERNAL_SERVER_ERROR", "Failed to update login state.");
+  }
+
   const token = signAuthToken({
-    sub: user._id!.toString(),
-    email: user.email,
+    sub: loggedInUser._id.toString(),
+    email: loggedInUser.email,
   });
 
   return sendJson(response, 200, {
     token,
-    user: toPublicUser(user),
+    user: toPublicUser(loggedInUser),
   });
 };
 
@@ -198,38 +266,9 @@ const handleDeleteAccount = async (
     throw new ApiError(404, "NOT_FOUND", "User not found.");
   }
 
-  const [
-    booksCollection,
-    seriesCollection,
-    collectionsCollection,
-    upcomingReleasesCollection,
-    notificationsCollection,
-    userSettingsCollection,
-  ] = await Promise.all([
-    getBooksCollection(),
-    getSeriesCollection(),
-    getCollectionsCollection(),
-    getUpcomingReleasesCollection(),
-    getNotificationsCollection(),
-    getUserSettingsCollection(),
-  ]);
+  const summary = await deleteOwnedUserData(authUser.sub);
 
-  await Promise.all([
-    booksCollection.deleteMany({ userId: authUser.sub }),
-    seriesCollection.deleteMany({ userId: authUser.sub }),
-    collectionsCollection.deleteMany({ userId: authUser.sub }),
-    upcomingReleasesCollection.deleteMany({ userId: authUser.sub }),
-    notificationsCollection.deleteMany({ userId: authUser.sub }),
-    userSettingsCollection.deleteMany({ userId: authUser.sub }),
-  ]);
-
-  const userDeleted = await deleteUserById(authUser.sub);
-
-  if (!userDeleted) {
-    throw new ApiError(500, "INTERNAL_SERVER_ERROR", "Failed to delete account.");
-  }
-
-  return sendJson(response, 200, { success: true });
+  return sendJson(response, 200, { success: true, summary });
 };
 
 const handleAdminUsers = async (
@@ -313,6 +352,55 @@ const handleAdminUserDetail = async (
       notifications,
     },
     hasUserSettings: hasUserSettings > 0,
+  });
+};
+
+const handleAdminDeleteAccount = async (
+  request: VercelRequest,
+  response: VercelResponse,
+): Promise<VercelResponse> => {
+  if (request.method !== "POST") {
+    return methodNotAllowed(response, ["POST"]);
+  }
+
+  const adminUser = await requireAdminUser(request);
+  const body = getRequestBody(request);
+  const userId = (body.userId || "").trim();
+
+  if (!userId) {
+    throw new ApiError(400, "BAD_REQUEST", "User ID is required.");
+  }
+
+  if (userId === adminUser.sub) {
+    throw new ApiError(
+      403,
+      "FORBIDDEN",
+      "Admins cannot delete their own account.",
+    );
+  }
+
+  const user = await findUserById(userId);
+
+  if (!user) {
+    throw new ApiError(404, "NOT_FOUND", "User not found.");
+  }
+
+  const summary = await deleteOwnedUserData(userId);
+
+  console.info("[ADMIN] Account deleted", {
+    adminUserId: adminUser.sub,
+    deletedUserId: userId,
+  });
+
+  return sendJson(response, 200, {
+    success: true,
+    deletedUser: {
+      id: user._id!.toString(),
+      email: user.email,
+      preferredName: user.preferredName,
+      role: user.role || "user",
+    },
+    summary,
   });
 };
 
@@ -573,6 +661,10 @@ export default async function handler(
 
     if (action === "admin-user-detail") {
       return handleAdminUserDetail(request, response);
+    }
+
+    if (action === "admin-delete-account") {
+      return handleAdminDeleteAccount(request, response);
     }
 
     if (action === "change-email") {

@@ -3,7 +3,19 @@ import { useLocation } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, Database, HardDrive, RefreshCw, UserCircle, Wrench } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { AlertCircle, Database, HardDrive, RefreshCw, Trash2, UserCircle, Wrench } from "lucide-react";
 import { PageHeader } from '@/components/ui/page-header';
 import { DatabaseRepairUtility } from '@/components/debug/DatabaseRepairUtility';
 import { SessionDiagnostics } from '@/components/debug/SessionDiagnostics';
@@ -12,6 +24,7 @@ import { MigrationDiagnostics } from '@/components/debug/MigrationDiagnostics';
 import { IndexedDBViewer } from '@/components/debug/IndexedDBViewer';
 import { useSettings } from '@/contexts/SettingsContext';
 import { useAuth } from '@/hooks/useAuth';
+import { useToast } from '@/hooks/use-toast';
 import { ApiClientError, authApi } from '@/lib/apiClient';
 import type { AuthUser } from '@/lib/auth-storage';
 
@@ -47,8 +60,12 @@ export default function AdminPage() {
   } | null>(null);
   const [selectedUserError, setSelectedUserError] = useState<string | null>(null);
   const [isLoadingSelectedUser, setIsLoadingSelectedUser] = useState(false);
+  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
+  const [deleteConfirmationValue, setDeleteConfirmationValue] = useState('');
+  const [isDeletingSelectedUser, setIsDeletingSelectedUser] = useState(false);
   const { settings } = useSettings();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
+  const { toast } = useToast();
 
   useEffect(() => {
     const loadUsers = async () => {
@@ -98,6 +115,52 @@ export default function AdminPage() {
 
     void loadSelectedUser();
   }, [selectedUserId]);
+
+  const selectedUserIsCurrentAdmin = selectedUserDetail?.user.id === user?.id;
+  const deleteConfirmationMatches =
+    deleteConfirmationValue.trim().toLowerCase() ===
+    (selectedUserDetail?.user.email || '').trim().toLowerCase();
+
+  const handleDeleteSelectedUser = async () => {
+    if (!selectedUserDetail) {
+      return;
+    }
+
+    try {
+      setIsDeletingSelectedUser(true);
+
+      const result = await authApi.adminDeleteAccount({
+        userId: selectedUserDetail.user.id,
+      });
+
+      setUsers((currentUsers) =>
+        currentUsers.filter((listedUser) => listedUser.id !== selectedUserDetail.user.id),
+      );
+      setSelectedUserId(null);
+      setSelectedUserDetail(null);
+      setSelectedUserError(null);
+      setDeleteConfirmationValue('');
+      setShowDeleteConfirmation(false);
+
+      toast({
+        title: "Account deleted",
+        description: `${result.deletedUser.email} was permanently deleted. Removed ${result.summary.books} books, ${result.summary.series} series, ${result.summary.collections} collections, ${result.summary.upcomingReleases} upcoming releases, ${result.summary.notifications} notifications, and ${result.summary.userSettings} user settings documents.`,
+      });
+    } catch (error) {
+      const description =
+        error instanceof ApiClientError
+          ? error.message
+          : 'Failed to delete the selected account.';
+
+      toast({
+        variant: "destructive",
+        title: "Delete account failed",
+        description,
+      });
+    } finally {
+      setIsDeletingSelectedUser(false);
+    }
+  };
 
   return (
     <div className="container py-8 max-w-7xl">
@@ -173,6 +236,7 @@ export default function AdminPage() {
                         <div className="text-sm text-muted-foreground">
                           <p><span className="font-medium">Role:</span> {user.role}</p>
                           <p><span className="font-medium">Created:</span> {new Date(user.createdAt).toLocaleDateString()}</p>
+                          <p><span className="font-medium">Last Login:</span> {user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleString() : 'Not recorded'}</p>
                         </div>
                       </div>
                     </button>
@@ -215,6 +279,7 @@ export default function AdminPage() {
                     <div className="space-y-1 text-sm">
                       <p><span className="font-medium">User ID:</span> {selectedUserDetail.user.id}</p>
                       <p><span className="font-medium">Created:</span> {new Date(selectedUserDetail.user.createdAt).toLocaleString()}</p>
+                      <p><span className="font-medium">Last Login:</span> {selectedUserDetail.user.lastLoginAt ? new Date(selectedUserDetail.user.lastLoginAt).toLocaleString() : 'Not recorded'}</p>
                       <p><span className="font-medium">User Settings:</span> {selectedUserDetail.hasUserSettings ? 'Present' : 'None found'}</p>
                     </div>
                   </div>
@@ -239,6 +304,39 @@ export default function AdminPage() {
                     <div className="rounded-lg border p-4">
                       <p className="text-sm text-muted-foreground">Notifications</p>
                       <p className="mt-2 text-2xl font-semibold">{selectedUserDetail.counts.notifications}</p>
+                    </div>
+                  </div>
+
+                  <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4">
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="space-y-2">
+                        <h3 className="flex items-center gap-2 font-semibold text-destructive">
+                          <Trash2 className="h-4 w-4" />
+                          Delete Account
+                        </h3>
+                        <p className="text-sm text-muted-foreground">
+                          This permanently deletes the selected user account and all remote data owned by that user. This action cannot be undone.
+                        </p>
+                        <div className="text-sm text-muted-foreground">
+                          <p>Deletion summary:</p>
+                          <p>{selectedUserDetail.counts.books} books, {selectedUserDetail.counts.series} series, {selectedUserDetail.counts.collections} collections</p>
+                          <p>{selectedUserDetail.counts.upcomingReleases} upcoming releases, {selectedUserDetail.counts.notifications} notifications, {selectedUserDetail.hasUserSettings ? 1 : 0} user settings documents</p>
+                        </div>
+                        {selectedUserIsCurrentAdmin ? (
+                          <p className="text-sm font-medium text-destructive">
+                            Admins cannot delete their own account.
+                          </p>
+                        ) : null}
+                      </div>
+
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        onClick={() => setShowDeleteConfirmation(true)}
+                        disabled={selectedUserIsCurrentAdmin || isDeletingSelectedUser}
+                      >
+                        Delete Account
+                      </Button>
                     </div>
                   </div>
                 </div>
@@ -368,6 +466,67 @@ export default function AdminPage() {
 
       </Tabs>
       </PageHeader>
+
+      <AlertDialog
+        open={showDeleteConfirmation}
+        onOpenChange={(open) => {
+          setShowDeleteConfirmation(open);
+
+          if (!open) {
+            setDeleteConfirmationValue('');
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+              <Trash2 className="h-5 w-5" />
+              Permanently Delete Account
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-4 text-sm text-muted-foreground">
+                <p>
+                  This permanently deletes <span className="font-medium text-foreground">{selectedUserDetail?.user.email}</span> and all remote data owned by that account.
+                </p>
+                <div className="rounded-md border bg-muted/40 p-3">
+                  <p className="font-medium text-foreground">Deletion summary</p>
+                  <p>Books: {selectedUserDetail?.counts.books || 0}</p>
+                  <p>Series: {selectedUserDetail?.counts.series || 0}</p>
+                  <p>Collections: {selectedUserDetail?.counts.collections || 0}</p>
+                  <p>Upcoming Releases: {selectedUserDetail?.counts.upcomingReleases || 0}</p>
+                  <p>Notifications: {selectedUserDetail?.counts.notifications || 0}</p>
+                  <p>User Settings: {selectedUserDetail?.hasUserSettings ? 1 : 0}</p>
+                </div>
+                <div className="space-y-2">
+                  <label htmlFor="admin-delete-confirmation" className="font-medium text-foreground">
+                    Type the user email to confirm
+                  </label>
+                  <Input
+                    id="admin-delete-confirmation"
+                    value={deleteConfirmationValue}
+                    onChange={(event) => setDeleteConfirmationValue(event.target.value)}
+                    placeholder={selectedUserDetail?.user.email || 'user@example.com'}
+                    autoComplete="off"
+                  />
+                </div>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeletingSelectedUser}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(event) => {
+                event.preventDefault();
+                void handleDeleteSelectedUser();
+              }}
+              disabled={!deleteConfirmationMatches || isDeletingSelectedUser || selectedUserIsCurrentAdmin}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeletingSelectedUser ? 'Deleting…' : 'Delete Permanently'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

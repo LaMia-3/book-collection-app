@@ -4,6 +4,7 @@ export type AuthUser = {
   preferredName?: string;
   role: "user" | "admin";
   createdAt: string;
+  lastLoginAt?: string;
   updatedAt: string;
 };
 
