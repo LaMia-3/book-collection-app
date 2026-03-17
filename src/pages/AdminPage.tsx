@@ -3,14 +3,13 @@ import { useLocation } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, Database, HardDrive, RefreshCw, UserCircle, Wrench, Zap } from "lucide-react";
+import { AlertCircle, Database, HardDrive, RefreshCw, UserCircle, Wrench } from "lucide-react";
 import { PageHeader } from '@/components/ui/page-header';
 import { DatabaseRepairUtility } from '@/components/debug/DatabaseRepairUtility';
 import { SessionDiagnostics } from '@/components/debug/SessionDiagnostics';
 import { MigrationDiagnostics } from '@/components/debug/MigrationDiagnostics';
 
 import { IndexedDBViewer } from '@/components/debug/IndexedDBViewer';
-import WorkflowTester from '@/components/debug/WorkflowTester';
 import { useSettings } from '@/contexts/SettingsContext';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -21,7 +20,6 @@ import { useAuth } from '@/hooks/useAuth';
  * 1. Database Viewer - View and inspect IndexedDB data
  * 2. Database Repair - Diagnose and fix database issues
  * 3. User Settings - View user settings
- * 4. Workflow Test - Test library workflows
  */
 export default function AdminPage() {
   // Get tab from URL query parameter if available
@@ -61,10 +59,6 @@ export default function AdminPage() {
           <TabsTrigger value="repair" className="flex items-center gap-2">
             <Wrench className="h-4 w-4" />
             <span>Repair</span>
-          </TabsTrigger>
-          <TabsTrigger value="workflow-test" className="flex items-center gap-2">
-            <Zap className="h-4 w-4" />
-            <span>Workflow Test</span>
           </TabsTrigger>
         </TabsList>
 
@@ -191,19 +185,6 @@ export default function AdminPage() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="workflow-test">
-          <Card>
-            <CardHeader>
-              <CardTitle>Library Workflow Tester</CardTitle>
-              <CardDescription>
-                Development tool for exercising sample library flows. Use this to probe workflow behavior without assuming IndexedDB is the primary database.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <WorkflowTester />
-            </CardContent>
-          </Card>
-        </TabsContent>
       </Tabs>
       </PageHeader>
     </div>
