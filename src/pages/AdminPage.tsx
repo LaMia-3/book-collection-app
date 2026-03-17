@@ -45,6 +45,7 @@ export default function AdminPage() {
   const [activeTab, setActiveTab] = useState(tabParam || 'account');
   const [isLoadingUsers, setIsLoadingUsers] = useState(true);
   const [users, setUsers] = useState<AuthUser[]>([]);
+  const [userFilterQuery, setUserFilterQuery] = useState('');
   const [usersError, setUsersError] = useState<string | null>(null);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [selectedUserDetail, setSelectedUserDetail] = useState<{
@@ -131,6 +132,18 @@ export default function AdminPage() {
   const deleteConfirmationMatches =
     deleteConfirmationValue.trim().toLowerCase() ===
     (selectedUserDetail?.user.email || '').trim().toLowerCase();
+  const normalizedUserFilterQuery = userFilterQuery.trim().toLowerCase();
+  const filteredUsers = users.filter((listedUser) => {
+    if (!normalizedUserFilterQuery) {
+      return true;
+    }
+
+    return [
+      listedUser.email,
+      listedUser.preferredName || '',
+      listedUser.role,
+    ].some((value) => value.toLowerCase().includes(normalizedUserFilterQuery));
+  });
 
   const handleSelectedUserRoleChange = async (role: 'user' | 'admin') => {
     if (!selectedUserDetail) {
@@ -308,32 +321,45 @@ export default function AdminPage() {
                 <p className="text-sm text-muted-foreground">Loading users…</p>
               ) : (
                 <div className="space-y-3">
-                  {users.map((user) => (
-                    <button
-                      key={user.id}
-                      type="button"
-                      onClick={() => setSelectedUserId(user.id)}
-                      className={`w-full rounded-lg border p-4 text-left transition-colors ${
-                        selectedUserId === user.id
-                          ? 'border-primary bg-primary/5'
-                          : 'hover:bg-muted/40'
-                      }`}
-                    >
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div>
-                          <p className="font-medium">{user.email}</p>
-                          <p className="text-sm text-muted-foreground">
-                            {user.preferredName || 'No preferred name'}
-                          </p>
+                  <Input
+                    value={userFilterQuery}
+                    onChange={(event) => setUserFilterQuery(event.target.value)}
+                    placeholder="Filter by email, preferred name, or role"
+                    aria-label="Filter users"
+                  />
+
+                  {filteredUsers.length === 0 ? (
+                    <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                      No users match this filter.
+                    </p>
+                  ) : (
+                    filteredUsers.map((user) => (
+                      <button
+                        key={user.id}
+                        type="button"
+                        onClick={() => setSelectedUserId(user.id)}
+                        className={`w-full rounded-lg border p-4 text-left transition-colors ${
+                          selectedUserId === user.id
+                            ? 'border-primary bg-primary/5'
+                            : 'hover:bg-muted/40'
+                        }`}
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div>
+                            <p className="font-medium">{user.email}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {user.preferredName || 'No preferred name'}
+                            </p>
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            <p><span className="font-medium">Role:</span> {user.role}</p>
+                            <p><span className="font-medium">Created:</span> {new Date(user.createdAt).toLocaleDateString()}</p>
+                            <p><span className="font-medium">Last Login:</span> {user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleString() : 'Not recorded'}</p>
+                          </div>
                         </div>
-                        <div className="text-sm text-muted-foreground">
-                          <p><span className="font-medium">Role:</span> {user.role}</p>
-                          <p><span className="font-medium">Created:</span> {new Date(user.createdAt).toLocaleDateString()}</p>
-                          <p><span className="font-medium">Last Login:</span> {user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleString() : 'Not recorded'}</p>
-                        </div>
-                      </div>
-                    </button>
-                  ))}
+                      </button>
+                    ))
+                  )}
                 </div>
               )}
             </CardContent>
