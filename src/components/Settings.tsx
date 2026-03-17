@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
+import { PasswordInput } from '@/components/ui/password-input';
 import { Separator } from '@/components/ui/separator';
 import { Card } from '@/components/ui/card';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -469,13 +470,7 @@ export const Settings: React.FC<SettingsProps> = ({
 
                   <Separator />
 
-                  <div>
-                    <h4 className="text-md font-medium mb-3 flex items-center gap-2">
-                      <Trophy className="h-4 w-4 text-amber-500" />
-                      Reading Goals
-                    </h4>
-                    <GoalsTab />
-                  </div>
+                  <GoalsTab />
                 </div>
               </TabsContent>
 
@@ -665,9 +660,8 @@ export const Settings: React.FC<SettingsProps> = ({
 
                       <div className="grid gap-2">
                         <label htmlFor="email-current-password" className="text-sm font-medium">Current Password</label>
-                        <input
+                        <PasswordInput
                           id="email-current-password"
-                          type="password"
                           autoComplete="current-password"
                           className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                           value={emailCurrentPassword}
@@ -698,9 +692,8 @@ export const Settings: React.FC<SettingsProps> = ({
                     <form className="space-y-4" onSubmit={handlePasswordChange}>
                       <div className="grid gap-2">
                         <label htmlFor="password-current-password" className="text-sm font-medium">Current Password</label>
-                        <input
+                        <PasswordInput
                           id="password-current-password"
-                          type="password"
                           autoComplete="current-password"
                           className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                           value={passwordCurrentPassword}
@@ -710,9 +703,8 @@ export const Settings: React.FC<SettingsProps> = ({
 
                       <div className="grid gap-2">
                         <label htmlFor="new-password" className="text-sm font-medium">New Password</label>
-                        <input
+                        <PasswordInput
                           id="new-password"
-                          type="password"
                           autoComplete="new-password"
                           className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                           value={newPassword}
@@ -722,9 +714,8 @@ export const Settings: React.FC<SettingsProps> = ({
 
                       <div className="grid gap-2">
                         <label htmlFor="confirm-new-password" className="text-sm font-medium">Confirm New Password</label>
-                        <input
+                        <PasswordInput
                           id="confirm-new-password"
-                          type="password"
                           autoComplete="new-password"
                           className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                           value={confirmNewPassword}

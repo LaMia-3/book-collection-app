@@ -10,6 +10,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { useAuth } from "@/hooks/useAuth";
 
 export default function RegisterPage() {
@@ -82,11 +83,10 @@ export default function RegisterPage() {
                 <label className="text-sm font-medium" htmlFor="password">
                   Password
                 </label>
-                <Input
+                <PasswordInput
                   autoComplete="new-password"
                   id="password"
                   onChange={(event) => setPassword(event.target.value)}
-                  type="password"
                   value={password}
                 />
               </div>

@@ -11,6 +11,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { ApiClientError, authApi } from "@/lib/apiClient";
 
 export default function ResetPasswordPage() {
@@ -160,11 +161,10 @@ export default function ResetPasswordPage() {
                       <label className="text-sm font-medium" htmlFor="password">
                         New Password
                       </label>
-                      <Input
+                      <PasswordInput
                         autoComplete="new-password"
                         id="password"
                         onChange={(event) => setPassword(event.target.value)}
-                        type="password"
                         value={password}
                       />
                     </div>
@@ -176,13 +176,12 @@ export default function ResetPasswordPage() {
                       >
                         Confirm Password
                       </label>
-                      <Input
+                      <PasswordInput
                         autoComplete="new-password"
                         id="passwordConfirmation"
                         onChange={(event) =>
                           setPasswordConfirmation(event.target.value)
                         }
-                        type="password"
                         value={passwordConfirmation}
                       />
                     </div>
