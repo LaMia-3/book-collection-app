@@ -21,6 +21,7 @@ import {
   requireAuthenticatedUser,
 } from "../../src/server/middleware/auth.js";
 import {
+  countAdmins,
   findUserByEmail,
   findUserById,
   deleteUserById,
@@ -51,6 +52,7 @@ type AuthRequestBody = {
   otp?: string;
   password?: string;
   preferredName?: string;
+  role?: "user" | "admin";
   userId?: string;
 };
 
@@ -404,6 +406,77 @@ const handleAdminDeleteAccount = async (
   });
 };
 
+const handleAdminSetRole = async (
+  request: VercelRequest,
+  response: VercelResponse,
+): Promise<VercelResponse> => {
+  if (request.method !== "POST") {
+    return methodNotAllowed(response, ["POST"]);
+  }
+
+  const adminUser = await requireAdminUser(request);
+  const body = getRequestBody(request);
+  const userId = (body.userId || "").trim();
+  const role = body.role;
+
+  if (!userId) {
+    throw new ApiError(400, "BAD_REQUEST", "User ID is required.");
+  }
+
+  if (role !== "user" && role !== "admin") {
+    throw new ApiError(400, "BAD_REQUEST", "A valid role is required.");
+  }
+
+  const user = await findUserById(userId);
+
+  if (!user) {
+    throw new ApiError(404, "NOT_FOUND", "User not found.");
+  }
+
+  const currentRole = user.role || "user";
+
+  if (currentRole === role) {
+    throw new ApiError(400, "BAD_REQUEST", "That user already has this role.");
+  }
+
+  if (userId === adminUser.sub) {
+    throw new ApiError(
+      403,
+      "FORBIDDEN",
+      "Admins cannot change their own admin role.",
+    );
+  }
+
+  if (currentRole === "admin" && role === "user") {
+    const adminCount = await countAdmins();
+
+    if (adminCount <= 1) {
+      throw new ApiError(
+        403,
+        "FORBIDDEN",
+        "You cannot remove the last remaining admin.",
+      );
+    }
+  }
+
+  const updatedUser = await updateUserRoleById(userId, role);
+
+  if (!updatedUser) {
+    throw new ApiError(500, "INTERNAL_SERVER_ERROR", "Failed to update role.");
+  }
+
+  console.info("[ADMIN] User role changed", {
+    adminUserId: adminUser.sub,
+    targetUserId: userId,
+    nextRole: role,
+  });
+
+  return sendJson(response, 200, {
+    success: true,
+    user: toPublicUser(updatedUser),
+  });
+};
+
 const handleChangeEmail = async (
   request: VercelRequest,
   response: VercelResponse,
@@ -665,6 +738,10 @@ export default async function handler(
 
     if (action === "admin-delete-account") {
       return handleAdminDeleteAccount(request, response);
+    }
+
+    if (action === "admin-set-role") {
+      return handleAdminSetRole(request, response);
     }
 
     if (action === "change-email") {

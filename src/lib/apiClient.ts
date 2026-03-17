@@ -65,6 +65,11 @@ type AdminDeleteAccountResponse = {
   };
 };
 
+type AdminSetRoleResponse = {
+  success: boolean;
+  user: AuthUser;
+};
+
 type BookRecord = {
   id: string;
   title: string;
@@ -287,6 +292,12 @@ export const authApi = {
     ),
   adminDeleteAccount: (payload: { userId: string }) =>
     apiRequest<AdminDeleteAccountResponse>("/auth/admin-delete-account", {
+      auth: true,
+      method: "POST",
+      body: payload,
+    }),
+  adminSetRole: (payload: { userId: string; role: "user" | "admin" }) =>
+    apiRequest<AdminSetRoleResponse>("/auth/admin-set-role", {
       auth: true,
       method: "POST",
       body: payload,

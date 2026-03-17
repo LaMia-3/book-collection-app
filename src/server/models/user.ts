@@ -76,6 +76,11 @@ export const listUsers = async (): Promise<UserDocument[]> => {
   return usersCollection.find({}, { sort: { createdAt: -1 } }).toArray();
 };
 
+export const countAdmins = async (): Promise<number> => {
+  const usersCollection = await getUsersCollection();
+  return usersCollection.countDocuments({ role: "admin" });
+};
+
 export const deleteUserById = async (id: string): Promise<boolean> => {
   if (!ObjectId.isValid(id)) {
     return false;

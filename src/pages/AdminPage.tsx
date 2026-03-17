@@ -60,6 +60,7 @@ export default function AdminPage() {
   } | null>(null);
   const [selectedUserError, setSelectedUserError] = useState<string | null>(null);
   const [isLoadingSelectedUser, setIsLoadingSelectedUser] = useState(false);
+  const [isUpdatingSelectedUserRole, setIsUpdatingSelectedUserRole] = useState(false);
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
   const [deleteConfirmationValue, setDeleteConfirmationValue] = useState('');
   const [isDeletingSelectedUser, setIsDeletingSelectedUser] = useState(false);
@@ -120,6 +121,54 @@ export default function AdminPage() {
   const deleteConfirmationMatches =
     deleteConfirmationValue.trim().toLowerCase() ===
     (selectedUserDetail?.user.email || '').trim().toLowerCase();
+
+  const handleSelectedUserRoleChange = async (role: 'user' | 'admin') => {
+    if (!selectedUserDetail) {
+      return;
+    }
+
+    try {
+      setIsUpdatingSelectedUserRole(true);
+
+      const result = await authApi.adminSetRole({
+        userId: selectedUserDetail.user.id,
+        role,
+      });
+
+      setUsers((currentUsers) =>
+        currentUsers.map((listedUser) =>
+          listedUser.id === result.user.id ? result.user : listedUser,
+        ),
+      );
+      setSelectedUserDetail((currentDetail) =>
+        currentDetail
+          ? {
+              ...currentDetail,
+              user: result.user,
+            }
+          : currentDetail,
+      );
+
+      toast({
+        title: role === 'admin' ? 'Admin access granted' : 'Admin access removed',
+        description:
+          role === 'admin'
+            ? `${result.user.email} is now an admin.`
+            : `${result.user.email} no longer has admin access.`,
+      });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Role update failed",
+        description:
+          error instanceof ApiClientError
+            ? error.message
+            : 'Failed to update the selected user role.',
+      });
+    } finally {
+      setIsUpdatingSelectedUserRole(false);
+    }
+  };
 
   const handleDeleteSelectedUser = async () => {
     if (!selectedUserDetail) {
@@ -304,6 +353,44 @@ export default function AdminPage() {
                     <div className="rounded-lg border p-4">
                       <p className="text-sm text-muted-foreground">Notifications</p>
                       <p className="mt-2 text-2xl font-semibold">{selectedUserDetail.counts.notifications}</p>
+                    </div>
+                  </div>
+
+                  <div className="rounded-lg border p-4">
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="space-y-2">
+                        <h3 className="font-semibold">Admin Access</h3>
+                        <p className="text-sm text-muted-foreground">
+                          Promote standard users to admin or remove admin access from other admins. Self-demotion is blocked, and the final remaining admin cannot be demoted.
+                        </p>
+                        {selectedUserIsCurrentAdmin ? (
+                          <p className="text-sm font-medium text-muted-foreground">
+                            You cannot change your own admin role from this screen.
+                          </p>
+                        ) : null}
+                      </div>
+
+                      <div className="flex flex-wrap gap-2">
+                        {selectedUserDetail.user.role === 'user' ? (
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            onClick={() => void handleSelectedUserRoleChange('admin')}
+                            disabled={selectedUserIsCurrentAdmin || isUpdatingSelectedUserRole}
+                          >
+                            {isUpdatingSelectedUserRole ? 'Updating…' : 'Promote to Admin'}
+                          </Button>
+                        ) : (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => void handleSelectedUserRoleChange('user')}
+                            disabled={selectedUserIsCurrentAdmin || isUpdatingSelectedUserRole}
+                          >
+                            {isUpdatingSelectedUserRole ? 'Updating…' : 'Remove Admin Access'}
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   </div>
 
