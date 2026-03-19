@@ -699,15 +699,15 @@ export const Settings: React.FC<SettingsProps> = ({
 
                 <div className="space-y-6">
                   <Card className="border-destructive/20 bg-destructive/5 p-6">
-                    <h4 className="font-medium mb-2">Delete Library</h4>
+                    <h4 className="font-medium mb-2">Clear Books</h4>
                     <p className="text-sm text-muted-foreground mb-4">
                       {isAuthenticated
-                        ? 'This will delete all books from your MongoDB-backed account library, remove their references from series and collections, delete book-linked notifications, and clear stale browser cache on this device.'
-                        : 'This will remove all books from your local library, clear book references from series and collections, and keep those series and collection structures intact.'}
+                        ? 'Removes all books from your library while keeping your collections, series, and account settings.'
+                        : 'Removes all books from your local library while keeping your collections, series, and settings.'}
                     </p>
                     <ul className="list-disc pl-5 space-y-2 text-sm text-muted-foreground mb-4">
-                      <li>{isAuthenticated ? 'All account-library books will be deleted from the remote source of truth' : 'All local books will be deleted'}</li>
-                      <li>Books will be removed from series and collections</li>
+                      <li>{isAuthenticated ? 'All account-library books will be removed from the remote source of truth' : 'All local books will be removed'}</li>
+                      <li>Books will be removed from collections and series</li>
                       <li>Series and collection structures will be preserved</li>
                       {isAuthenticated && (
                         <li>This device&apos;s stale local cache will be cleared after the remote deletion completes</li>
@@ -723,21 +723,20 @@ export const Settings: React.FC<SettingsProps> = ({
                       }}
                     >
                       <Trash2 className="h-4 w-4" />
-                      Delete Library
+                      Clear Books
                     </Button>
                   </Card>
 
                   <Card className="border-destructive/20 bg-destructive/5 p-6">
-                    <h4 className="font-medium mb-2">Reset Library</h4>
+                    <h4 className="font-medium mb-2">Start Fresh</h4>
                     <p className="text-sm text-muted-foreground mb-4">
-                      This will completely reset your library by removing all books, series, collections, upcoming releases, and notifications.
+                      Clears your books, collections, series, upcoming releases, and notifications so you can begin again with an empty library.
                     </p>
                     <ul className="list-disc pl-5 space-y-2 text-sm text-muted-foreground mb-4">
-                      <li>All books will be deleted</li>
-                      <li>All series will be deleted</li>
-                      <li>All collections will be deleted</li>
-                      <li>All upcoming releases and notifications will be deleted</li>
-                      <li>You will start with a completely empty library</li>
+                      <li>All books will be removed</li>
+                      <li>All series and collections will be removed</li>
+                      <li>All upcoming releases and notifications will be removed</li>
+                      <li>Your account and settings will remain</li>
                     </ul>
 
                     <Button
@@ -749,7 +748,7 @@ export const Settings: React.FC<SettingsProps> = ({
                       }}
                     >
                       <Trash2 className="h-4 w-4" />
-                      Reset Library
+                      Start Fresh
                     </Button>
                   </Card>
                 </div>
@@ -905,9 +904,9 @@ export const Settings: React.FC<SettingsProps> = ({
                 <AlertDialogTitle className="text-destructive flex items-center gap-2">
                   <AlertTriangle className="h-5 w-5" /> 
                   {deleteMode === 'delete'
-                    ? 'Delete Library?'
+                    ? 'Clear Books?'
                     : deleteMode === 'reset'
-                      ? 'Reset Library?'
+                      ? 'Start Fresh?'
                       : 'Delete Account?'}
                 </AlertDialogTitle>
                 {/* Use a custom description to avoid DOM nesting issues */}
@@ -923,8 +922,8 @@ export const Settings: React.FC<SettingsProps> = ({
                     </>
                   ) : deleteMode === 'reset' ? (
                     <>
-                      <span className="block mb-2">Are you sure you want to completely reset your {isAuthenticated ? 'account library' : 'local library'}? This action <strong>cannot be undone</strong>.</span>
-                      <span className="block mb-4">All books, series, collections, upcoming releases, and notifications will be permanently deleted.</span>
+                      <span className="block mb-2">Are you sure you want to start fresh with your {isAuthenticated ? 'account library' : 'local library'}? This action <strong>cannot be undone</strong>.</span>
+                      <span className="block mb-4">This will permanently remove all books, series, collections, upcoming releases, and notifications from your library so you can start over.</span>
                     </>
                   ) : (
                     <>
@@ -951,9 +950,9 @@ export const Settings: React.FC<SettingsProps> = ({
                   }}
                 >
                   {deleteMode === 'delete'
-                    ? 'Yes, Delete Library'
+                    ? 'Yes, Clear Books'
                     : deleteMode === 'reset'
-                      ? 'Yes, Reset Library'
+                      ? 'Yes, Start Fresh'
                       : 'Yes, Delete Account'}
                 </AlertDialogAction>
               </AlertDialogFooter>
