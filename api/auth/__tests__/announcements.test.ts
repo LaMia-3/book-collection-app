@@ -174,12 +174,19 @@ const createRequest = (overrides: Record<string, unknown> = {}) =>
   }) as unknown as HandlerRequest;
 
 describe("system announcement routes", () => {
+  const originalVercelEnv = process.env.VERCEL_ENV;
+
   beforeEach(() => {
     jest.clearAllMocks();
+    process.env.VERCEL_ENV = "preview";
     (requireAuthenticatedUser as jest.Mock).mockResolvedValue({
       sub: "user-1",
       email: "reader@example.com",
     });
+  });
+
+  afterAll(() => {
+    process.env.VERCEL_ENV = originalVercelEnv;
   });
 
   it("returns only non-dismissed announcements and marks seen state correctly", async () => {
