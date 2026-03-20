@@ -1,4 +1,5 @@
 {
+  "buildCommand": "npm run build:vercel",
   "routes": [
     {
       "src": "/api/auth/(login|register|me|account|admin-users|admin-audit-logs|admin-system-announcements|admin-system-announcement-update|admin-system-announcement-delete|admin-user-detail|admin-delete-account|admin-set-role|admin-reset-password|system-announcements|system-announcement-seen|system-announcement-dismiss|change-email|change-preferred-name|change-password|forgot-password|verify-reset-otp|reset-password)",

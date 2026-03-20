@@ -2,12 +2,12 @@ import { VercelRequest, VercelResponse } from "@vercel/node";
 import { randomBytes } from "node:crypto";
 import { MongoServerError } from "mongodb";
 
-import { ApiError, methodNotAllowed, sendError, sendJson } from "../../src/server/lib/api-response.js";
+import { ApiError, methodNotAllowed, sendError, sendJson } from "../../src/server/lib/api-response";
 import {
   createAdminAuditLog,
   listAdminAuditLogs,
   toAdminAuditLogEntry,
-} from "../../src/server/models/admin-audit-log.js";
+} from "../../src/server/models/admin-audit-log";
 import {
   findSystemAnnouncementById,
   insertSystemAnnouncement,
@@ -20,10 +20,10 @@ import {
   toPublicSystemAnnouncement,
   updateSystemAnnouncementById,
   deleteSystemAnnouncementById,
-} from "../../src/server/models/system-announcement.js";
-import { ensureBootstrapAdminUser } from "../../src/server/lib/admin-bootstrap.js";
-import { signAuthToken } from "../../src/server/lib/auth.js";
-import { sendPasswordResetEmail } from "../../src/server/lib/email.js";
+} from "../../src/server/models/system-announcement";
+import { ensureBootstrapAdminUser } from "../../src/server/lib/admin-bootstrap";
+import { signAuthToken } from "../../src/server/lib/auth";
+import { sendPasswordResetEmail } from "../../src/server/lib/email";
 import {
   CredentialValidationError,
   hashPassword,
@@ -32,13 +32,13 @@ import {
   validatePassword,
   validateRegisterCredentials,
   verifyPassword,
-} from "../../src/server/lib/password.js";
+} from "../../src/server/lib/password";
 import {
   ForbiddenError,
   UnauthorizedError,
   requireAdminUser,
   requireAuthenticatedUser,
-} from "../../src/server/middleware/auth.js";
+} from "../../src/server/middleware/auth";
 import {
   countAdmins,
   findUserByEmail,
@@ -52,25 +52,25 @@ import {
   updateUserPasswordById,
   updateUserPreferredNameById,
   updateUserRoleById,
-} from "../../src/server/models/user.js";
-import { getBooksCollection } from "../../src/server/models/book.js";
-import { getSeriesCollection } from "../../src/server/models/series.js";
-import { getCollectionsCollection } from "../../src/server/models/collection.js";
-import { getUpcomingReleasesCollection } from "../../src/server/models/upcoming-release.js";
-import { getNotificationsCollection } from "../../src/server/models/notification.js";
-import { getUserSettingsCollection } from "../../src/server/models/user-settings.js";
+} from "../../src/server/models/user";
+import { getBooksCollection } from "../../src/server/models/book";
+import { getSeriesCollection } from "../../src/server/models/series";
+import { getCollectionsCollection } from "../../src/server/models/collection";
+import { getUpcomingReleasesCollection } from "../../src/server/models/upcoming-release";
+import { getNotificationsCollection } from "../../src/server/models/notification";
+import { getUserSettingsCollection } from "../../src/server/models/user-settings";
 import {
   dismissAnnouncement,
   getAnnouncementStateCounts,
   getUserAnnouncementStates,
   markAnnouncementSeen,
-} from "../../src/server/models/user-announcement-state.js";
+} from "../../src/server/models/user-announcement-state";
 import {
   consumePasswordResetOtp,
   createPasswordResetOtp,
   invalidatePasswordResetOtpsForUser,
   verifyPasswordResetOtp,
-} from "../../src/server/models/password-reset-otp.js";
+} from "../../src/server/models/password-reset-otp";
 
 type AuthRequestBody = {
   announcementId?: string;
@@ -585,7 +585,7 @@ const handleAdminSystemAnnouncements = async (
     });
 
     await createAdminAuditLog({
-      actorUserId: adminUser.sub,
+      actorUserId: adminUser._id.toString(),
       actorEmail: adminUser.email,
       action: "admin.announcement.created",
       targetUserId: announcement._id!.toString(),
@@ -650,7 +650,7 @@ const handleAdminSystemAnnouncementUpdate = async (
     existingAnnouncement.isActive === true && updatedAnnouncement.isActive === false;
 
   await createAdminAuditLog({
-    actorUserId: adminUser.sub,
+    actorUserId: adminUser._id.toString(),
     actorEmail: adminUser.email,
     action: becameActive
       ? "admin.announcement.activated"
@@ -703,7 +703,7 @@ const handleAdminSystemAnnouncementDelete = async (
   }
 
   await createAdminAuditLog({
-    actorUserId: adminUser.sub,
+    actorUserId: adminUser._id.toString(),
     actorEmail: adminUser.email,
     action: "admin.announcement.deleted",
     targetUserId: announcementId,
@@ -897,7 +897,7 @@ const handleAdminDeleteAccount = async (
     throw new ApiError(400, "BAD_REQUEST", "User ID is required.");
   }
 
-  if (userId === adminUser.sub) {
+  if (userId === adminUser._id.toString()) {
     throw new ApiError(
       403,
       "FORBIDDEN",
@@ -914,7 +914,7 @@ const handleAdminDeleteAccount = async (
   const summary = await deleteOwnedUserData(userId);
 
   await createAdminAuditLog({
-    actorUserId: adminUser.sub,
+    actorUserId: adminUser._id.toString(),
     actorEmail: adminUser.email,
     action: "admin.user.deleted",
     targetUserId: userId,
@@ -970,7 +970,7 @@ const handleAdminSetRole = async (
     throw new ApiError(400, "BAD_REQUEST", "That user already has this role.");
   }
 
-  if (userId === adminUser.sub) {
+  if (userId === adminUser._id.toString()) {
     throw new ApiError(
       403,
       "FORBIDDEN",
@@ -997,7 +997,7 @@ const handleAdminSetRole = async (
   }
 
   await createAdminAuditLog({
-    actorUserId: adminUser.sub,
+    actorUserId: adminUser._id.toString(),
     actorEmail: adminUser.email,
     action: role === "admin" ? "admin.user.promoted" : "admin.user.demoted",
     targetUserId: userId,
@@ -1030,7 +1030,7 @@ const handleAdminResetPassword = async (
     throw new ApiError(400, "BAD_REQUEST", "User ID is required.");
   }
 
-  if (userId === adminUser.sub) {
+  if (userId === adminUser._id.toString()) {
     throw new ApiError(
       403,
       "FORBIDDEN",
@@ -1057,7 +1057,7 @@ const handleAdminResetPassword = async (
   }
 
   await createAdminAuditLog({
-    actorUserId: adminUser.sub,
+    actorUserId: adminUser._id.toString(),
     actorEmail: adminUser.email,
     action: "admin.user.password_reset",
     targetUserId: userId,
@@ -1351,91 +1351,91 @@ export default async function handler(
     const action = resolveAction(request);
 
     if (action === "register") {
-      return handleRegister(request, response);
+      return await handleRegister(request, response);
     }
 
     if (action === "login") {
-      return handleLogin(request, response);
+      return await handleLogin(request, response);
     }
 
     if (action === "me") {
-      return handleMe(request, response);
+      return await handleMe(request, response);
     }
 
     if (action === "account") {
-      return handleDeleteAccount(request, response);
+      return await handleDeleteAccount(request, response);
     }
 
     if (action === "admin-users") {
-      return handleAdminUsers(request, response);
+      return await handleAdminUsers(request, response);
     }
 
     if (action === "admin-audit-logs") {
-      return handleAdminAuditLogs(request, response);
+      return await handleAdminAuditLogs(request, response);
     }
 
     if (action === "admin-system-announcements") {
-      return handleAdminSystemAnnouncements(request, response);
+      return await handleAdminSystemAnnouncements(request, response);
     }
 
     if (action === "admin-system-announcement-update") {
-      return handleAdminSystemAnnouncementUpdate(request, response);
+      return await handleAdminSystemAnnouncementUpdate(request, response);
     }
 
     if (action === "admin-system-announcement-delete") {
-      return handleAdminSystemAnnouncementDelete(request, response);
+      return await handleAdminSystemAnnouncementDelete(request, response);
     }
 
     if (action === "admin-user-detail") {
-      return handleAdminUserDetail(request, response);
+      return await handleAdminUserDetail(request, response);
     }
 
     if (action === "system-announcements") {
-      return handleSystemAnnouncements(request, response);
+      return await handleSystemAnnouncements(request, response);
     }
 
     if (action === "system-announcement-seen") {
-      return handleSystemAnnouncementSeen(request, response);
+      return await handleSystemAnnouncementSeen(request, response);
     }
 
     if (action === "system-announcement-dismiss") {
-      return handleSystemAnnouncementDismiss(request, response);
+      return await handleSystemAnnouncementDismiss(request, response);
     }
 
     if (action === "admin-delete-account") {
-      return handleAdminDeleteAccount(request, response);
+      return await handleAdminDeleteAccount(request, response);
     }
 
     if (action === "admin-set-role") {
-      return handleAdminSetRole(request, response);
+      return await handleAdminSetRole(request, response);
     }
 
     if (action === "admin-reset-password") {
-      return handleAdminResetPassword(request, response);
+      return await handleAdminResetPassword(request, response);
     }
 
     if (action === "change-email") {
-      return handleChangeEmail(request, response);
+      return await handleChangeEmail(request, response);
     }
 
     if (action === "change-preferred-name") {
-      return handleChangePreferredName(request, response);
+      return await handleChangePreferredName(request, response);
     }
 
     if (action === "change-password") {
-      return handleChangePassword(request, response);
+      return await handleChangePassword(request, response);
     }
 
     if (action === "forgot-password") {
-      return handleForgotPassword(request, response);
+      return await handleForgotPassword(request, response);
     }
 
     if (action === "verify-reset-otp") {
-      return handleVerifyResetOtp(request, response);
+      return await handleVerifyResetOtp(request, response);
     }
 
     if (action === "reset-password") {
-      return handleResetPassword(request, response);
+      return await handleResetPassword(request, response);
     }
 
     throw new ApiError(404, "NOT_FOUND", "Auth route not found.");

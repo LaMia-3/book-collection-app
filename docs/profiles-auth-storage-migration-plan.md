@@ -683,20 +683,56 @@ Ship the migration safely on Vercel with predictable auth and data behavior.
 
 Checklist:
 
-- [ ] Add frontend tests for auth bootstrap and protected route behavior
-- [ ] Add API tests for register, login, and `me`
-- [ ] Add API tests for per-user data ownership enforcement
-- [ ] Add tests for book CRUD through authenticated routes
-- [ ] Add tests for migration happy path
-- [ ] Add tests for migration retry and duplicate prevention
-- [ ] Add tests for destructive actions
-- [ ] Add local development setup instructions for Mongo and env vars
+### Phase 5a: Manual Production-Readiness QA
+
+- [ ] Verify auth bootstrap and protected-route behavior end to end
+- [ ] Verify login, register, logout, and `me` behavior in the deployed app
+- [ ] Verify book CRUD through the authenticated app shell
+- [ ] Verify series and collections flows end to end
+- [ ] Verify import/export flows, including JSON and backup restore behavior
+- [ ] Verify legacy migration with realistic IndexedDB/localStorage data
+- [ ] Verify destructive actions:
+  - `Clear Books`
+  - `Start Fresh`
+  - `Delete Account`
+- [ ] Verify admin actions:
+  - view/filter users
+  - inspect selected user
+  - promote/demote with safeguards
+  - admin password reset
+  - admin account deletion
+- [ ] Verify system announcements in Notifications:
+  - admin create/update/delete
+  - user seen/dismiss behavior
+  - `App Updates` / `Book Alerts` tab behavior
+- [ ] Verify paused Phase 4c password-reset flow end to end in deployed environments
+
+### Phase 5b: Deployment and Environment Verification
+
 - [ ] Add Vercel deployment configuration review
 - [ ] Verify env var names and runtime expectations in Vercel
 - [ ] Verify cold-start-safe Mongo connection behavior
 - [ ] Verify JWT behavior across local and deployed environments
-- [ ] Run full manual QA for login, CRUD, migration, export, and destructive actions
+- [ ] Verify deployed OTP email delivery and related password-reset env configuration
+- [ ] Add local development setup instructions for Mongo and env vars
+
+### Phase 5c: Automated Coverage
+
+- [x] Add frontend tests for auth bootstrap and protected route behavior
+- [x] Add API tests for register, login, and `me`
+- [x] Add API tests for per-user data ownership enforcement
+- [x] Add tests for book CRUD through authenticated routes
+- [x] Add tests for migration happy path
+- [x] Add tests for migration retry and duplicate prevention
+- [x] Add tests for destructive actions
+- [x] Add tests for admin access control and admin mutation flows
+- [x] Add tests for system announcement targeting, seen tracking, and dismiss behavior
+- [x] Add automated coverage for Phase 4e account-security flows
+
+### Phase 5d: Operations and Recovery
+
 - [ ] Document rollback or recovery strategy if migration issues are found after deploy
+- [ ] Document deployment-time verification and release signoff steps
 
 Definition of done:
 
@@ -704,6 +740,7 @@ Definition of done:
 - auth and CRUD are stable
 - migration is tested
 - operational risks are documented
+- high-risk user and admin flows have both manual QA and targeted automated coverage
 
 ## Open Decisions
 

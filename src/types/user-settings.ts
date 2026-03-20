@@ -74,6 +74,36 @@ export const mergeUserSettings = (
     return baseSettings;
   }
 
+  const baseLegacyImport = baseSettings.migration?.legacyImport;
+  const incomingLegacyImport = incomingSettings.migration?.legacyImport;
+  const mergedLegacyImport: LegacyImportStatus | undefined =
+    baseLegacyImport || incomingLegacyImport
+      ? {
+          status:
+            incomingLegacyImport?.status ||
+            baseLegacyImport?.status ||
+            'not-started',
+          ...(baseLegacyImport || {}),
+          ...(incomingLegacyImport || {}),
+          entityCounts: {
+            ...(baseLegacyImport?.entityCounts || {}),
+            ...(incomingLegacyImport?.entityCounts || {}),
+          },
+          duplicateStrategy:
+            incomingLegacyImport?.duplicateStrategy ||
+            baseLegacyImport?.duplicateStrategy ||
+            'prefer-primary-indexeddb-then-fallback-upsert-by-id',
+          sourceDatabases:
+            incomingLegacyImport?.sourceDatabases ||
+            baseLegacyImport?.sourceDatabases ||
+            [],
+          canonicalImportOrder:
+            incomingLegacyImport?.canonicalImportOrder ||
+            baseLegacyImport?.canonicalImportOrder ||
+            [],
+        }
+      : undefined;
+
   return {
     ...baseSettings,
     ...incomingSettings,
@@ -92,18 +122,7 @@ export const mergeUserSettings = (
     migration: {
       ...(baseSettings.migration || {}),
       ...(incomingSettings.migration || {}),
-      legacyImport: {
-        ...(baseSettings.migration?.legacyImport || {}),
-        ...(incomingSettings.migration?.legacyImport || {}),
-        entityCounts: {
-          ...(baseSettings.migration?.legacyImport?.entityCounts || {}),
-          ...(incomingSettings.migration?.legacyImport?.entityCounts || {}),
-        },
-        sourceDatabases: incomingSettings.migration?.legacyImport?.sourceDatabases ||
-          baseSettings.migration?.legacyImport?.sourceDatabases,
-        canonicalImportOrder: incomingSettings.migration?.legacyImport?.canonicalImportOrder ||
-          baseSettings.migration?.legacyImport?.canonicalImportOrder,
-      },
+      legacyImport: mergedLegacyImport,
     },
   };
 };

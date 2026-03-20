@@ -1,14 +1,13 @@
 import { IncomingHttpHeaders } from "http";
 
-import { AuthTokenPayload, verifyAuthToken } from "../lib/auth.js";
-import { findUserById, UserDocument } from "../models/user.js";
+import { AuthTokenPayload, verifyAuthToken } from "../lib/auth";
+import { findUserById, UserDocument } from "../models/user";
 
-type HeaderSource =
-  | Headers
-  | IncomingHttpHeaders
-  | {
-      headers: Headers | IncomingHttpHeaders;
-    };
+type WrappedHeaderSource = {
+  headers: Headers | IncomingHttpHeaders;
+};
+
+type HeaderSource = Headers | IncomingHttpHeaders | WrappedHeaderSource;
 
 const getHeaderValue = (
   headers: Headers | IncomingHttpHeaders,
@@ -27,14 +26,30 @@ const getHeaderValue = (
   return value ?? null;
 };
 
+const isWrappedHeaderSource = (
+  source: HeaderSource,
+): source is WrappedHeaderSource => {
+  if (source instanceof Headers) {
+    return false;
+  }
+
+  const candidate = (source as WrappedHeaderSource).headers;
+
+  return typeof candidate === "object" && candidate !== null && !Array.isArray(candidate);
+};
+
 const resolveHeaders = (
   source: HeaderSource,
 ): Headers | IncomingHttpHeaders => {
-  if ("headers" in source && !(source instanceof Headers)) {
+  if (source instanceof Headers) {
+    return source;
+  }
+
+  if (isWrappedHeaderSource(source)) {
     return source.headers;
   }
 
-  return source;
+  return source as IncomingHttpHeaders;
 };
 
 export class UnauthorizedError extends Error {

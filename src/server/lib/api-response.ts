@@ -6,7 +6,9 @@ export type ApiErrorCode =
   | "FORBIDDEN"
   | "NOT_FOUND"
   | "CONFLICT"
+  | "INVALID_RESET_OTP"
   | "METHOD_NOT_ALLOWED"
+  | "RESET_OTP_ATTEMPTS_EXHAUSTED"
   | "INTERNAL_SERVER_ERROR";
 
 export class ApiError extends Error {

@@ -6,12 +6,14 @@
   "scripts": {
     "dev": "cross-env NODE_OPTIONS=--enable-source-maps vite",
     "build": "cross-env vite build",
+    "build:vercel": "npm run test:phase5c && npm run build",
     "build:dev": "cross-env vite build --mode development",
     "lint": "cross-env eslint .",
     "preview": "cross-env vite preview",
     "start": "npm run dev",
     "stop": "pkill -f vite",
     "test": "jest --config=jest.config.cjs",
+    "test:phase5c": "jest --config=jest.config.cjs src/components/auth/__tests__/ProtectedRoute.test.tsx src/server/middleware/__tests__/auth.test.ts src/contexts/__tests__/AuthContext.test.tsx api/auth/__tests__/action.test.ts api/auth/__tests__/admin.test.ts api/auth/__tests__/announcements.test.ts api/books/__tests__/ownership.test.ts src/hooks/__tests__/useLibrarySettings.test.tsx src/server/models/__tests__/system-announcement.test.ts src/services/migration/__tests__/legacyLibraryImport.test.ts",
     "test:watch": "jest --config=jest.config.cjs --watch",
     "test:coverage": "jest --config=jest.config.cjs --coverage"
   },
