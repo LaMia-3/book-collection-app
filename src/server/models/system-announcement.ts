@@ -1,6 +1,6 @@
 import { Collection, ObjectId } from "mongodb";
 
-import { getMongoDb } from "../lib/mongodb";
+import { getMongoDb } from "../lib/mongodb.js";
 
 export const SYSTEM_ANNOUNCEMENTS_COLLECTION = "system_announcements";
 let ensureSystemAnnouncementIndexesPromise: Promise<string[]> | null = null;

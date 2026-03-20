@@ -1,7 +1,7 @@
 import { IncomingHttpHeaders } from "http";
 
-import { AuthTokenPayload, verifyAuthToken } from "../lib/auth";
-import { findUserById, UserDocument } from "../models/user";
+import { AuthTokenPayload, verifyAuthToken } from "../lib/auth.js";
+import { findUserById, UserDocument } from "../models/user.js";
 
 type WrappedHeaderSource = {
   headers: Headers | IncomingHttpHeaders;

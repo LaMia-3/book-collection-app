@@ -13,6 +13,7 @@ module.exports = {
     '^.+\.(js|jsx)$': 'babel-jest',
   },
   moduleNameMapper: {
+    '^(\\.{1,2}/.*)\\.js$': '$1',
     '^@/(.*)$': '<rootDir>/src/$1',
     '\\.css$': 'identity-obj-proxy',
   },

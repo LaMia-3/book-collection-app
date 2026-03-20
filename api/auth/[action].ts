@@ -2,12 +2,12 @@ import { VercelRequest, VercelResponse } from "@vercel/node";
 import { randomBytes } from "node:crypto";
 import { MongoServerError } from "mongodb";
 
-import { ApiError, methodNotAllowed, sendError, sendJson } from "../../src/server/lib/api-response";
+import { ApiError, methodNotAllowed, sendError, sendJson } from "../../src/server/lib/api-response.js";
 import {
   createAdminAuditLog,
   listAdminAuditLogs,
   toAdminAuditLogEntry,
-} from "../../src/server/models/admin-audit-log";
+} from "../../src/server/models/admin-audit-log.js";
 import {
   findSystemAnnouncementById,
   insertSystemAnnouncement,
@@ -20,10 +20,10 @@ import {
   toPublicSystemAnnouncement,
   updateSystemAnnouncementById,
   deleteSystemAnnouncementById,
-} from "../../src/server/models/system-announcement";
-import { ensureBootstrapAdminUser } from "../../src/server/lib/admin-bootstrap";
-import { signAuthToken } from "../../src/server/lib/auth";
-import { sendPasswordResetEmail } from "../../src/server/lib/email";
+} from "../../src/server/models/system-announcement.js";
+import { ensureBootstrapAdminUser } from "../../src/server/lib/admin-bootstrap.js";
+import { signAuthToken } from "../../src/server/lib/auth.js";
+import { sendPasswordResetEmail } from "../../src/server/lib/email.js";
 import {
   CredentialValidationError,
   hashPassword,
@@ -32,13 +32,13 @@ import {
   validatePassword,
   validateRegisterCredentials,
   verifyPassword,
-} from "../../src/server/lib/password";
+} from "../../src/server/lib/password.js";
 import {
   ForbiddenError,
   UnauthorizedError,
   requireAdminUser,
   requireAuthenticatedUser,
-} from "../../src/server/middleware/auth";
+} from "../../src/server/middleware/auth.js";
 import {
   countAdmins,
   findUserByEmail,
@@ -52,25 +52,25 @@ import {
   updateUserPasswordById,
   updateUserPreferredNameById,
   updateUserRoleById,
-} from "../../src/server/models/user";
-import { getBooksCollection } from "../../src/server/models/book";
-import { getSeriesCollection } from "../../src/server/models/series";
-import { getCollectionsCollection } from "../../src/server/models/collection";
-import { getUpcomingReleasesCollection } from "../../src/server/models/upcoming-release";
-import { getNotificationsCollection } from "../../src/server/models/notification";
-import { getUserSettingsCollection } from "../../src/server/models/user-settings";
+} from "../../src/server/models/user.js";
+import { getBooksCollection } from "../../src/server/models/book.js";
+import { getSeriesCollection } from "../../src/server/models/series.js";
+import { getCollectionsCollection } from "../../src/server/models/collection.js";
+import { getUpcomingReleasesCollection } from "../../src/server/models/upcoming-release.js";
+import { getNotificationsCollection } from "../../src/server/models/notification.js";
+import { getUserSettingsCollection } from "../../src/server/models/user-settings.js";
 import {
   dismissAnnouncement,
   getAnnouncementStateCounts,
   getUserAnnouncementStates,
   markAnnouncementSeen,
-} from "../../src/server/models/user-announcement-state";
+} from "../../src/server/models/user-announcement-state.js";
 import {
   consumePasswordResetOtp,
   createPasswordResetOtp,
   invalidatePasswordResetOtpsForUser,
   verifyPasswordResetOtp,
-} from "../../src/server/models/password-reset-otp";
+} from "../../src/server/models/password-reset-otp.js";
 
 type AuthRequestBody = {
   announcementId?: string;
